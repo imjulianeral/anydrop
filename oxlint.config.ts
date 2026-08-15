@@ -1,16 +1,8 @@
 import { defineConfig } from "oxlint";
 import core from "ultracite/oxlint/core";
-
+import react from "ultracite/oxlint/react";
+import vitest from "ultracite/oxlint/vitest";
 export default defineConfig({
-  extends: [core],
-  ignorePatterns: core.ignorePatterns ?? [],
-  overrides: [
-    {
-      files: ["alchemy.run.ts"],
-      rules: {
-        // Alchemy stacks use Effect.gen(function* () { ... }).
-        "func-names": "off",
-      },
-    },
-  ],
+  extends: [core, react, vitest],
+  ignorePatterns: core.ignorePatterns,
 });

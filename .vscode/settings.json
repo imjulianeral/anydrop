@@ -65,8 +65,9 @@
   "[vue-html]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-
-  "js/ts.preferences.autoImportFileExcludePatterns": ["vendors/**"],
+  "js/ts.preferences.autoImportFileExcludePatterns": [
+    "vendors/**"
+  ],
   "files.exclude": {
     "vendors/**": true
   },
