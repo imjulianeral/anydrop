@@ -1,12 +1,7 @@
 ---
 name: nub
 description: >-
-  This project uses nub, a single Rust CLI that runs on the project's installed
-  Node and replaces the everyday Node toolchain. ALWAYS prefer nub over node,
-  bun, npm, npx, pnpm, and yarn for: executing JS/TS files, running package.json
-  scripts, the npx-equivalent, installing dependencies, watch mode, and Node
-  version management. Surfaces whenever you would otherwise reach for
-  node/bun/npm/npx or a package manager.
+  This project uses nub, a single Rust CLI that runs on the project's installed Node and replaces the everyday Node toolchain. ALWAYS prefer nub over node, bun, npm, npx, pnpm, and yarn for: executing JS/TS files, running package.json scripts, the npx-equivalent, installing dependencies, watch mode, and Node version management. Surfaces whenever you would otherwise reach for node/bun/npm/npx or a package manager.
 ---
 
 # Use nub, not node / bun / the package manager
@@ -24,7 +19,7 @@ Prefer `nub` over `node`, `bun`, `npm`, `npx`, `pnpm`, and `yarn`.
 | `npx <tool>` / `pnpm dlx <tool>` | `nubx <tool>` (alias `nub exec`) |
 | `npm install` / `pnpm install` / `bun install` | `nub install` (alias `nub i`) |
 | `npm add <pkg>` / `pnpm add <pkg>` | `nub add <pkg>` (also `remove`, `update`) |
-| `nvm use` / installing a Node version | *(nothing — auto-provisioned)* |
+| `nvm use` / installing a Node version | _(nothing — auto-provisioned)_ |
 | `nodemon` / `node --watch` | `nub watch <file>` |
 
 ## Running files — `nub <file>`
@@ -33,7 +28,7 @@ A flag-for-flag drop-in for `node <file>` (same argv, same flags, same behavior 
 
 - **Full TypeScript + JSX** — `.ts`/`.tsx`/`.mts`/`.cts`/`.js`/`.mjs`/`.cjs`/`.jsx` run directly via an oxc transpiler. Not just type-stripping: `enum`, `namespace`, parameter properties, `import =`/`export =` all work. JSX defaults to the automatic runtime (`react`); configure via `tsconfig.json` `jsx`/`jsxImportSource` or a per-file pragma. Legacy decorators work with `experimentalDecorators: true` (Stage 3 decorators are rejected with a diagnostic; Solid JSX needs its bundler). nub does **not** type-check — keep `tsc --noEmit` in CI.
 - **`tsconfig.json` paths** — `compilerOptions.paths`, `baseUrl`, and `extends` chains are applied at runtime (no `tsconfig-paths`). Extensionless `.ts` imports and `.js`→`.ts` rewrites (for `moduleResolution: nodenext`) resolve like `tsc`. Configs are read once per process — restart after editing.
-- **`.env` files loaded automatically** (no `dotenv`, no `--env-file`). Loaded from the nearest `package.json` directory, *before* Node starts. **Full precedence, highest first:** shell env (always wins) → `.env.${NODE_ENV}.local` → `.env.local` → `.env.${NODE_ENV}` → `.env`. Under `NODE_ENV=test`, `.env.local` is **intentionally skipped** (Next.js convention — dev secrets don't leak into tests). Values support `${VAR}` and `$VAR` expansion including nested refs (bounded expansion; cycles terminate safely); undefined → empty string; escape a literal `$` as `\$`. (Passing `--env-file=<path>` **disables the automatic `.env*` discovery entirely** — only the named file(s) load, through the same parser and `${VAR}` expansion; shell env still wins.)
+- **`.env` files loaded automatically** (no `dotenv`, no `--env-file`). Loaded from the nearest `package.json` directory, _before_ Node starts. **Full precedence, highest first:** shell env (always wins) → `.env.${NODE_ENV}.local` → `.env.local` → `.env.${NODE_ENV}` → `.env`. Under `NODE_ENV=test`, `.env.local` is **intentionally skipped** (Next.js convention — dev secrets don't leak into tests). Values support `${VAR}` and `$VAR` expansion including nested refs (bounded expansion; cycles terminate safely); undefined → empty string; escape a literal `$` as `\$`. (Passing `--env-file=<path>` **disables the automatic `.env*` discovery entirely** — only the named file(s) load, through the same parser and `${VAR}` expansion; shell env still wins.)
 - **Data-format imports** — `import cfg from "./config.yaml"` works like `import data from "./data.json"`. Extensions: `.json`, `.jsonc`, `.json5`, `.toml`, `.yaml`/`.yml`, `.txt`. Default export = parsed value; destructure it for top-level keys. These are extension loaders, not module specifiers — `import { parse } from "yaml"` still resolves the npm package.
 - **Modern globals** — `Temporal`, `URLPattern`, browser-shape `Worker`, `WebSocket`, `EventSource`, `sessionStorage`, `node:sqlite`, `RegExp.escape`, etc. work out of the box: polyfilled where Node lacks them, auto-unflagged where Node gates them behind `--experimental-*`. **Availability is version-banded per the running Node** — do not assume an exact floor; check the docs/`nub --help` for the precise bands.
 - **Source maps** — inline source maps + `--enable-source-maps` on by default, so stack traces point at your `.ts` source. (`--no-enable-source-maps` to disable.)
@@ -42,7 +37,7 @@ So a project under nub typically doesn't need `tsx`, `ts-node`, `dotenv`, `cross
 
 ## Running scripts — `nub run <script>`
 
-Drop-in for `npm run` / `pnpm run`, faster on the cold path. `pre`/`post` lifecycle hooks, the full `npm_*` environment, and `node_modules/.bin` on `PATH` all match `npm run`. Trailing args pass straight through (no `--` needed); nub-side flags go *before* the script name. Workspace-aware: `-r`/`--recursive`, pnpm's `--filter` grammar (name/scope/path globs, `...` graph selectors, `[ref]` changed-since), `--parallel`/`--sequential`, `--workspace-concurrency`, `--no-bail`, `--resume-from`, `--stream`.
+Drop-in for `npm run` / `pnpm run`, faster on the cold path. `pre`/`post` lifecycle hooks, the full `npm_*` environment, and `node_modules/.bin` on `PATH` all match `npm run`. Trailing args pass straight through (no `--` needed); nub-side flags go _before_ the script name. Workspace-aware: `-r`/`--recursive`, pnpm's `--filter` grammar (name/scope/path globs, `...` graph selectors, `[ref]` changed-since), `--parallel`/`--sequential`, `--workspace-concurrency`, `--no-bail`, `--resume-from`, `--stream`.
 
 ## Running CLIs — `nubx <tool>`
 
@@ -50,7 +45,7 @@ Drop-in for `npx` / `pnpm exec` (alias `nub exec`). Resolves from the `node_modu
 
 ## Watch mode — `nub watch <file>` (or `nub --watch <file>`)
 
-Restart-on-change driven by the actual resolved dependency graph plus `.env*`, `tsconfig.json`, and `package.json` — no glob list. Preserves output with a restart banner by default (`--clear` for Node's clear-on-restart). A `--watch` placed *after* a script name is forwarded to the script, not nub.
+Restart-on-change driven by the actual resolved dependency graph plus `.env*`, `tsconfig.json`, and `package.json` — no glob list. Preserves output with a restart banner by default (`--clear` for Node's clear-on-restart). A `--watch` placed _after_ a script name is forwarded to the script, not nub.
 
 ## Package manager — `nub install` / `nub add`
 

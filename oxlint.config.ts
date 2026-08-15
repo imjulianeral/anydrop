@@ -5,7 +5,7 @@ import vitest from "ultracite/oxlint/vitest";
 
 export default defineConfig({
   extends: [core, react, vitest],
-  ignorePatterns: core.ignorePatterns ?? [],
+  ignorePatterns: [...(core.ignorePatterns ?? []), "vendors/**"],
   overrides: [
     {
       files: ["alchemy.run.ts"],
@@ -21,6 +21,12 @@ export default defineConfig({
         "no-use-before-define": "off",
         "react/function-component-definition": "off",
         "sort-keys": "off",
+      },
+    },
+    {
+      files: ["apps/web/src/components/ui/**"],
+      rules: {
+        "import/consistent-type-specifier-style": "off",
       },
     },
   ],
