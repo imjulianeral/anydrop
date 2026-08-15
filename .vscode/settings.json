@@ -64,5 +64,16 @@
   },
   "[vue-html]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+
+  "js/ts.preferences.autoImportFileExcludePatterns": ["vendors/**"],
+  "files.exclude": {
+    "vendors/**": true
+  },
+  "files.watcherExclude": {
+    "vendors/**": true
+  },
+  "search.exclude": {
+    "vendors/**": true
   }
 }
