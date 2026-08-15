@@ -70,9 +70,14 @@
     "vendors/**": true
   },
   "files.watcherExclude": {
-    "vendors/**": true
+    "vendors/**": true,
+    "**/routeTree.gen.ts": true
+  },
+  "files.readonlyInclude": {
+    "**/routeTree.gen.ts": true
   },
   "search.exclude": {
-    "vendors/**": true
+    "vendors/**": true,
+    "**/routeTree.gen.ts": true
   }
 }

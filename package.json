@@ -1,4 +1,18 @@
 {
+  "name": "anydrop",
+  "version": "0.0.1",
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "start": "nub index.ts",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "deploy": "alchemy deploy",
+    "destroy": "alchemy destroy",
+    "plan": "alchemy plan"
+  },
   "dependencies": {
     "@effect/platform-bun": ">=4.0.0-beta.105 || >=4.0.0",
     "@effect/platform-node": ">=4.0.0-beta.105 || >=4.0.0",
@@ -14,17 +28,6 @@
     "typescript": "^7",
     "ultracite": "7.10.4"
   },
-  "name": "anydrop",
-  "scripts": {
-    "start": "nub index.ts",
-    "check": "ultracite check",
-    "fix": "ultracite fix",
-    "deploy": "alchemy deploy",
-    "destroy": "alchemy destroy",
-    "plan": "alchemy plan"
-  },
-  "type": "module",
-  "version": "0.0.1",
   "devEngines": {
     "packageManager": {
       "name": "nub",
