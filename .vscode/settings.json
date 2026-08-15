@@ -1,5 +1,5 @@
 {
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": "oxc.oxc-vscode",
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
   "emmet.showExpandedAbbreviation": "never",
@@ -65,9 +65,7 @@
   "[vue-html]": {
     "editor.defaultFormatter": "oxc.oxc-vscode"
   },
-  "js/ts.preferences.autoImportFileExcludePatterns": [
-    "vendors/**"
-  ],
+  "js/ts.preferences.autoImportFileExcludePatterns": ["vendors/**"],
   "files.exclude": {
     "vendors/**": true
   },
