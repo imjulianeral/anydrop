@@ -4,3 +4,9 @@ node_modules
 *.log
 .DS_Store
 .alchemy
+apps/backend/log
+apps/backend/tmp
+apps/backend/storage
+apps/backend/vendor/bundle
+apps/backend/config/master.key
+apps/web/dist

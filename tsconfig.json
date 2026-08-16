@@ -4,7 +4,7 @@
     "moduleResolution": "nodenext",
     "target": "es2024",
     "lib": ["es2024"],
-    "types": ["node", "@nubjs/types"],
+    "types": ["node", "@nubjs/types", "@cloudflare/workers-types"],
     "moduleDetection": "force",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -17,5 +17,7 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noEmit": true
-  }
+  },
+  "include": ["alchemy.run.ts", "infra/**/*.ts"],
+  "exclude": ["apps", "vendors", "node_modules", "infra/**/*.test.ts"]
 }

@@ -12,6 +12,9 @@ const config = defineConfig({
     tanstackRouter({ target: "react", autoCodeSplitting: true }),
     viteReact(),
   ],
+  server: {
+    port: 3000,
+  },
 });
 
 export default config;

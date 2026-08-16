@@ -15,10 +15,23 @@ export default defineConfig({
       },
     },
     {
+      files: ["infra/**"],
+      rules: {
+        "filename-case": "off",
+        "func-names": "off",
+        "func-style": "off",
+        "sort-keys": "off",
+        "unicorn/filename-case": "off",
+      },
+    },
+    {
       files: ["apps/web/**"],
       rules: {
         "func-style": "off",
         "no-use-before-define": "off",
+        "no-void": "off",
+        "promise/avoid-new": "off",
+        "promise/prefer-await-to-then": "off",
         "react/function-component-definition": "off",
         "sort-keys": "off",
       },

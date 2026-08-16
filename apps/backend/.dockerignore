@@ -1,0 +1,9 @@
+tmp
+log
+storage
+test
+vendor/bundle
+.git
+*.log
+config/master.key
+README.md

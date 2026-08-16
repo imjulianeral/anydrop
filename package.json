@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "start": "nub index.ts",
+    "dev": "alchemy dev",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "deploy": "alchemy deploy",
@@ -14,12 +15,14 @@
     "plan": "alchemy plan"
   },
   "dependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "@effect/platform-bun": ">=4.0.0-beta.105 || >=4.0.0",
     "@effect/platform-node": ">=4.0.0-beta.105 || >=4.0.0",
     "alchemy": "^2.0.0-beta.72",
     "effect": ">=4.0.0-beta.105 || >=4.0.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260814.1",
     "@nubjs/types": ">=0.4.13 <=0.7.5",
     "@types/node": "^24",
     "oxfmt": "latest",

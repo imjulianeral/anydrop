@@ -1,3 +1,7 @@
+## Tooling
+
+Prefer `nub` over `node`, `bun`, `npm`, `npx`, `pnpm`, and `yarn`. Run files with `nub <file>`, scripts with `nub run`, local CLIs with `nubx`, and installs with `nub install` / `nub add`. Use `nub --node <file>` for unaugmented Node.
+
 ## Vendored Repositories
 
 This project vendors external repositories under @vendors/
