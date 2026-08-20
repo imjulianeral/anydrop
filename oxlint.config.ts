@@ -5,7 +5,13 @@ import vitest from "ultracite/oxlint/vitest";
 
 export default defineConfig({
   extends: [core, react, vitest],
-  ignorePatterns: [...(core.ignorePatterns ?? []), "vendors/**"],
+  // Scoped to this file only. Vendored trees have their own .oxlintrc.json,
+  // so they also need the global ignore in `.eslintignore`.
+  ignorePatterns: [
+    ...(core.ignorePatterns ?? []),
+    "vendors/**",
+    "apps/backend/**",
+  ],
   overrides: [
     {
       files: ["alchemy.run.ts"],

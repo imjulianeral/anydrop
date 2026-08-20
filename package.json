@@ -8,8 +8,8 @@
   "scripts": {
     "start": "nub index.ts",
     "dev": "alchemy dev",
-    "check": "ultracite check",
-    "fix": "ultracite fix",
+    "check": "ultracite check --ignore-pattern=vendors/**",
+    "fix": "ultracite fix --ignore-pattern=vendors/**",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "plan": "alchemy plan"

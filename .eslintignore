@@ -1,0 +1,5 @@
+# Oxlint treats ignorePatterns as scoped to the config that owns them.
+# Vendored trees ship their own .oxlintrc.json, so only a global ignore
+# (this file, plus --ignore-pattern on the check/fix scripts) keeps
+# oxlint from loading vendors/effect/.oxlintrc.json.
+vendors/

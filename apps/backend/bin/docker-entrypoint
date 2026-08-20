@@ -3,19 +3,40 @@ set -euo pipefail
 
 cd /app
 
+unpack_redacted() {
+  local value="${1-}"
+  if [[ "${value}" == \{* ]]; then
+    local unpacked
+    unpacked="$(ruby -e 'require "json"; v=JSON.parse(ARGV[0]); print v["value"] if v.is_a?(Hash) && v["_tag"]=="Redacted"' "${value}" 2>/dev/null || true)"
+    if [[ -n "${unpacked}" ]]; then
+      printf '%s' "${unpacked}"
+      return
+    fi
+  fi
+  printf '%s' "${value}"
+}
+
 for key in DATABASE_URL DIRECT_URL; do
-  value="${!key-}"
-  if [[ -n "${value}" && ! "${value}" =~ ^postgres(ql)?:// ]]; then
+  value="$(unpack_redacted "${!key-}")"
+  if [[ -n "${value}" && "${value}" =~ ^postgres(ql)?:// ]]; then
+    export "${key}=${value}"
+  else
     unset "${key}"
   fi
 done
 
+# Only rewrite loopback when Alchemy set ANYDROP_PG_HOST.
 if [[ -n "${ANYDROP_PG_HOST-}" ]]; then
+  escaped_host="${ANYDROP_PG_HOST//./\\.}"
   for key in DATABASE_URL DIRECT_URL; do
     value="${!key-}"
     if [[ -n "${value}" ]]; then
-      export "${key}=${value//127.0.0.1/${ANYDROP_PG_HOST}}"
-      export "${key}=${!key//localhost/${ANYDROP_PG_HOST}}"
+      value="${value//127.0.0.1/${ANYDROP_PG_HOST}}"
+      value="${value//localhost/${ANYDROP_PG_HOST}}"
+      if [[ -n "${ANYDROP_PG_PORT-}" ]]; then
+        value="$(printf '%s' "${value}" | sed -E "s#@${escaped_host}(:[0-9]+)?#@${ANYDROP_PG_HOST}:${ANYDROP_PG_PORT}#")"
+      fi
+      export "${key}=${value}"
     fi
   done
   if [[ -z "${DATABASE_URL-}" ]]; then
@@ -29,6 +50,10 @@ fi
 
 if [[ "$#" -eq 0 ]]; then
   set -- bundle exec puma -C config/puma.rb
+fi
+
+if [[ "${DATABASE_URL-}" =~ ^postgres(ql)?:// ]]; then
+  bundle exec rails db:prepare || echo "db:prepare failed; starting Puma anyway" >&2
 fi
 
 exec "$@"

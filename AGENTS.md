@@ -15,6 +15,10 @@ This project vendors external repositories under @vendors/
 
 When writing Effect code, inspect @vendors/effect/LLMS.md for examples of idiomatic usage, tests, module structure, and API design. Treat it as the source of truth for Effect patterns. If you not find something related to effect, then inspect the whole directory: @vendors/effect/
 
+## Alchemy
+
+When writing Alchemy code, inspect @vendors/alchemy for examples of idiomatic usage, tests, module structure, and API design. Treat it as the source of truth for Alchemy patterns.
+
 # Ultracite Code Standards
 
 This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.

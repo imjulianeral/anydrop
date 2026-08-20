@@ -30,7 +30,7 @@ threads threads_count, threads_count
 
 # Vite uses 3000. The container must listen on a different port.
 # Bind only here — do not also pass `-b` on the Puma command line.
-bind "tcp://0.0.0.0:8080"
+bind "tcp://0.0.0.0:#{ENV.fetch("PORT", "8080")}"
 
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
