@@ -7,7 +7,9 @@ import * as Layer from "effect/Layer";
 
 import Api from "./infra/Api.ts";
 import { Hyperdrive } from "./infra/db.ts";
-import { Frontend } from "./infra/Frontend.ts";
+import { websitePort } from "./infra/ports.ts";
+
+const webDir = `${import.meta.dirname}/../apps/web`;
 
 export default Alchemy.Stack(
   "AnyDrop",
@@ -24,7 +26,16 @@ export default Alchemy.Stack(
 
     const bucket = yield* Cloudflare.R2.Bucket("Bucket");
     const api = yield* Api;
-    const website = yield* Frontend;
+    const website = yield* Cloudflare.Website.Vite("Website", {
+      assets: {
+        notFoundHandling: "single-page-application",
+      },
+      dev: { port: websitePort },
+      env: {
+        VITE_API_URL: api.url.as<string>(),
+      },
+      rootDir: webDir,
+    });
 
     return {
       apiUrl: api.url,
