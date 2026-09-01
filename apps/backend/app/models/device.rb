@@ -5,6 +5,7 @@ class Device < ApplicationRecord
 
   has_many :sent_transfers, class_name: "Transfer", foreign_key: :sender_id, inverse_of: :sender, dependent: :destroy
   has_many :received_transfers, class_name: "Transfer", foreign_key: :recipient_id, inverse_of: :recipient, dependent: :destroy
+  has_many :short_links, dependent: :delete_all
 
   validates :display_name, presence: true, length: { maximum: 40 }
   validates :device_kind, inclusion: { in: KINDS }

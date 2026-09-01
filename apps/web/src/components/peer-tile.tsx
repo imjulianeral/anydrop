@@ -20,30 +20,33 @@ const initials = (name: string): string =>
 
 interface PeerTileProps {
   peer: Peer;
+  selected: boolean;
   onSelect: (peer: Peer) => void;
 }
 
-export function PeerTile({ peer, onSelect }: PeerTileProps) {
+export function PeerTile({ peer, selected, onSelect }: PeerTileProps) {
   const Icon = kindIcon[peer.device_kind];
 
   return (
     <button
-      aria-label={`Send to ${peer.display_name}`}
+      aria-current={selected ? "true" : undefined}
+      aria-label={`Chat with ${peer.display_name}`}
       className={cn(
-        "border-border/70 bg-card/70 flex w-36 flex-col items-center gap-3 rounded-3xl border p-5 text-center transition-colors",
-        "hover:border-foreground/20 hover:bg-card focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none"
+        "flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
+        "hover:bg-muted focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none",
+        selected ? "bg-muted" : null
       )}
+      type="button"
       onClick={() => {
         onSelect(peer);
       }}
-      type="button"
     >
-      <Avatar size="lg">
+      <Avatar>
         <AvatarFallback>{initials(peer.display_name)}</AvatarFallback>
       </Avatar>
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="truncate font-medium">{peer.display_name}</span>
-        <span className="text-muted-foreground flex items-center justify-center gap-1 text-xs">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-sm font-medium">{peer.display_name}</span>
+        <span className="text-muted-foreground flex items-center gap-1 text-xs">
           <Icon />
           {peer.device_kind}
         </span>

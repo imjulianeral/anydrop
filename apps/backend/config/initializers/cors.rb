@@ -1,8 +1,8 @@
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
   allow do
     origins(
-      *Anydrop.config.allowed_origins,
-      %r{\Ahttps://anydrop-website-[\w-]+\.[\w-]+\.workers\.dev\z}
+      *AnyShare.config.allowed_origins,
+      %r{\Ahttps://anyshare-website-[\w-]+\.[\w-]+\.workers\.dev\z}
     )
 
     resource "*",

@@ -3,8 +3,8 @@ import ultracite from "ultracite/oxfmt";
 
 export default defineConfig({
   ...ultracite,
-  // Scoped to this file only. Vendored trees have their own .oxfmtrc.json,
-  // so they also need the global ignore in `.prettierignore`.
+  // Scoped to this file only. Nested vendor configs still win unless
+  // `.prettierignore` also excludes `vendors/`.
   ignorePatterns: [
     ...(ultracite.ignorePatterns ?? []),
     "vendors/**",

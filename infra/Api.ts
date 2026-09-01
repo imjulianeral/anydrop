@@ -5,19 +5,18 @@ import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 
 import Backend from "./Backend.ts";
 import { corsHeaders } from "./cors.ts";
-import { Hyperdrive } from "./db.ts";
 
 export default class Api extends Cloudflare.Worker<Api>()(
   "Api",
   {
     crons: ["0 * * * *"],
     env: {
+      ALCHEMY_DEV: process.env.ALCHEMY_DEV ?? "false",
       ALLOWED_ORIGINS: "http://127.0.0.1:3000,http://localhost:3000",
     },
     main: import.meta.url,
   },
   Effect.gen(function* () {
-    yield* Cloudflare.Hyperdrive.Connect(Hyperdrive);
     const backends = yield* Backend;
     const env = yield* Cloudflare.Workers.WorkerEnvironment;
 
@@ -38,10 +37,9 @@ export default class Api extends Cloudflare.Worker<Api>()(
           .fetch(request)
           .pipe(
             Effect.map((response) =>
-              HttpServerResponse.setHeaders(
-                response as HttpServerResponse.HttpServerResponse,
-                headers
-              )
+              response.status === 101
+                ? response
+                : HttpServerResponse.setHeaders(response, headers)
             ),
             Effect.orElseSucceed(() =>
               HttpServerResponse.text("Backend unavailable", {
@@ -52,5 +50,5 @@ export default class Api extends Cloudflare.Worker<Api>()(
           );
       }),
     };
-  }).pipe(Effect.provide(Cloudflare.Hyperdrive.ConnectBinding))
+  })
 ) {}

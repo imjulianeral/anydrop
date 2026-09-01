@@ -6,7 +6,7 @@ module ObjectStore
   module_function
 
   def presign_put(key, content_type:, byte_size:)
-    if Anydrop.config.r2_configured?
+    if AnyShare.config.r2_configured?
       url = presigner.presigned_url(
         :put_object,
         bucket: bucket_name,
@@ -25,7 +25,7 @@ module ObjectStore
   end
 
   def presign_get(key)
-    if Anydrop.config.r2_configured?
+    if AnyShare.config.r2_configured?
       presigner.presigned_url(
         :get_object,
         bucket: bucket_name,
@@ -38,9 +38,9 @@ module ObjectStore
   end
 
   def delete(key)
-    return local_path(key).delete if local_path(key).exist? && !Anydrop.config.r2_configured?
+    return local_path(key).delete if local_path(key).exist? && !AnyShare.config.r2_configured?
 
-    client.delete_object(bucket: bucket_name, key: key) if Anydrop.config.r2_configured?
+    client.delete_object(bucket: bucket_name, key: key) if AnyShare.config.r2_configured?
   rescue Aws::S3::Errors::ServiceError
     nil
   end

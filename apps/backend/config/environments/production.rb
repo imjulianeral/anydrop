@@ -47,7 +47,7 @@ Rails.application.configure do
   config.action_cable.disable_request_forgery_protection = true
   config.action_cable.allowed_request_origins = [
     *ENV.fetch("ALLOWED_ORIGINS", "").split(",").map(&:strip).reject(&:blank?),
-    %r{\Ahttps://anydrop-website-[\w-]+\.[\w-]+\.workers\.dev\z}
+    %r{\Ahttps://anyshare-website-[\w-]+\.[\w-]+\.workers\.dev\z}
   ]
 
   # Ignore bad email addresses and do not raise email delivery errors.

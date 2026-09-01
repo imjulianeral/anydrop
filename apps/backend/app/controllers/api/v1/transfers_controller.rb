@@ -3,9 +3,28 @@ module Api
     class TransfersController < ApplicationController
       before_action :authenticate_device!
 
+      def index
+        peer_id = params[:peer_id].to_s.presence
+        unless peer_id
+          return render json: { error: "peer_id required" }, status: :unprocessable_entity
+        end
+
+        me = current_device.id
+        transfers = Transfer.active.where(expires_at: Time.current...).where(
+          "(sender_id = :me AND recipient_id = :peer) OR (sender_id = :peer AND recipient_id = :me)",
+          me: me,
+          peer: peer_id
+        ).order(:created_at)
+
+        render json: { transfers: transfers.map { |transfer| transfer_payload(transfer) } }
+      end
+
       def create
-        recipient = find_visible_peer(transfer_params[:recipient_id])
-        return render json: { error: "recipient not found" }, status: :not_found unless recipient
+        recipient_id = transfer_params[:recipient_id].presence
+        recipient = find_visible_peer(recipient_id) if recipient_id
+        if recipient_id && recipient.nil?
+          return render json: { error: "recipient not found" }, status: :not_found
+        end
 
         transfer = build_transfer(recipient)
         unless transfer.save
@@ -13,8 +32,13 @@ module Api
         end
 
         if transfer.text?
-          RoomChannel.broadcast_event(recipient, "text_received", transfer.as_json_for(recipient))
-          return render json: { transfer: transfer.as_json_for(current_device) }, status: :created
+          if recipient
+            RoomChannel.broadcast_event(recipient, "text_received", transfer.as_json_for(recipient))
+          end
+          return render json: {
+            transfer: transfer.as_json_for(current_device),
+            short_link: mint_short_link(transfer).as_json_payload
+          }, status: :created
         end
 
         upload = ObjectStore.presign_put(
@@ -42,13 +66,17 @@ module Api
         return render json: { error: "already completed" }, status: :conflict unless transfer.status == "pending"
 
         transfer.update!(status: "uploaded")
-        download_url = ObjectStore.presign_get(transfer.r2_key) if transfer.file?
-        RoomChannel.broadcast_event(
-          transfer.recipient,
-          "transfer_offered",
-          transfer.as_json_for(transfer.recipient).merge(download: download_url ? { url: download_url } : nil)
-        )
-        render json: { transfer: transfer.as_json_for(current_device) }
+        if transfer.recipient
+          RoomChannel.broadcast_event(
+            transfer.recipient,
+            "transfer_offered",
+            transfer_payload(transfer, transfer.recipient)
+          )
+        end
+        render json: {
+          transfer: transfer_payload(transfer),
+          short_link: mint_short_link(transfer).as_json_payload
+        }
       end
 
       private
@@ -63,6 +91,13 @@ module Api
 
       def visible_transfer
         Transfer.where(sender_id: current_device.id).or(Transfer.where(recipient_id: current_device.id)).find_by(id: params[:id])
+      end
+
+      def mint_short_link(transfer)
+        transfer.short_links.first || transfer.short_links.create!(
+          device: current_device,
+          expires_at: transfer.expires_at
+        )
       end
 
       def build_transfer(recipient)
@@ -87,6 +122,14 @@ module Api
 
       def sanitize_filename(name)
         File.basename(name.to_s).gsub(/[^A-Za-z0-9._-]/, "_").presence || "file"
+      end
+
+      def transfer_payload(transfer, viewer = current_device)
+        payload = transfer.as_json_for(viewer)
+        if transfer.file? && transfer.status.in?(%w[uploaded delivered]) && transfer.r2_key.present?
+          payload[:download] = { url: ObjectStore.presign_get(transfer.r2_key) }
+        end
+        payload
       end
     end
   end

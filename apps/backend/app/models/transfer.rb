@@ -6,7 +6,8 @@ class Transfer < ApplicationRecord
   TTL = 24.hours
 
   belongs_to :sender, class_name: "Device"
-  belongs_to :recipient, class_name: "Device"
+  belongs_to :recipient, class_name: "Device", optional: true
+  has_many :short_links, dependent: :delete_all
 
   before_validation :assign_id, on: :create
 
@@ -52,6 +53,20 @@ class Transfer < ApplicationRecord
       created_at: created_at.iso8601
     }
     payload[:body] = body if text? && (viewer.id == recipient_id || viewer.id == sender_id)
+    payload
+  end
+
+  def as_drop_json
+    payload = {
+      id: id,
+      kind: kind,
+      filename: filename,
+      byte_size: byte_size,
+      content_type: content_type,
+      status: status,
+      expires_at: expires_at.iso8601
+    }
+    payload[:body] = body if text?
     payload
   end
 end

@@ -1,41 +1,47 @@
-import * as Cloudflare from "alchemy/Cloudflare";
-import * as Prisma from "alchemy/Prisma";
+import { ALCHEMY_DEV } from "alchemy";
+import * as Docker from "alchemy/Docker";
+import * as Planetscale from "alchemy/Planetscale";
 import * as Effect from "effect/Effect";
 
-export const region = "us-east-1" as const;
 export const DEV_DATABASE_PORT = 51_214;
 
-const backendDir = `${import.meta.dirname}/../apps/backend`;
+export const localDatabaseUrl = `postgresql://postgres:postgres@host.docker.internal:${DEV_DATABASE_PORT}/postgres?sslmode=disable`;
 
-export const DB = Effect.gen(function* () {
-  const project = yield* Prisma.Project("AnyDrop", {
-    createDatabase: false,
-    region,
-  });
-
-  const postgres = yield* Prisma.Postgres("DB", {
-    project,
-    region,
-    branchGitName: "main",
-    dev: {
-      name: "anydrop",
-      databasePort: DEV_DATABASE_PORT,
-      migrate: "bin/rails db:prepare",
-      migrateCwd: backendDir,
-    },
-  });
-
-  const connection = yield* Prisma.Connection("API", {
-    database: postgres,
-  });
-
-  return { project, postgres, connection };
+export const LocalPostgres = Docker.Container("Postgres", {
+  environment: {
+    POSTGRES_DB: "postgres",
+    POSTGRES_HOST_AUTH_METHOD: "trust",
+    POSTGRES_PASSWORD: "postgres",
+    POSTGRES_USER: "postgres",
+  },
+  healthcheck: {
+    cmd: ["CMD-SHELL", "pg_isready -U postgres"],
+    interval: "2 seconds",
+    retries: 15,
+    timeout: "2 seconds",
+  },
+  image: "postgres:16-alpine",
+  ports: [{ external: DEV_DATABASE_PORT, internal: 5432 }],
+  restart: "unless-stopped",
+  start: true,
 });
 
-export const Hyperdrive = Effect.gen(function* () {
-  const db = yield* DB;
-  return yield* Cloudflare.Hyperdrive.Connection("Hyperdrive", {
-    origin: db.connection.origin.as<Prisma.PostgresOrigin>(),
-    dev: db.connection.pooledOrigin,
+export const DatabaseUrl = Effect.gen(function* () {
+  if (yield* ALCHEMY_DEV) {
+    if (!globalThis.__ALCHEMY_RUNTIME__) {
+      yield* LocalPostgres;
+    }
+    return localDatabaseUrl;
+  }
+
+  const database = yield* Planetscale.PostgresDatabase("DB", {
+    clusterSize: "PS_10",
+    region: { slug: "us-east" },
+    replicas: 0,
   });
+  const role = yield* Planetscale.PostgresRole("API", {
+    database,
+    inheritedRoles: ["postgres"],
+  });
+  return role.connectionUrl;
 });

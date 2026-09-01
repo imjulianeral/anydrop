@@ -1,4 +1,4 @@
-import { Copy, Monitor, QrCode, Smartphone, Tablet } from "lucide-react";
+import { Copy, Link2, Monitor, QrCode, Smartphone, Tablet } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 
@@ -7,7 +7,7 @@ import { Button } from "#/components/ui/button.tsx";
 import { Field, FieldGroup, FieldLabel } from "#/components/ui/field.tsx";
 import { Input } from "#/components/ui/input.tsx";
 import { toast } from "#/components/ui/toast.tsx";
-import type { Peer } from "#/lib/api.ts";
+import { createShortLink, shortPageUrl, type Peer } from "#/lib/api.ts";
 
 const reportError = (error: unknown) => {
   toast.add({
@@ -26,6 +26,7 @@ const kindIcon = {
 interface SelfCardProps {
   connected: boolean;
   device: Peer;
+  token: string;
   onJoinRoom: (code: string | null) => Promise<void>;
   onRename: (name: string) => Promise<void>;
 }
@@ -33,6 +34,7 @@ interface SelfCardProps {
 export function SelfCard({
   connected,
   device,
+  token,
   onJoinRoom,
   onRename,
 }: SelfCardProps) {
@@ -51,7 +53,7 @@ export function SelfCard({
       try {
         const dataUrl = await QRCode.toDataURL(joinUrl, {
           margin: 1,
-          width: 180,
+          width: 120,
         });
         if (!cancelled) {
           setQr(dataUrl);
@@ -76,17 +78,27 @@ export function SelfCard({
     toast.add({ title: "Room code copied", type: "success" });
   };
 
+  const copyInviteLink = async () => {
+    if (!device.room_code) {
+      return;
+    }
+    const joinUrl = `${globalThis.location.origin}?room=${device.room_code}`;
+    const created = await createShortLink(token, joinUrl);
+    await navigator.clipboard.writeText(shortPageUrl(created.short_link.code));
+    toast.add({ title: "Invite link copied", type: "success" });
+  };
+
   return (
-    <section className="border-border/70 bg-card/80 flex w-full max-w-md flex-col gap-6 rounded-3xl border p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
+    <section className="border-border/70 flex flex-col gap-4 border-b p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
             This device
           </p>
-          <h1 className="font-heading text-2xl tracking-tight">
+          <h1 className="font-heading truncate text-lg tracking-tight">
             {device.display_name}
           </h1>
-          <p className="text-muted-foreground flex items-center gap-2 text-sm">
+          <p className="text-muted-foreground flex items-center gap-2 text-xs">
             <Icon />
             {device.device_kind}
           </p>
@@ -147,39 +159,51 @@ export function SelfCard({
       </FieldGroup>
 
       {device.room_code ? (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {qr ? (
             <img
               alt={`QR code for room ${device.room_code}`}
-              className="bg-background size-24 rounded-xl p-1"
+              className="bg-background size-16 rounded-xl p-1"
               src={qr}
             />
           ) : (
             <QrCode className="text-muted-foreground" />
           )}
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="font-mono text-2xl tracking-[0.3em]">
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="font-mono text-lg tracking-[0.3em]">
               {device.room_code}
             </p>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                copyRoom().catch(reportError);
-              }}
-            >
-              <Copy data-icon="inline-start" />
-              Copy code
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                onJoinRoom(null).catch(reportError);
-              }}
-            >
-              Leave room
-            </Button>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  copyRoom().catch(reportError);
+                }}
+              >
+                <Copy data-icon="inline-start" />
+                Copy
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  copyInviteLink().catch(reportError);
+                }}
+              >
+                <Link2 data-icon="inline-start" />
+                Invite
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  onJoinRoom(null).catch(reportError);
+                }}
+              >
+                Leave
+              </Button>
+            </div>
           </div>
         </div>
       ) : (

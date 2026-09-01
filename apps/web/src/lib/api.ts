@@ -12,7 +12,7 @@ export interface Peer {
 export interface Transfer {
   id: string;
   sender_id: string;
-  recipient_id: string;
+  recipient_id: string | null;
   kind: "file" | "text";
   filename: string | null;
   byte_size: number | null;
@@ -21,6 +21,7 @@ export interface Transfer {
   status: string;
   expires_at: string;
   created_at: string;
+  download?: { url: string };
 }
 
 export interface UploadTarget {
@@ -105,11 +106,26 @@ export const updateDevice = (
 export const listPeers = (token: string) =>
   request<{ peers: Peer[] }>("/api/v1/peers", { token });
 
+export interface ShortLink {
+  code: string;
+  kind: "url" | "text" | "file";
+  url?: string;
+  body?: string;
+  filename?: string | null;
+  byte_size?: number | null;
+  content_type?: string | null;
+  download?: { url: string };
+  expires_at: string;
+}
+
+export const shortPageUrl = (code: string) =>
+  `${globalThis.location.origin}/s/${code}`;
+
 export const createTextTransfer = (
   token: string,
-  input: { recipientId: string; body: string }
+  input: { recipientId?: string; body: string }
 ) =>
-  request<{ transfer: Transfer }>("/api/v1/transfers", {
+  request<{ transfer: Transfer; short_link: ShortLink }>("/api/v1/transfers", {
     method: "POST",
     token,
     body: {
@@ -122,7 +138,7 @@ export const createTextTransfer = (
 export const createFileTransfer = (
   token: string,
   input: {
-    recipientId: string;
+    recipientId?: string;
     filename: string;
     byteSize: number;
     contentType: string;
@@ -141,15 +157,39 @@ export const createFileTransfer = (
   });
 
 export const completeTransfer = (token: string, id: string) =>
-  request<{ transfer: Transfer }>(`/api/v1/transfers/${id}/complete`, {
-    method: "POST",
-    token,
-  });
+  request<{ transfer: Transfer; short_link: ShortLink }>(
+    `/api/v1/transfers/${id}/complete`,
+    {
+      method: "POST",
+      token,
+    }
+  );
 
 export const getTransfer = (token: string, id: string) =>
   request<{ transfer: Transfer; download?: { url: string } }>(
     `/api/v1/transfers/${id}`,
     { token }
+  );
+
+export const listTransfers = (token: string, peerId: string) =>
+  request<{ transfers: Transfer[] }>(
+    `/api/v1/transfers?peer_id=${encodeURIComponent(peerId)}`,
+    { token }
+  );
+
+export const createShortLink = (token: string, url: string) =>
+  request<{ short_link: ShortLink }>("/api/v1/short_links", {
+    method: "POST",
+    token,
+    body: { url },
+  });
+
+export const listShortLinks = (token: string) =>
+  request<{ short_links: ShortLink[] }>("/api/v1/short_links", { token });
+
+export const getShortLink = (code: string) =>
+  request<{ short_link: ShortLink }>(
+    `/api/v1/short_links/${encodeURIComponent(code)}`
   );
 
 export const resolveAssetUrl = (url: string): string => {

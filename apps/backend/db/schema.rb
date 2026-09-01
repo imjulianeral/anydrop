@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_15_120001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_120001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -36,7 +36,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_15_120001) do
     t.string "filename"
     t.string "kind", null: false
     t.string "r2_key"
-    t.string "recipient_id", limit: 36, null: false
+    t.string "recipient_id", limit: 36
     t.string "sender_id", limit: 36, null: false
     t.string "status", null: false
     t.index ["expires_at"], name: "index_transfers_on_expires_at"
@@ -44,6 +44,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_15_120001) do
     t.index ["sender_id"], name: "index_transfers_on_sender_id"
   end
 
+  create_table "short_links", primary_key: "code", id: { type: :string, limit: 7 }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "device_id", limit: 36
+    t.datetime "expires_at", null: false
+    t.text "target_url"
+    t.string "transfer_id", limit: 36
+    t.index ["device_id"], name: "index_short_links_on_device_id"
+    t.index ["expires_at"], name: "index_short_links_on_expires_at"
+    t.index ["transfer_id"], name: "index_short_links_on_transfer_id"
+  end
+
+  add_foreign_key "short_links", "devices"
+  add_foreign_key "short_links", "transfers"
   add_foreign_key "transfers", "devices", column: "recipient_id"
   add_foreign_key "transfers", "devices", column: "sender_id"
 end

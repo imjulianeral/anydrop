@@ -1,4 +1,4 @@
-const STORAGE_KEY = "anydrop.device";
+const STORAGE_KEY = "anyshare.device";
 
 const adjectives = [
   "Amber",

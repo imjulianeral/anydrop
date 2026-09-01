@@ -6,13 +6,14 @@ module Internal
       end
 
       Transfer.expire_stale!
+      ShortLink.expire_stale!
       render json: { ok: true }
     end
 
     private
 
     def authorized?
-      secret = Anydrop.config.expire_secret
+      secret = AnyShare.config.expire_secret
       return true if secret.blank? && !Rails.env.production?
 
       ActiveSupport::SecurityUtils.secure_compare(bearer_token.to_s, secret.to_s)

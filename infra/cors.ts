@@ -4,7 +4,7 @@ const localOrigins = new Set([
 ]);
 
 const websiteOrigin =
-  /^https:\/\/anydrop-website(?:-[\w-]+)?\.[\w.-]+\.workers\.dev$/u;
+  /^https:\/\/anyshare-website(?:-[\w-]+)?\.[\w.-]+\.workers\.dev$/u;
 
 const extras = (allowedOrigins: string) =>
   allowedOrigins

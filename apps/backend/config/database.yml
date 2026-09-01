@@ -5,8 +5,7 @@ default: &default
   connect_timeout: 5
 
 <%
-  raw_url = ENV["DIRECT_URL"].to_s
-  raw_url = ENV["DATABASE_URL"].to_s if raw_url.empty?
+  raw_url = ENV["DATABASE_URL"].to_s
   postgres_url = raw_url if raw_url.match?(/\Apostgres(?:ql)?:\/\//i)
 %>
 

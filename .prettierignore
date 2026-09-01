@@ -1,0 +1,4 @@
+# Oxfmt treats ignorePatterns as scoped to the config that owns them.
+# Vendored trees ship their own .oxfmtrc.json, so only a global ignore
+# (this file) keeps oxfmt from formatting vendors/.
+vendors/

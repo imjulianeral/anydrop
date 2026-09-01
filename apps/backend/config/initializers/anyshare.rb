@@ -1,4 +1,4 @@
-module Anydrop
+module AnyShare
   class Config
     def allowed_origins
       raw = ENV.fetch("ALLOWED_ORIGINS", "")
