@@ -17,7 +17,7 @@ When writing Effect code, inspect @vendors/effect/LLMS.md for examples of idioma
 
 ## Alchemy
 
-When writing Alchemy code, fetch https://alchemy.run/llms.txt — it's the index of the guide and concept docs. Use it to look up the specific page you need instead of guessing URLs. The per-resource API reference is indexed separately in https://alchemy.run/llms-full.txt — it's large, so only fetch it when you need a specific resource's reference page. Also if you need more insights inspect @vendors/Alchemy/ for examples of idiomatic usage, tests, module structure, and API design. Treat it as the source of truth for Alchemy patterns.
+When writing Alchemy code, fetch https://alchemy.run/llms.txt — it's the index of the guide and concept docs. Use it to look up the specific page you need instead of guessing URLs. The per-resource API reference is indexed separately in https://alchemy.run/llms-full.txt — it's large, so only fetch it when you need a specific resource's reference page.
 
 # Ultracite Code Standards
 
