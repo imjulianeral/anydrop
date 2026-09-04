@@ -1,4 +1,0 @@
-#!/usr/bin/env ruby
-# Solid Queue is not used. Jobs run in-process via the async adapter.
-warn "bin/jobs is unused: Active Job uses the async adapter"
-exit 1

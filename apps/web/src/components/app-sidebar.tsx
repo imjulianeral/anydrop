@@ -1,8 +1,10 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { createLink, useRouterState } from "@tanstack/react-router";
 import { Link2, Share2 } from "lucide-react";
 
-import { buttonVariants } from "#/components/ui/button.tsx";
-import { cn } from "#/lib/utils.ts";
+import { ButtonLink } from "#/components/motion/button/index.tsx";
+import { ThemeSwitch } from "#/components/theme-switch.tsx";
+
+const NavButton = createLink(ButtonLink);
 
 const items = [
   { to: "/", label: "Share", icon: Share2 },
@@ -15,7 +17,7 @@ export function AppSidebar() {
   });
 
   return (
-    <aside className="border-sidebar-border bg-sidebar/80 text-sidebar-foreground flex h-full w-52 shrink-0 flex-col gap-8 border-r px-4 py-8">
+    <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground flex h-full w-52 shrink-0 flex-col gap-8 border-r px-4 py-8">
       <div className="px-1">
         <p className="text-muted-foreground text-xs tracking-[0.28em] uppercase">
           AnyShare
@@ -26,22 +28,21 @@ export function AppSidebar() {
           const Icon = item.icon;
           const isActive = pathname === item.to;
           return (
-            <Link
+            <NavButton
               key={item.to}
+              className="w-full justify-start"
               to={item.to}
-              className={cn(
-                buttonVariants({
-                  variant: isActive ? "secondary" : "ghost",
-                }),
-                "w-full justify-start"
-              )}
+              variant={isActive ? "secondary" : "ghost"}
             >
-              <Icon data-icon="inline-start" />
+              <Icon />
               {item.label}
-            </Link>
+            </NavButton>
           );
         })}
       </nav>
+      <div className="mt-auto">
+        <ThemeSwitch />
+      </div>
     </aside>
   );
 }

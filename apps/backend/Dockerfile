@@ -1,24 +1,42 @@
-FROM ruby:4.0.6-bookworm
+ARG ELIXIR_VERSION=1.20.4
+ARG OTP_VERSION=29.0.6
+ARG ALPINE_VERSION=3.24.1
+
+FROM hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-alpine-${ALPINE_VERSION} AS build
+
+RUN apk add --no-cache build-base git
 
 WORKDIR /app
+ENV LANG=C.UTF-8
+ENV MIX_ENV=prod
 
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends build-essential libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+RUN mix local.hex --force && mix local.rebar --force
+COPY mix.exs mix.lock ./
+RUN mix deps.get --only prod && mix deps.compile
 
-COPY Gemfile Gemfile.lock .ruby-version ./
-RUN bundle config set --local without "development test" && bundle install
+COPY config config
+COPY lib lib
+COPY priv priv
+RUN mix compile && mix release
 
-COPY . .
-RUN mkdir -p tmp/pids tmp/storage tmp/cache log && \
-    rm -rf tmp/cache/bootsnap && \
-    chmod +x bin/docker-entrypoint
+FROM alpine:${ALPINE_VERSION} AS runtime
 
-# Puma binds PORT inside the container (see config/puma.rb).
+RUN apk add --no-cache ca-certificates libgcc libstdc++ ncurses-libs openssl
+
+WORKDIR /app
+RUN adduser -D -H -h /app -s /sbin/nologin anyshare
+
+COPY --from=build --chown=anyshare:anyshare /app/_build/prod/rel/anyshare ./
+COPY --chown=anyshare:anyshare bin/docker-entrypoint ./bin/docker-entrypoint
+RUN chmod +x ./bin/docker-entrypoint && mkdir -p tmp/storage && chown -R anyshare:anyshare tmp
+
+USER anyshare
+ENV HOME=/app
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV PHX_SERVER=true
 ENV PORT=8080
-ENV RAILS_ENV=production
-ENV DISABLE_BOOTSNAP=1
-ENV RAILS_LOG_TO_STDOUT=true
+ENV RELEASE_DISTRIBUTION=none
 EXPOSE 8080
 
 CMD ["./bin/docker-entrypoint"]

@@ -20,7 +20,7 @@ export const LocalPostgres = Docker.Container("Postgres", {
     retries: 15,
     timeout: "2 seconds",
   },
-  image: "postgres:16-alpine",
+  image: "postgres:18.6-alpine",
   ports: [{ external: DEV_DATABASE_PORT, internal: 5432 }],
   restart: "unless-stopped",
   start: true,
@@ -36,6 +36,7 @@ export const DatabaseUrl = Effect.gen(function* () {
 
   const database = yield* Planetscale.PostgresDatabase("DB", {
     clusterSize: "PS_10",
+    majorVersion: "18",
     region: { slug: "us-east" },
     replicas: 0,
   });

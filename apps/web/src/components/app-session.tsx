@@ -8,13 +8,9 @@ import {
   type ReactNode,
 } from "react";
 
-import { Button } from "#/components/ui/button.tsx";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "#/components/ui/empty.tsx";
+import { EmptyState } from "#/components/empty-state.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { Loader } from "#/components/motion/loader.tsx";
 import { createSession, updateDevice, type Peer } from "#/lib/api.ts";
 import { loadLocalDevice, saveLocalDevice } from "#/lib/device.ts";
 
@@ -118,35 +114,33 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
 
   if (bootError) {
     return (
-      <div className="flex min-h-svh items-center justify-center p-6">
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyTitle>Could not connect</EmptyTitle>
-            <EmptyDescription>{bootError}</EmptyDescription>
-          </EmptyHeader>
-          <Button
-            onClick={() => {
-              globalThis.location.reload();
-            }}
-          >
-            Retry
-          </Button>
-        </Empty>
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState
+          action={
+            <Button
+              type="button"
+              onClick={() => {
+                globalThis.location.reload();
+              }}
+            >
+              Retry
+            </Button>
+          }
+          description={bootError}
+          title="Could not connect"
+        />
       </div>
     );
   }
 
   if (!self || !token) {
     return (
-      <div className="flex min-h-svh items-center justify-center p-6">
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Looking for the room</EmptyTitle>
-            <EmptyDescription>
-              Registering this device on the network.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      <div className="flex h-full items-center justify-center p-6">
+        <EmptyState
+          description="Registering this device on the network."
+          icon={<Loader label="Connecting" variant="dots" />}
+          title="Looking for the room"
+        />
       </div>
     );
   }

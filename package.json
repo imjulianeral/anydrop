@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260814.1",
-    "@nubjs/types": ">=0.4.13 <=0.7.5",
+    "@nubjs/types": "0.8.3",
     "@types/node": "^24",
     "oxfmt": "latest",
     "oxlint": "latest",
@@ -34,9 +34,9 @@
   "devEngines": {
     "packageManager": {
       "name": "nub",
-      "version": "^0.7.5",
+      "version": "^0.8.3",
       "onFail": "ignore"
     }
   },
-  "packageManager": "nub@0.7.5"
+  "packageManager": "nub@0.8.3"
 }

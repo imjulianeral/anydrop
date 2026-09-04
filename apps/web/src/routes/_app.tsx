@@ -9,16 +9,13 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   return (
-    <AppSessionProvider>
-      <div className="relative h-svh overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,oklch(0.32_0_0),transparent_55%)]" />
-        <div className="relative flex h-full">
-          <AppSidebar />
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            <Outlet />
-          </div>
-        </div>
+    <div className="bg-background flex h-svh overflow-hidden">
+      <AppSidebar />
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <AppSessionProvider>
+          <Outlet />
+        </AppSessionProvider>
       </div>
-    </AppSessionProvider>
+    </div>
   );
 }

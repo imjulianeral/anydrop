@@ -1,67 +1,71 @@
-import { useEffect, useRef } from "react";
-
-import { buttonVariants } from "#/components/ui/button.tsx";
-import { resolveAssetUrl, type Transfer } from "#/lib/api.ts";
-import { cn } from "#/lib/utils.ts";
+import {
+  Message,
+  MessageAvatar,
+  MessageBubble,
+  MessageBubbleContent,
+  MessageContent,
+  MessageScroller,
+} from "#/components/agents/message.tsx";
+import { FilePreview } from "#/components/file-preview.tsx";
+import type { Transfer } from "#/lib/api.ts";
+import { initials } from "#/lib/media.ts";
 
 interface ChatThreadProps {
   selfId: string;
+  selfName: string;
+  peerName: string;
   transfers: Transfer[];
 }
 
-export function ChatThread({ selfId, transfers }: ChatThreadProps) {
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [transfers]);
-
+export function ChatThread({
+  selfId,
+  selfName,
+  peerName,
+  transfers,
+}: ChatThreadProps) {
   return (
-    <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-6">
+    <MessageScroller
+      className="min-h-0 flex-1"
+      contentClassName="flex flex-col gap-3 px-6 py-6"
+      followOutput
+      label="Chat"
+    >
       {transfers.map((transfer) => {
         const mine = transfer.sender_id === selfId;
-        const downloadUrl = transfer.download?.url
-          ? resolveAssetUrl(transfer.download.url)
-          : null;
+        const name = mine ? selfName : peerName;
         return (
-          <article
+          <Message
             key={transfer.id}
-            className={cn(
-              "border-border/70 max-w-[min(100%,28rem)] rounded-3xl border px-4 py-3",
-              mine
-                ? "bg-secondary ml-auto"
-                : "bg-card/80 mr-auto"
-            )}
+            animateIn
+            from={mine ? "user" : "assistant"}
           >
-            {transfer.kind === "text" ? (
-              <p className="whitespace-pre-wrap text-sm">
-                {transfer.body ?? ""}
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">
-                  {transfer.filename ?? "File"}
-                </p>
-                {downloadUrl ? (
-                  <a
-                    className={buttonVariants({ size: "sm", variant: "outline" })}
-                    download={transfer.filename ?? undefined}
-                    href={downloadUrl}
-                    rel="noopener"
-                  >
-                    Download
-                  </a>
-                ) : (
-                  <p className="text-muted-foreground text-xs">
-                    {transfer.status === "pending" ? "Uploading…" : "Not ready"}
-                  </p>
-                )}
-              </div>
-            )}
-          </article>
+            <MessageAvatar>{initials(name)}</MessageAvatar>
+            <MessageContent>
+              <MessageBubble animateIn variant={mine ? "solid" : "soft"}>
+                <MessageBubbleContent
+                  className={
+                    transfer.kind === "file"
+                      ? "max-w-sm overflow-hidden p-2"
+                      : undefined
+                  }
+                >
+                  {transfer.kind === "text" ? (
+                    <p className="whitespace-pre-wrap">{transfer.body ?? ""}</p>
+                  ) : (
+                    <FilePreview
+                      byteSize={transfer.byte_size}
+                      contentType={transfer.content_type}
+                      downloadUrl={transfer.download?.url}
+                      filename={transfer.filename}
+                      status={transfer.status}
+                    />
+                  )}
+                </MessageBubbleContent>
+              </MessageBubble>
+            </MessageContent>
+          </Message>
         );
       })}
-      <div ref={endRef} />
-    </div>
+    </MessageScroller>
   );
 }

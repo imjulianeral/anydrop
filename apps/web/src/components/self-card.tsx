@@ -2,11 +2,10 @@ import { Copy, Link2, Monitor, QrCode, Smartphone, Tablet } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 
-import { Badge } from "#/components/ui/badge.tsx";
-import { Button } from "#/components/ui/button.tsx";
-import { Field, FieldGroup, FieldLabel } from "#/components/ui/field.tsx";
-import { Input } from "#/components/ui/input.tsx";
-import { toast } from "#/components/ui/toast.tsx";
+import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { Input } from "#/components/motion/input.tsx";
+import { toast } from "#/components/toast-host.tsx";
 import { createShortLink, shortPageUrl, type Peer } from "#/lib/api.ts";
 
 const reportError = (error: unknown) => {
@@ -103,60 +102,59 @@ export function SelfCard({
             {device.device_kind}
           </p>
         </div>
-        <Badge variant={connected ? "secondary" : "outline"}>
+        <AnimatedBadge
+          pulse={connected}
+          size="sm"
+          status={connected ? "success" : "warning"}
+        >
           {connected ? "Live" : "Reconnecting"}
-        </Badge>
+        </AnimatedBadge>
       </div>
 
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="display-name">Display name</FieldLabel>
-          <div className="flex gap-2">
-            <Input
-              id="display-name"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-            />
-            <Button
-              disabled={
-                name.trim() === device.display_name || name.trim() === ""
-              }
-              variant="outline"
-              onClick={() => {
-                onRename(name.trim()).catch(reportError);
-              }}
-            >
-              Save
-            </Button>
-          </div>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="room-code">Room code</FieldLabel>
-          <div className="flex gap-2">
-            <Input
-              id="room-code"
-              maxLength={6}
-              placeholder="Optional"
-              value={roomInput}
-              onChange={(event) => {
-                setRoomInput(event.target.value.toUpperCase());
-              }}
-            />
-            <Button
-              variant="outline"
-              onClick={() => {
-                onJoinRoom(
-                  roomInput.trim() === "" ? null : roomInput.trim()
-                ).catch(reportError);
-              }}
-            >
-              {device.room_code ? "Update" : "Join"}
-            </Button>
-          </div>
-        </Field>
-      </FieldGroup>
+      <div className="flex items-end gap-2">
+        <Input
+          className="min-w-0 flex-1"
+          label="Display name"
+          value={name}
+          onChange={setName}
+        />
+        <Button
+          disabled={name.trim() === device.display_name || name.trim() === ""}
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={() => {
+            onRename(name.trim()).catch(reportError);
+          }}
+        >
+          Save
+        </Button>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <Input
+          className="min-w-0 flex-1"
+          label="Room code"
+          maxLength={6}
+          placeholder="Optional"
+          value={roomInput}
+          onChange={(value) => {
+            setRoomInput(value.toUpperCase());
+          }}
+        />
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={() => {
+            onJoinRoom(roomInput.trim() === "" ? null : roomInput.trim()).catch(
+              reportError
+            );
+          }}
+        >
+          {device.room_code ? "Update" : "Join"}
+        </Button>
+      </div>
 
       {device.room_code ? (
         <div className="flex items-center gap-3">
@@ -176,26 +174,29 @@ export function SelfCard({
             <div className="flex flex-wrap gap-1">
               <Button
                 size="sm"
+                type="button"
                 variant="ghost"
                 onClick={() => {
                   copyRoom().catch(reportError);
                 }}
               >
-                <Copy data-icon="inline-start" />
+                <Copy />
                 Copy
               </Button>
               <Button
                 size="sm"
+                type="button"
                 variant="ghost"
                 onClick={() => {
                   copyInviteLink().catch(reportError);
                 }}
               >
-                <Link2 data-icon="inline-start" />
+                <Link2 />
                 Invite
               </Button>
               <Button
                 size="sm"
+                type="button"
                 variant="ghost"
                 onClick={() => {
                   onJoinRoom(null).catch(reportError);
@@ -208,6 +209,7 @@ export function SelfCard({
         </div>
       ) : (
         <Button
+          type="button"
           variant="secondary"
           onClick={() => {
             const code = crypto

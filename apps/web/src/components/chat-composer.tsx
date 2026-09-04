@@ -1,10 +1,9 @@
 import { Paperclip } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { Button } from "#/components/ui/button.tsx";
-import { Progress } from "#/components/ui/progress.tsx";
-import { Textarea } from "#/components/ui/textarea.tsx";
-import { toast } from "#/components/ui/toast.tsx";
+import { PromptInput } from "#/components/agents/prompt-input.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { toast } from "#/components/toast-host.tsx";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -34,8 +33,8 @@ export function ChatComposer({
   onSendFiles,
 }: ChatComposerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [text, setText] = useState("");
 
   const openFilePicker = () => {
     inputRef.current?.click();
@@ -50,15 +49,6 @@ export function ChatComposer({
       return;
     }
     void onSendFiles(files);
-  };
-
-  const sendText = async () => {
-    const body = text.trim();
-    if (disabled || sending || body === "") {
-      return;
-    }
-    await onSendText(body);
-    setText("");
   };
 
   return (
@@ -84,11 +74,10 @@ export function ChatComposer({
     >
       {variant === "drop" ? (
         <button
-          className={
-            isDragging
-              ? "border-foreground/40 bg-muted/60 rounded-3xl border border-dashed px-6 py-10 text-center"
-              : "border-border rounded-3xl border border-dashed px-6 py-10 text-center"
-          }
+          className={cn(
+            "rounded-3xl border border-dashed px-6 py-10 text-center",
+            isDragging ? "border-foreground/40 bg-muted/60" : "border-border"
+          )}
           disabled={disabled || sending}
           type="button"
           onClick={openFilePicker}
@@ -97,45 +86,44 @@ export function ChatComposer({
           <p className="text-muted-foreground text-sm">or click to browse</p>
         </button>
       ) : null}
-      <div className="flex items-end gap-2">
-        {variant === "inline" ? (
-          <Button
-            disabled={disabled || sending}
-            size="icon"
-            type="button"
-            variant="ghost"
-            onClick={openFilePicker}
-          >
-            <Paperclip />
-            <span className="sr-only">Attach files</span>
-          </Button>
-        ) : null}
-        <Textarea
-          disabled={disabled || sending}
-          maxLength={maxTextBytes}
-          placeholder="Say something"
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              sendText().catch(reportError);
-            }
-          }}
-        />
-        <Button
-          disabled={disabled || sending || text.trim() === ""}
-          onClick={() => {
-            sendText().catch(reportError);
-          }}
-        >
-          Send
-        </Button>
-      </div>
+      <PromptInput
+        disabled={disabled}
+        value={text}
+        onValueChange={setText}
+        leadingAction={
+          variant === "inline" ? (
+            <Button
+              aria-label="Attach files"
+              disabled={disabled || sending}
+              size="icon"
+              type="button"
+              variant="ghost"
+              onClick={openFilePicker}
+            >
+              <Paperclip />
+            </Button>
+          ) : undefined
+        }
+        loading={sending}
+        maxLength={maxTextBytes}
+        maxRows={6}
+        minRows={1}
+        placeholder={variant === "drop" ? "Leave a message" : "Say something"}
+        onSubmit={(body) => {
+          onSendText(body)
+            .then(() => {
+              setText("");
+            })
+            .catch(reportError);
+        }}
+      />
       {progress === null ? null : (
-        <Progress value={Math.round(progress * 100)} />
+        <div className="bg-muted h-1 overflow-hidden rounded-full">
+          <div
+            className="bg-primary h-full origin-left transition-transform"
+            style={{ transform: `scaleX(${progress})` }}
+          />
+        </div>
       )}
       <input
         ref={inputRef}

@@ -1,7 +1,8 @@
 import { Monitor, Smartphone, Tablet } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "#/components/ui/avatar.tsx";
+import { MessageAvatar } from "#/components/agents/message.tsx";
 import type { Peer } from "#/lib/api.ts";
+import { initials } from "#/lib/media.ts";
 import { cn } from "#/lib/utils.ts";
 
 const kindIcon = {
@@ -9,14 +10,6 @@ const kindIcon = {
   tablet: Tablet,
   desktop: Monitor,
 } as const;
-
-const initials = (name: string): string =>
-  name
-    .split(" ")
-    .slice(0, 2)
-    .map((part) => part[0] ?? "")
-    .join("")
-    .toUpperCase();
 
 interface PeerTileProps {
   peer: Peer;
@@ -41,11 +34,11 @@ export function PeerTile({ peer, selected, onSelect }: PeerTileProps) {
         onSelect(peer);
       }}
     >
-      <Avatar>
-        <AvatarFallback>{initials(peer.display_name)}</AvatarFallback>
-      </Avatar>
+      <MessageAvatar>{initials(peer.display_name)}</MessageAvatar>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">{peer.display_name}</span>
+        <span className="truncate text-sm font-medium">
+          {peer.display_name}
+        </span>
         <span className="text-muted-foreground flex items-center gap-1 text-xs">
           <Icon />
           {peer.device_kind}

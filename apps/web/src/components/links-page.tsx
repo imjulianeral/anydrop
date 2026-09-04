@@ -3,18 +3,13 @@ import { useEffect, useState } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
 import { ChatComposer } from "#/components/chat-composer.tsx";
-import { Badge } from "#/components/ui/badge.tsx";
-import { Button } from "#/components/ui/button.tsx";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "#/components/ui/empty.tsx";
-import { Field, FieldLabel } from "#/components/ui/field.tsx";
-import { Input } from "#/components/ui/input.tsx";
-import { toast } from "#/components/ui/toast.tsx";
+import { EmptyState } from "#/components/empty-state.tsx";
+import { FilePreview } from "#/components/file-preview.tsx";
+import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { Input } from "#/components/motion/input.tsx";
+import { Loader } from "#/components/motion/loader.tsx";
+import { toast } from "#/components/toast-host.tsx";
 import {
   completeTransfer,
   createFileTransfer,
@@ -166,34 +161,32 @@ export function LinksPage() {
         </p>
       </header>
 
-      <Field className="shrink-0">
-        <FieldLabel htmlFor="shorten-url">Shorten a URL</FieldLabel>
-        <div className="flex gap-2">
-          <Input
-            id="shorten-url"
-            placeholder="https://"
-            value={shortInput}
-            onChange={(event) => {
-              setShortInput(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void shortenUrl();
-              }
-            }}
-          />
-          <Button
-            disabled={shortening || shortInput.trim() === ""}
-            variant="outline"
-            onClick={() => {
+      <div className="flex shrink-0 items-end gap-2">
+        <Input
+          className="min-w-0 flex-1"
+          id="shorten-url"
+          label="Shorten a URL"
+          placeholder="https://"
+          value={shortInput}
+          onChange={setShortInput}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
               void shortenUrl();
-            }}
-          >
-            Shorten
-          </Button>
-        </div>
-      </Field>
+            }
+          }}
+        />
+        <Button
+          disabled={shortening || shortInput.trim() === ""}
+          type="button"
+          variant="outline"
+          onClick={() => {
+            void shortenUrl();
+          }}
+        >
+          Shorten
+        </Button>
+      </div>
 
       <section className="flex shrink-0 flex-col gap-3">
         <div className="flex flex-col gap-1">
@@ -213,20 +206,16 @@ export function LinksPage() {
 
       <section className="border-border/70 bg-card/40 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border">
         {loading ? (
-          <p className="text-muted-foreground p-6 text-sm">Loading links…</p>
+          <div className="flex flex-1 items-center justify-center p-6">
+            <Loader label="Loading links" variant="dots" />
+          </div>
         ) : links.length === 0 ? (
-          <Empty className="flex-1 border-0">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Link2 />
-              </EmptyMedia>
-              <EmptyTitle>No live links yet</EmptyTitle>
-              <EmptyDescription>
-                Shorten a URL, or share a file or message, and it will show up
-                here.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <EmptyState
+            className="flex-1"
+            description="Shorten a URL, or share a file or message, and it will show up here."
+            icon={<Link2 />}
+            title="No live links yet"
+          />
         ) : (
           <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
             {links.map((link) => {
@@ -234,27 +223,44 @@ export function LinksPage() {
               return (
                 <li
                   key={link.code}
-                  className="border-border/70 bg-card/80 flex items-start justify-between gap-4 rounded-3xl border p-4"
+                  className="border-border/70 bg-card/80 flex flex-col gap-3 rounded-3xl border p-4"
                 >
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{link.kind}</Badge>
-                      <p className="truncate text-sm">{linkLabel(link)}</p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <AnimatedBadge
+                          showIcon={false}
+                          size="sm"
+                          status="neutral"
+                        >
+                          {link.kind}
+                        </AnimatedBadge>
+                        <p className="truncate text-sm">{linkLabel(link)}</p>
+                      </div>
+                      <p className="text-muted-foreground truncate font-mono text-xs">
+                        {shortUrl}
+                      </p>
                     </div>
-                    <p className="text-muted-foreground truncate font-mono text-xs">
-                      {shortUrl}
-                    </p>
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        void copyLink(link.code);
+                      }}
+                    >
+                      <Copy />
+                      Copy
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      void copyLink(link.code);
-                    }}
-                  >
-                    <Copy data-icon="inline-start" />
-                    Copy
-                  </Button>
+                  {link.kind === "file" ? (
+                    <FilePreview
+                      byteSize={link.byte_size}
+                      contentType={link.content_type}
+                      downloadUrl={link.download?.url}
+                      filename={link.filename}
+                    />
+                  ) : null}
                 </li>
               );
             })}

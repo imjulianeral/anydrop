@@ -4,16 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useAppSession } from "#/components/app-session.tsx";
 import { ChatComposer } from "#/components/chat-composer.tsx";
 import { ChatThread } from "#/components/chat-thread.tsx";
+import { EmptyState } from "#/components/empty-state.tsx";
+import { Loader } from "#/components/motion/loader.tsx";
 import { PeerTile } from "#/components/peer-tile.tsx";
 import { SelfCard } from "#/components/self-card.tsx";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "#/components/ui/empty.tsx";
-import { toast } from "#/components/ui/toast.tsx";
+import { toast } from "#/components/toast-host.tsx";
 import {
   completeTransfer,
   createFileTransfer,
@@ -168,9 +163,7 @@ export function ShareApp() {
 
   const appendTransfer = (next: Transfer) => {
     setTransfers((current) =>
-      current.some((item) => item.id === next.id)
-        ? current
-        : [...current, next]
+      current.some((item) => item.id === next.id) ? current : [...current, next]
     );
   };
 
@@ -239,7 +232,7 @@ export function ShareApp() {
   };
 
   return (
-    <div className="flex h-svh min-h-0">
+    <div className="flex h-full min-h-0">
       <aside className="border-border/70 flex w-80 shrink-0 flex-col border-r">
         <SelfCard
           key={`${self.display_name}-${self.room_code ?? ""}`}
@@ -251,18 +244,12 @@ export function ShareApp() {
         />
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {peers.length === 0 ? (
-            <Empty className="border-0 p-6">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Radio />
-                </EmptyMedia>
-                <EmptyTitle>No other devices yet</EmptyTitle>
-                <EmptyDescription>
-                  Open this page on another device on the same network, or join
-                  a room.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <EmptyState
+              className="p-6"
+              description="Open this page on another device on the same network, or join a room."
+              icon={<Radio />}
+              title="No other devices yet"
+            />
           ) : (
             peers.map((peer) => (
               <PeerTile
@@ -301,23 +288,23 @@ export function ShareApp() {
               <h2 className="font-heading text-lg">{selected.display_name}</h2>
             </header>
             {loadingThread ? (
-              <p className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
-                Loading messages…
-              </p>
+              <div className="flex flex-1 items-center justify-center">
+                <Loader label="Loading messages" variant="dots" />
+              </div>
             ) : transfers.length === 0 ? (
-              <Empty className="flex-1 border-0">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <MessageSquare />
-                  </EmptyMedia>
-                  <EmptyTitle>No messages yet</EmptyTitle>
-                  <EmptyDescription>
-                    Send a file or a message. History lasts 24 hours.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+              <EmptyState
+                className="flex-1"
+                description="Send a file or a message. History lasts 24 hours."
+                icon={<MessageSquare />}
+                title="No messages yet"
+              />
             ) : (
-              <ChatThread selfId={self.id} transfers={transfers} />
+              <ChatThread
+                peerName={selected.display_name}
+                selfId={self.id}
+                selfName={self.display_name}
+                transfers={transfers}
+              />
             )}
             <ChatComposer
               progress={progress}
@@ -327,18 +314,12 @@ export function ShareApp() {
             />
           </>
         ) : (
-          <Empty className="flex-1 border-0">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageSquare />
-              </EmptyMedia>
-              <EmptyTitle>Select a device to start sharing</EmptyTitle>
-              <EmptyDescription>
-                Nearby devices show up on the left. Chats stay here for 24
-                hours.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <EmptyState
+            className="flex-1"
+            description="Nearby devices show up on the left. Chats stay here for 24 hours."
+            icon={<MessageSquare />}
+            title="Select a device to start sharing"
+          />
         )}
       </section>
     </div>

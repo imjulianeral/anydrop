@@ -1,12 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { Button, buttonVariants } from "#/components/ui/button.tsx";
-import { getShortLink, resolveAssetUrl, type ShortLink } from "#/lib/api.ts";
+import { FilePreview } from "#/components/file-preview.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { Loader } from "#/components/motion/loader.tsx";
+import { ThemeSwitch } from "#/components/theme-switch.tsx";
+import { getShortLink, type ShortLink } from "#/lib/api.ts";
 
 export const Route = createFileRoute("/s/$code")({
   component: ShortLinkPage,
 });
+
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="bg-background relative min-h-svh">
+      <ThemeSwitch className="absolute top-4 right-4" />
+      {children}
+    </div>
+  );
+}
 
 function ShortLinkPage() {
   const { code } = Route.useParams();
@@ -28,9 +40,7 @@ function ShortLinkPage() {
         setDrop(payload.short_link);
       } catch (caught) {
         if (!cancelled) {
-          setError(
-            caught instanceof Error ? caught.message : "Link not found"
-          );
+          setError(caught instanceof Error ? caught.message : "Link not found");
         }
       }
     };
@@ -49,56 +59,59 @@ function ShortLinkPage() {
 
   if (error) {
     return (
-      <main className="flex min-h-svh items-center justify-center p-6">
-        <p className="text-muted-foreground text-sm">{error}</p>
-      </main>
+      <PageShell>
+        <main className="flex min-h-svh items-center justify-center p-6">
+          <p className="text-muted-foreground text-sm">{error}</p>
+        </main>
+      </PageShell>
     );
   }
 
   if (!drop) {
     return (
-      <main className="flex min-h-svh items-center justify-center p-6">
-        <p className="text-muted-foreground text-sm">Opening link…</p>
-      </main>
+      <PageShell>
+        <main className="flex min-h-svh items-center justify-center p-6">
+          <Loader label="Opening link" variant="dots" />
+        </main>
+      </PageShell>
     );
   }
 
   if (drop.kind === "text") {
     return (
-      <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
-        <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
-          Message
-        </p>
-        <p className="whitespace-pre-wrap text-lg">{drop.body}</p>
-        <Button
-          variant="outline"
-          onClick={() => {
-            void copyMessage();
-          }}
-        >
-          Copy
-        </Button>
-      </main>
+      <PageShell>
+        <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
+          <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
+            Message
+          </p>
+          <p className="text-lg whitespace-pre-wrap">{drop.body}</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void copyMessage();
+            }}
+          >
+            Copy
+          </Button>
+        </main>
+      </PageShell>
     );
   }
 
-  const downloadUrl = drop.download?.url
-    ? resolveAssetUrl(drop.download.url)
-    : null;
-
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
-      <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
-        File
-      </p>
-      <p className="text-lg">{drop.filename ?? "File"}</p>
-      {downloadUrl ? (
-        <a className={buttonVariants()} href={downloadUrl} rel="noopener">
-          Download
-        </a>
-      ) : (
-        <p className="text-muted-foreground text-sm">This file is not ready.</p>
-      )}
-    </main>
+    <PageShell>
+      <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
+        <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
+          File
+        </p>
+        <FilePreview
+          byteSize={drop.byte_size}
+          contentType={drop.content_type}
+          downloadUrl={drop.download?.url}
+          filename={drop.filename}
+        />
+      </main>
+    </PageShell>
   );
 }

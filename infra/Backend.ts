@@ -2,16 +2,16 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/unstable/http/HttpServerRequest";
 
-import { railsPort } from "./ports.ts";
-import { Rails } from "./Rails.ts";
+import { ElixirBackend } from "./ElixirBackend.ts";
+import { backendPort } from "./ports.ts";
 
 export default class Backend extends Cloudflare.DurableObject<Backend>()(
   "Backend",
   Effect.gen(function* () {
-    const rails = yield* Rails;
+    const backend = yield* ElixirBackend;
 
     return Effect.gen(function* () {
-      const { fetch } = yield* rails.getTcpPort(railsPort);
+      const { fetch } = yield* backend.getTcpPort(backendPort);
 
       return {
         fetch: Effect.gen(function* () {
@@ -21,6 +21,8 @@ export default class Backend extends Cloudflare.DurableObject<Backend>()(
       };
     });
   }).pipe(
-    Effect.provide(Cloudflare.Containers.layer(Rails, { enableInternet: true }))
+    Effect.provide(
+      Cloudflare.Containers.layer(ElixirBackend, { enableInternet: true })
+    )
   )
 ) {}

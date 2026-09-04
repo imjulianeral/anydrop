@@ -2,7 +2,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import { Toaster } from "#/components/ui/toast.tsx";
+import { ToastHost } from "#/components/toast-host.tsx";
 
 import "../styles.css";
 
@@ -12,8 +12,9 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <Toaster>
+    <>
       <Outlet />
+      <ToastHost />
       {import.meta.env.DEV ? (
         <TanStackDevtools
           config={{
@@ -27,6 +28,6 @@ function RootComponent() {
           ]}
         />
       ) : null}
-    </Toaster>
+    </>
   );
 }

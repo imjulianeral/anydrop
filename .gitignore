@@ -1,4 +1,5 @@
 node_modules
+.cache-nub
 .env*
 !.env.example
 *.log

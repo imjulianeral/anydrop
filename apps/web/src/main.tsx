@@ -1,4 +1,5 @@
 import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { ThemeProvider } from "next-themes";
 import ReactDOM from "react-dom/client";
 
 import { routeTree } from "./routeTree.gen";
@@ -19,5 +20,14 @@ const rootElement = document.querySelector("#app");
 
 if (!rootElement?.innerHTML && rootElement instanceof HTMLElement) {
   const root = ReactDOM.createRoot(rootElement);
-  root.render(<RouterProvider router={router} />);
+  root.render(
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      storageKey="anyshare.theme"
+    >
+      <RouterProvider router={router} />
+    </ThemeProvider>
+  );
 }

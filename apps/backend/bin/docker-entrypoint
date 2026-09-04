@@ -1,38 +1,30 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 cd /app
 
-unpack_redacted() {
-  local value="${1-}"
-  if [[ "${value}" == \{* ]]; then
-    local unpacked
-    unpacked="$(ruby -e 'require "json"; v=JSON.parse(ARGV[0]); print v["value"] if v.is_a?(Hash) && v["_tag"]=="Redacted"' "${value}" 2>/dev/null || true)"
-    if [[ -n "${unpacked}" ]]; then
-      printf '%s' "${unpacked}"
-      return
+if [ "$#" -eq 0 ]; then
+  set -- /app/bin/anyshare start
+fi
+
+if [ -n "${DATABASE_URL:-}" ]; then
+  attempt=1
+  max_attempts=30
+
+  while [ "${attempt}" -le "${max_attempts}" ]; do
+    if /app/bin/anyshare eval "Anyshare.Release.migrate()"; then
+      break
     fi
-  fi
-  printf '%s' "${value}"
-}
 
-value="$(unpack_redacted "${DATABASE_URL-}")"
-if [[ -n "${value}" && "${value}" =~ ^postgres(ql)?:// ]]; then
-  export DATABASE_URL="${value}"
-else
-  unset DATABASE_URL
-fi
+    if [ "${attempt}" -eq "${max_attempts}" ]; then
+      echo "database migrate failed after ${max_attempts} attempts" >&2
+      exit 1
+    fi
 
-if [[ -z "${SECRET_KEY_BASE-}" ]]; then
-  export SECRET_KEY_BASE="anyshare-container-dev-secret-key-base-please-override"
-fi
-
-if [[ "$#" -eq 0 ]]; then
-  set -- bundle exec puma -C config/puma.rb
-fi
-
-if [[ "${DATABASE_URL-}" =~ ^postgres(ql)?:// && ! "${DATABASE_URL}" =~ @127\.0\.0\.1|@localhost|@\[::1\] ]]; then
-  bundle exec rails db:prepare || echo "db:prepare failed; starting Puma anyway" >&2
+    echo "database migrate failed (attempt ${attempt}/${max_attempts}); retrying" >&2
+    attempt=$((attempt + 1))
+    sleep 2
+  done
 fi
 
 exec "$@"
