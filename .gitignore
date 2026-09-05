@@ -11,3 +11,4 @@ apps/backend/storage
 apps/backend/vendor/bundle
 apps/backend/config/master.key
 apps/web/dist
+.vitest

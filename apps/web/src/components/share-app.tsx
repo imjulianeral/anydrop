@@ -8,7 +8,7 @@ import { EmptyState } from "#/components/empty-state.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
 import { PeerTile } from "#/components/peer-tile.tsx";
 import { SelfCard } from "#/components/self-card.tsx";
-import { toast } from "#/components/toast-host.tsx";
+import { toast } from "#/lib/toast.ts";
 import {
   completeTransfer,
   createFileTransfer,

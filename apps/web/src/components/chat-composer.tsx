@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 
 import { PromptInput } from "#/components/agents/prompt-input.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
-import { toast } from "#/components/toast-host.tsx";
+import { toast } from "#/lib/toast.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { cn } from "#/lib/utils.ts";
 

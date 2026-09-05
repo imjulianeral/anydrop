@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Input } from "#/components/motion/input.tsx";
-import { toast } from "#/components/toast-host.tsx";
+import { toast } from "#/lib/toast.ts";
 import { createShortLink, shortPageUrl, type Peer } from "#/lib/api.ts";
 
 const reportError = (error: unknown) => {

@@ -1,15 +1,23 @@
-import { Copy, Link2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ChevronLeft,
+  Copy,
+  FileIcon,
+  Link2,
+  MessageSquare,
+  Plus,
+} from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { PromptInput } from "#/components/agents/prompt-input.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
-import { ChatComposer } from "#/components/chat-composer.tsx";
 import { EmptyState } from "#/components/empty-state.tsx";
 import { FilePreview } from "#/components/file-preview.tsx";
 import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Input } from "#/components/motion/input.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
-import { toast } from "#/components/toast-host.tsx";
+import { MorphingModal } from "#/components/motion/morphing-modal.tsx";
+import { toast } from "#/lib/toast.ts";
 import {
   completeTransfer,
   createFileTransfer,
@@ -19,7 +27,11 @@ import {
   shortPageUrl,
   type ShortLink,
 } from "#/lib/api.ts";
+import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { uploadFile } from "#/lib/upload.ts";
+import { cn } from "#/lib/utils.ts";
+
+type CreateView = "choose" | "message" | "link" | "file";
 
 const reportError = (error: unknown, title: string) => {
   toast.add({
@@ -40,14 +52,39 @@ const linkLabel = (link: ShortLink): string => {
   return link.filename ?? "File";
 };
 
+const choices = [
+  {
+    id: "message" as const,
+    title: "Message",
+    description: "Share text as a public drop.",
+    icon: MessageSquare,
+  },
+  {
+    id: "link" as const,
+    title: "Link",
+    description: "Shorten a URL anyone can open.",
+    icon: Link2,
+  },
+  {
+    id: "file" as const,
+    title: "File",
+    description: "Upload a file and get a download link.",
+    icon: FileIcon,
+  },
+];
+
 export function LinksPage() {
   const { token } = useAppSession();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [view, setView] = useState<CreateView | null>(null);
   const [shortInput, setShortInput] = useState("");
+  const [message, setMessage] = useState("");
   const [shortening, setShortening] = useState(false);
-  const [links, setLinks] = useState<ShortLink[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [links, setLinks] = useState<ShortLink[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +110,32 @@ export function LinksPage() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (view === null) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setView(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [view]);
+
+  const closeCreate = () => {
+    if (sending || shortening) {
+      return;
+    }
+    setView(null);
+    setShortInput("");
+    setMessage("");
+    setProgress(null);
+    setDragging(false);
+  };
+
   const copyLink = async (code: string) => {
     const url = shortPageUrl(code);
     await navigator.clipboard.writeText(url);
@@ -85,6 +148,10 @@ export function LinksPage() {
       ...current.filter((item) => item.code !== link.code),
     ]);
     await copyLink(link.code);
+    setView(null);
+    setShortInput("");
+    setMessage("");
+    setProgress(null);
   };
 
   const sendText = async (body: string) => {
@@ -100,11 +167,15 @@ export function LinksPage() {
   };
 
   const sendFiles = async (files: File[]) => {
+    const allowed = files.filter((file) => file.size <= maxFileBytes);
+    if (allowed.length === 0) {
+      return;
+    }
     setSending(true);
     try {
       /* Sequential so the progress bar tracks one file at a time. */
       /* oxlint-disable eslint/no-await-in-loop */
-      for (const file of files) {
+      for (const file of allowed) {
         setProgress(0);
         const created = await createFileTransfer(token, {
           filename: file.name,
@@ -137,14 +208,7 @@ export function LinksPage() {
     setShortening(true);
     try {
       const created = await createShortLink(token, url);
-      const shortUrl = shortPageUrl(created.short_link.code);
-      setLinks((current) => [
-        created.short_link,
-        ...current.filter((link) => link.code !== created.short_link.code),
-      ]);
-      setShortInput("");
-      await navigator.clipboard.writeText(shortUrl);
-      toast.add({ title: "Short link copied", type: "success" });
+      await rememberLink(created.short_link);
     } catch (error) {
       reportError(error, "Could not shorten");
     } finally {
@@ -154,55 +218,23 @@ export function LinksPage() {
 
   return (
     <main className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col gap-6 px-6 py-8">
-      <header className="flex shrink-0 flex-col gap-1">
-        <h2 className="font-heading text-lg">Links</h2>
-        <p className="text-muted-foreground text-sm">
-          Shorten a URL, or drop a file or message as a public link.
-        </p>
-      </header>
-
-      <div className="flex shrink-0 items-end gap-2">
-        <Input
-          className="min-w-0 flex-1"
-          id="shorten-url"
-          label="Shorten a URL"
-          placeholder="https://"
-          value={shortInput}
-          onChange={setShortInput}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void shortenUrl();
-            }
-          }}
-        />
-        <Button
-          disabled={shortening || shortInput.trim() === ""}
-          type="button"
-          variant="outline"
-          onClick={() => {
-            void shortenUrl();
-          }}
-        >
-          Shorten
-        </Button>
-      </div>
-
-      <section className="flex shrink-0 flex-col gap-3">
+      <header className="flex shrink-0 items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h3 className="font-medium">Share a drop</h3>
+          <h2 className="font-heading text-lg">Links</h2>
           <p className="text-muted-foreground text-sm">
-            Anyone with the link can open it. Drops expire after 24 hours.
+            Create a public drop. Anyone with the link can open it.
           </p>
         </div>
-        <ChatComposer
-          progress={progress}
-          sending={sending}
-          variant="drop"
-          onSendFiles={sendFiles}
-          onSendText={sendText}
-        />
-      </section>
+        <Button
+          type="button"
+          onClick={() => {
+            setView("choose");
+          }}
+        >
+          <Plus />
+          Create
+        </Button>
+      </header>
 
       <section className="border-border/70 bg-card/40 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border">
         {loading ? (
@@ -212,17 +244,17 @@ export function LinksPage() {
         ) : links.length === 0 ? (
           <EmptyState
             className="flex-1"
-            description="Shorten a URL, or share a file or message, and it will show up here."
+            description="Create a message, link, or file drop and it will show up here."
             icon={<Link2 />}
             title="No live links yet"
           />
         ) : (
           <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-            {links.map((link) => {
-              const shortUrl = shortPageUrl(link.code);
+            {links.map((item) => {
+              const shortUrl = shortPageUrl(item.code);
               return (
                 <li
-                  key={link.code}
+                  key={item.code}
                   className="border-border/70 bg-card/80 flex flex-col gap-3 rounded-3xl border p-4"
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -233,9 +265,9 @@ export function LinksPage() {
                           size="sm"
                           status="neutral"
                         >
-                          {link.kind}
+                          {item.kind}
                         </AnimatedBadge>
-                        <p className="truncate text-sm">{linkLabel(link)}</p>
+                        <p className="truncate text-sm">{linkLabel(item)}</p>
                       </div>
                       <p className="text-muted-foreground truncate font-mono text-xs">
                         {shortUrl}
@@ -246,19 +278,19 @@ export function LinksPage() {
                       type="button"
                       variant="ghost"
                       onClick={() => {
-                        void copyLink(link.code);
+                        void copyLink(item.code);
                       }}
                     >
                       <Copy />
                       Copy
                     </Button>
                   </div>
-                  {link.kind === "file" ? (
+                  {item.kind === "file" ? (
                     <FilePreview
-                      byteSize={link.byte_size}
-                      contentType={link.content_type}
-                      downloadUrl={link.download?.url}
-                      filename={link.filename}
+                      byteSize={item.byte_size}
+                      contentType={item.content_type}
+                      downloadUrl={item.download?.url}
+                      filename={item.filename}
                     />
                   ) : null}
                 </li>
@@ -267,6 +299,194 @@ export function LinksPage() {
           </ul>
         )}
       </section>
+
+      <MorphingModal
+        className="max-w-md"
+        placement="center"
+        viewId={view}
+        onClose={closeCreate}
+      >
+        {view === "choose" ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="font-heading text-lg">Create a drop</h3>
+              <p className="text-muted-foreground text-sm">
+                Choose what you want to share.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1">
+              {choices.map((choice) => {
+                const Icon = choice.icon;
+                return (
+                  <button
+                    key={choice.id}
+                    className="hover:bg-muted focus-visible:ring-ring/50 flex w-full items-start gap-3 rounded-2xl p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none"
+                    type="button"
+                    onClick={() => {
+                      setView(choice.id);
+                    }}
+                  >
+                    <span className="bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-2xl">
+                      <Icon />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="font-medium">{choice.title}</span>
+                      <span className="text-muted-foreground text-sm">
+                        {choice.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {view === "message" ? (
+          <CreatePane
+            title="Message"
+            onBack={() => {
+              setView("choose");
+            }}
+          >
+            <PromptInput
+              disabled={sending}
+              loading={sending}
+              maxLength={maxTextBytes}
+              maxRows={8}
+              minRows={3}
+              placeholder="Write a message"
+              value={message}
+              onSubmit={(body) => {
+                void sendText(body);
+              }}
+              onValueChange={setMessage}
+            />
+          </CreatePane>
+        ) : null}
+
+        {view === "link" ? (
+          <CreatePane
+            title="Link"
+            onBack={() => {
+              setView("choose");
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              <Input
+                label="URL"
+                placeholder="https://"
+                value={shortInput}
+                onChange={setShortInput}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void shortenUrl();
+                  }
+                }}
+              />
+              <Button
+                disabled={shortening || shortInput.trim() === ""}
+                type="button"
+                onClick={() => {
+                  void shortenUrl();
+                }}
+              >
+                Shorten
+              </Button>
+            </div>
+          </CreatePane>
+        ) : null}
+
+        {view === "file" ? (
+          <CreatePane
+            title="File"
+            onBack={() => {
+              setView("choose");
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              <button
+                className={cn(
+                  "rounded-3xl border border-dashed px-6 py-10 text-center",
+                  dragging
+                    ? "border-foreground/40 bg-muted/60"
+                    : "border-border"
+                )}
+                disabled={sending}
+                type="button"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                }}
+                onDragLeave={() => {
+                  setDragging(false);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  void sendFiles([...event.dataTransfer.files]);
+                }}
+              >
+                <p className="font-medium">Drop files here</p>
+                <p className="text-muted-foreground text-sm">
+                  or click to browse
+                </p>
+              </button>
+              {progress === null ? null : (
+                <div className="bg-muted h-1 overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-full origin-left transition-transform"
+                    style={{ transform: `scaleX(${progress})` }}
+                  />
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                disabled={sending}
+                multiple
+                type="file"
+                onChange={(event) => {
+                  void sendFiles([...(event.target.files ?? [])]);
+                  event.target.value = "";
+                }}
+              />
+            </div>
+          </CreatePane>
+        ) : null}
+      </MorphingModal>
     </main>
+  );
+}
+
+function CreatePane({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-1">
+        <Button
+          aria-label="Back"
+          size="icon"
+          type="button"
+          variant="ghost"
+          onClick={onBack}
+        >
+          <ChevronLeft />
+        </Button>
+        <h3 className="font-heading text-lg">{title}</h3>
+      </div>
+      {children}
+    </div>
   );
 }
