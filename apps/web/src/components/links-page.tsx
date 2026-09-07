@@ -1,6 +1,8 @@
 import {
   ChevronLeft,
   Copy,
+  Download,
+  Eye,
   FileIcon,
   Link2,
   MessageSquare,
@@ -11,13 +13,19 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PromptInput } from "#/components/agents/prompt-input.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
 import { EmptyState } from "#/components/empty-state.tsx";
-import { FilePreview } from "#/components/file-preview.tsx";
+import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
+import { LinkDetails } from "#/components/link-details.tsx";
+import { LinksActivityChart } from "#/components/links-activity-chart.tsx";
 import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Input } from "#/components/motion/input.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
 import { MorphingModal } from "#/components/motion/morphing-modal.tsx";
-import { toast } from "#/lib/toast.ts";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "#/components/ui/dialog.tsx";
 import {
   completeTransfer,
   createFileTransfer,
@@ -25,9 +33,16 @@ import {
   createTextTransfer,
   listShortLinks,
   shortPageUrl,
+  type LinkStat,
   type ShortLink,
 } from "#/lib/api.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
+import {
+  applyShortLinkEventToLink,
+  applyShortLinkEventToStats,
+  readShortLinkEvent,
+} from "#/lib/link-events.ts";
+import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -74,7 +89,7 @@ const choices = [
 ];
 
 export function LinksPage() {
-  const { token } = useAppSession();
+  const { token, subscribeToEvents } = useAppSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<CreateView | null>(null);
   const [shortInput, setShortInput] = useState("");
@@ -84,6 +99,7 @@ export function LinksPage() {
   const [progress, setProgress] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [links, setLinks] = useState<ShortLink[]>([]);
+  const [stats, setStats] = useState<LinkStat[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -93,6 +109,7 @@ export function LinksPage() {
         const payload = await listShortLinks(token);
         if (!cancelled) {
           setLinks(payload.short_links);
+          setStats(payload.stats ?? []);
         }
       } catch (error) {
         if (!cancelled) {
@@ -109,6 +126,19 @@ export function LinksPage() {
       cancelled = true;
     };
   }, [token]);
+
+  useEffect(() => {
+    return subscribeToEvents((payload) => {
+      const event = readShortLinkEvent(payload);
+      if (!event) {
+        return;
+      }
+      setLinks((current) =>
+        current.map((item) => applyShortLinkEventToLink(item, event))
+      );
+      setStats((current) => applyShortLinkEventToStats(current, event));
+    });
+  }, [subscribeToEvents]);
 
   useEffect(() => {
     if (view === null) {
@@ -158,6 +188,9 @@ export function LinksPage() {
     setSending(true);
     try {
       const created = await createTextTransfer(token, { body });
+      if (!created.short_link) {
+        throw new Error("Could not create link");
+      }
       await rememberLink(created.short_link);
     } catch (error) {
       reportError(error, "Could not send");
@@ -189,6 +222,9 @@ export function LinksPage() {
           setProgress
         );
         const completed = await completeTransfer(token, created.transfer.id);
+        if (!completed.short_link) {
+          throw new Error("Could not create link");
+        }
         await rememberLink(completed.short_link);
       }
       /* oxlint-enable eslint/no-await-in-loop */
@@ -236,6 +272,10 @@ export function LinksPage() {
         </Button>
       </header>
 
+      {loading || stats.length === 0 ? null : (
+        <LinksActivityChart stats={stats} />
+      )}
+
       <section className="border-border/70 bg-card/40 flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border">
         {loading ? (
           <div className="flex flex-1 items-center justify-center p-6">
@@ -250,52 +290,14 @@ export function LinksPage() {
           />
         ) : (
           <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-            {links.map((item) => {
-              const shortUrl = shortPageUrl(item.code);
-              return (
-                <li
-                  key={item.code}
-                  className="border-border/70 bg-card/80 flex flex-col gap-3 rounded-3xl border p-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <AnimatedBadge
-                          showIcon={false}
-                          size="sm"
-                          status="neutral"
-                        >
-                          {item.kind}
-                        </AnimatedBadge>
-                        <p className="truncate text-sm">{linkLabel(item)}</p>
-                      </div>
-                      <p className="text-muted-foreground truncate font-mono text-xs">
-                        {shortUrl}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        void copyLink(item.code);
-                      }}
-                    >
-                      <Copy />
-                      Copy
-                    </Button>
-                  </div>
-                  {item.kind === "file" ? (
-                    <FilePreview
-                      byteSize={item.byte_size}
-                      contentType={item.content_type}
-                      downloadUrl={item.download?.url}
-                      filename={item.filename}
-                    />
-                  ) : null}
-                </li>
-              );
-            })}
+            {links.map((item) => (
+              <LinkListItem
+                key={item.code}
+                item={item}
+                token={token}
+                onCopy={copyLink}
+              />
+            ))}
           </ul>
         )}
       </section>
@@ -460,6 +462,75 @@ export function LinksPage() {
         ) : null}
       </MorphingModal>
     </main>
+  );
+}
+
+function LinkListItem({
+  item,
+  token,
+  onCopy,
+}: {
+  item: ShortLink;
+  token: string;
+  onCopy: (code: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = linkLabel(item);
+
+  return (
+    <li className="border-border/70 bg-card/80 relative rounded-3xl border">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger
+          aria-label={`View activity for ${label}`}
+          className="hover:bg-muted/50 focus-visible:ring-ring/50 absolute inset-0 cursor-pointer rounded-3xl transition-colors focus-visible:ring-3 focus-visible:outline-none"
+        />
+        <div className="pointer-events-none relative flex items-start justify-between gap-4 p-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <AnimatedBadge showIcon={false} size="sm" status="neutral">
+                {item.kind}
+              </AnimatedBadge>
+              <p className="truncate text-sm">{label}</p>
+            </div>
+            <p className="text-muted-foreground truncate font-mono text-xs">
+              {shortPageUrl(item.code)}
+            </p>
+            <p className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs tabular-nums">
+              <span className="flex items-center gap-1">
+                <Eye aria-hidden="true" className="size-3.5" />
+                {item.view_count ?? 0}
+                <span className="sr-only"> views</span>
+              </span>
+              {item.kind === "file" ? (
+                <span className="flex items-center gap-1">
+                  <Download aria-hidden="true" className="size-3.5" />
+                  {item.download_count ?? 0}
+                  <span className="sr-only"> downloads</span>
+                </span>
+              ) : null}
+              <ExpiryCountdown expiresAt={item.expires_at} />
+            </p>
+          </div>
+          <Button
+            className="pointer-events-auto shrink-0"
+            size="sm"
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              void onCopy(item.code);
+            }}
+          >
+            <Copy aria-hidden="true" />
+            Copy
+          </Button>
+        </div>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+          {open ? (
+            <LinkDetails label={label} link={item} token={token} />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </li>
   );
 }
 

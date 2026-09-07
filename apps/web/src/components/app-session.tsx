@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,16 +13,28 @@ import { EmptyState } from "#/components/empty-state.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
 import { createSession, updateDevice, type Peer } from "#/lib/api.ts";
+import { connectRoom } from "#/lib/cable.ts";
 import { loadLocalDevice, saveLocalDevice } from "#/lib/device.ts";
+
+type CableEventHandler = (payload: Record<string, unknown>) => void;
 
 interface AppSession {
   token: string;
   self: Peer;
   peers: Peer[];
+  connected: boolean;
   setPeers: (updater: Peer[] | ((current: Peer[]) => Peer[])) => void;
-  rename: (displayName: string) => Promise<void>;
   joinRoom: (roomCode: string | null) => Promise<void>;
+  subscribeToEvents: (handler: CableEventHandler) => () => void;
 }
+
+const mergePeers = (current: Peer[], incoming: Peer[]): Peer[] => {
+  const next = new Map(current.map((peer) => [peer.id, peer]));
+  for (const peer of incoming) {
+    next.set(peer.id, peer);
+  }
+  return [...next.values()];
+};
 
 const AppSessionContext = createContext<AppSession | null>(null);
 
@@ -42,7 +55,11 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
   const [token, setToken] = useState<string | null>(null);
   const [self, setSelf] = useState<Peer | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
+  const [connected, setConnected] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
+  const selfIdRef = useRef<string | null>(null);
+  const listenersRef = useRef(new Set<CableEventHandler>());
+  selfIdRef.current = self?.id ?? null;
 
   const applySession = useCallback((device: Peer, nextPeers: Peer[]) => {
     setSelf(device);
@@ -96,13 +113,43 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
     };
   }, [applySession, local]);
 
-  const rename = async (displayName: string) => {
+  const subscribeToEvents = useCallback((handler: CableEventHandler) => {
+    listenersRef.current.add(handler);
+    return () => {
+      listenersRef.current.delete(handler);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!token) {
       return;
     }
-    const updated = await updateDevice(token, { displayName });
-    applySession(updated.device, updated.peers);
-  };
+    return connectRoom(token, {
+      onConnect: () => {
+        setConnected(true);
+      },
+      onDisconnect: () => {
+        setConnected(false);
+      },
+      onEvent: (payload) => {
+        const { type } = payload;
+        if (type === "peer_joined" || type === "peer_updated") {
+          const peer = payload as unknown as Peer;
+          if (peer.id && peer.id !== selfIdRef.current) {
+            setPeers((current) => mergePeers(current, [peer]));
+          }
+        }
+        if (type === "peer_left" && typeof payload.id === "string") {
+          setPeers((current) =>
+            current.filter((peer) => peer.id !== payload.id)
+          );
+        }
+        for (const listener of listenersRef.current) {
+          listener(payload);
+        }
+      },
+    });
+  }, [token]);
 
   const joinRoom = async (roomCode: string | null) => {
     if (!token) {
@@ -146,17 +193,18 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
   }
 
   return (
-    <AppSessionContext
+    <AppSessionContext.Provider
       value={{
         token,
         self,
         peers,
+        connected,
         setPeers,
-        rename,
         joinRoom,
+        subscribeToEvents,
       }}
     >
       {children}
-    </AppSessionContext>
+    </AppSessionContext.Provider>
   );
 }

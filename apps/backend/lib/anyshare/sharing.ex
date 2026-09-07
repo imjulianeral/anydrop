@@ -8,6 +8,7 @@ defmodule Anyshare.Sharing do
   alias Anyshare.ObjectStore
   alias Anyshare.Repo
   alias Anyshare.RoomEvents
+  alias Anyshare.Sharing.LinkEvent
   alias Anyshare.Sharing.ShortLink
   alias Anyshare.Sharing.Transfer
   alias Anyshare.Time
@@ -136,11 +137,84 @@ defmodule Anyshare.Sharing do
     now = Time.now()
 
     from(link in ShortLink,
+      left_join: transfer in assoc(link, :transfer),
       where: link.device_id == ^device.id and link.expires_at >= ^now,
+      where: is_nil(transfer.id) or is_nil(transfer.recipient_id),
       order_by: [desc: link.created_at],
-      preload: [:transfer]
+      preload: [transfer: transfer]
     )
     |> Repo.all()
+  end
+
+  @spec record_event(ShortLink.t(), String.t()) :: :ok
+  def record_event(%ShortLink{code: code, device_id: device_id}, kind)
+      when kind in ["view", "download"] do
+    field = if kind == "view", do: :view_count, else: :download_count
+
+    %LinkEvent{}
+    |> LinkEvent.changeset(%{
+      id: Ecto.UUID.generate(),
+      code: code,
+      kind: kind,
+      occurred_at: Time.now()
+    })
+    |> Repo.insert!()
+
+    {_count, updated} =
+      from(link in ShortLink, where: link.code == ^code, select: link)
+      |> Repo.update_all(inc: [{field, 1}])
+
+    case updated do
+      [%ShortLink{} = link] when is_binary(device_id) ->
+        RoomEvents.notify_device(device_id, "short_link_event", %{
+          code: link.code,
+          kind: kind,
+          view_count: link.view_count || 0,
+          download_count: link.download_count || 0,
+          date: Date.to_iso8601(Date.utc_today())
+        })
+
+      _missing ->
+        :ok
+    end
+
+    :ok
+  rescue
+    _error -> :ok
+  end
+
+  @spec daily_stats(Device.t(), pos_integer(), String.t() | nil) :: [map()]
+  def daily_stats(device, days \\ 7, code \\ nil) do
+    today = Date.utc_today()
+    start_date = Date.add(today, 1 - days)
+    start_at = NaiveDateTime.new!(start_date, ~T[00:00:00])
+
+    query =
+      from(event in LinkEvent,
+        join: link in ShortLink,
+        on: link.code == event.code,
+        where: link.device_id == ^device.id,
+        where: event.occurred_at >= ^start_at,
+        group_by: [fragment("(?::date)", event.occurred_at), event.kind],
+        select: {fragment("(?::date)", event.occurred_at), event.kind, count(event.id)}
+      )
+
+    query = if code, do: where(query, [_event, link], link.code == ^code), else: query
+
+    counts =
+      query
+      |> Repo.all()
+      |> Map.new(fn {date, kind, count} -> {{to_date(date), kind}, count} end)
+
+    Enum.map(0..(days - 1), fn offset ->
+      date = Date.add(start_date, offset)
+
+      %{
+        date: Date.to_iso8601(date),
+        views: Map.get(counts, {date, "view"}, 0),
+        downloads: Map.get(counts, {date, "download"}, 0)
+      }
+    end)
   end
 
   @spec get_live_short_link(String.t()) :: ShortLink.t() | nil
@@ -207,26 +281,30 @@ defmodule Anyshare.Sharing do
   @spec short_link_json(ShortLink.t()) :: map()
   def short_link_json(%ShortLink{transfer: %Transfer{} = transfer} = link) do
     payload =
-      %{
+      counts_json(link)
+      |> Map.merge(%{
         code: link.code,
         expires_at: Time.iso8601(link.expires_at)
-      }
+      })
       |> Map.merge(drop_json(transfer))
 
     if downloadable?(transfer) do
-      Map.put(payload, :download, %{url: ObjectStore.presign_get(transfer.r2_key)})
+      payload
+      |> Map.put(:download, %{url: ObjectStore.presign_get(transfer.r2_key)})
+      |> Map.put(:track_download, "/api/v1/short_links/#{link.code}/download")
     else
       payload
     end
   end
 
   def short_link_json(link) do
-    %{
+    counts_json(link)
+    |> Map.merge(%{
       code: link.code,
       expires_at: Time.iso8601(link.expires_at),
       kind: "url",
       url: link.target_url
-    }
+    })
   end
 
   @spec offer_transfer(Transfer.t(), Device.t() | nil) :: :ok
@@ -292,6 +370,17 @@ defmodule Anyshare.Sharing do
 
     if sanitized == "", do: "file", else: sanitized
   end
+
+  defp counts_json(link) do
+    %{
+      view_count: link.view_count || 0,
+      download_count: link.download_count || 0
+    }
+  end
+
+  defp to_date(%Date{} = date), do: date
+  defp to_date(%NaiveDateTime{} = datetime), do: NaiveDateTime.to_date(datetime)
+  defp to_date(%DateTime{} = datetime), do: DateTime.to_date(datetime)
 
   defp drop_json(transfer) do
     payload = %{

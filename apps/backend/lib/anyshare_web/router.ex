@@ -12,6 +12,7 @@ defmodule AnyshareWeb.Router do
 
   get "/up", AnyshareWeb.HealthController, :show
   get "/s/:code", AnyshareWeb.ShortLinkController, :show
+  get "/api/v1/short_links/:id/download", AnyshareWeb.Api.V1.ShortLinkController, :download
   get "/cable", AnyshareWeb.CablePlug, []
 
   scope "/api/v1", AnyshareWeb.Api.V1 do
@@ -30,6 +31,7 @@ defmodule AnyshareWeb.Router do
     patch "/device", DeviceController, :update
     get "/peers", PeerController, :index
     get "/short_links", ShortLinkController, :index
+    get "/short_links/:id/stats", ShortLinkController, :stats
     post "/short_links", ShortLinkController, :create
     get "/transfers", TransferController, :index
     post "/transfers", TransferController, :create

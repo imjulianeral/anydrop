@@ -1,14 +1,23 @@
-import { FileIcon } from "lucide-react";
+import { FileIcon, FileImage, FileText, FileVideoCamera } from "lucide-react";
 
 import { ButtonLink } from "#/components/motion/button/index.tsx";
 import { resolveAssetUrl } from "#/lib/api.ts";
-import { formatBytes, mediaKind } from "#/lib/media.ts";
+import { formatBytes, mediaKind, type MediaKind } from "#/lib/media.ts";
+
+const kindIcons = {
+  image: FileImage,
+  video: FileVideoCamera,
+  pdf: FileText,
+  file: FileIcon,
+} as const satisfies Record<MediaKind, typeof FileIcon>;
 
 interface FilePreviewProps {
   filename: string | null | undefined;
   contentType: string | null | undefined;
   byteSize?: number | null;
   downloadUrl?: string | null;
+  trackDownloadUrl?: string | null;
+  showDownload?: boolean;
   status?: string;
 }
 
@@ -17,91 +26,39 @@ export function FilePreview({
   contentType,
   byteSize,
   downloadUrl,
+  trackDownloadUrl,
+  showDownload = true,
   status,
 }: FilePreviewProps) {
   const name = filename ?? "File";
   const kind = mediaKind(contentType, filename);
+  const Icon = kindIcons[kind];
   const url = downloadUrl ? resolveAssetUrl(downloadUrl) : null;
+  const trackedUrl = trackDownloadUrl ? resolveAssetUrl(trackDownloadUrl) : url;
   const sizeLabel = formatBytes(byteSize);
+  const notReadyLabel = status === "pending" ? "Uploading…" : "Not ready";
+  const detail = url ? sizeLabel : notReadyLabel;
 
-  if (!url) {
-    return (
-      <div className="flex items-center gap-3">
-        <FileIcon aria-hidden="true" className="size-8 shrink-0" />
-        <div className="flex min-w-0 flex-col">
-          <p className="truncate font-medium">{name}</p>
-          <p className="text-muted-foreground text-xs">
-            {status === "pending" ? "Uploading…" : "Not ready"}
-          </p>
-        </div>
+  return (
+    <div className="flex items-center gap-3">
+      <Icon aria-hidden="true" className="size-8 shrink-0" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="truncate font-medium">{name}</p>
+        {detail === "" ? null : (
+          <p className="text-muted-foreground text-xs">{detail}</p>
+        )}
       </div>
-    );
-  }
-
-  if (kind === "image") {
-    return (
-      <a className="block" href={url} rel="noopener" target="_blank">
-        <img
-          alt={name}
-          className="max-h-72 w-full rounded-xl object-contain"
-          src={url}
-        />
-      </a>
-    );
-  }
-
-  if (kind === "video") {
-    return (
-      <video
-        className="max-h-72 w-full rounded-xl bg-black"
-        controls
-        preload="metadata"
-        src={url}
-      >
-        <track kind="captions" />
-      </video>
-    );
-  }
-
-  if (kind === "pdf") {
-    return (
-      <div className="flex flex-col gap-2">
-        <iframe
-          className="bg-background h-72 w-full rounded-xl"
-          src={url}
-          title={name}
-        />
+      {showDownload && url ? (
         <ButtonLink
-          href={url}
+          href={trackedUrl ?? undefined}
           rel="noopener"
           size="sm"
           target="_blank"
           variant="outline"
         >
-          Open PDF
+          Download
         </ButtonLink>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <FileIcon aria-hidden="true" className="size-8 shrink-0" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <p className="truncate font-medium">{name}</p>
-        {sizeLabel === "" ? null : (
-          <p className="text-muted-foreground text-xs">{sizeLabel}</p>
-        )}
-      </div>
-      <ButtonLink
-        download={name}
-        href={url}
-        rel="noopener"
-        size="sm"
-        variant="outline"
-      >
-        Download
-      </ButtonLink>
+      ) : null}
     </div>
   );
 }

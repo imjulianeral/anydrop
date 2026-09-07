@@ -29,13 +29,15 @@ defmodule Anyshare.ObjectStore.Signer do
     signed_header_names = Enum.map_join(signed_headers, ";", &elem(&1, 0))
 
     query =
-      canonical_query([
-        {"X-Amz-Algorithm", @algorithm},
-        {"X-Amz-Credential", "#{config.access_key_id}/#{scope}"},
-        {"X-Amz-Date", amz_date},
-        {"X-Amz-Expires", Integer.to_string(expires)},
-        {"X-Amz-SignedHeaders", signed_header_names}
-      ])
+      canonical_query(
+        [
+          {"X-Amz-Algorithm", @algorithm},
+          {"X-Amz-Credential", "#{config.access_key_id}/#{scope}"},
+          {"X-Amz-Date", amz_date},
+          {"X-Amz-Expires", Integer.to_string(expires)},
+          {"X-Amz-SignedHeaders", signed_header_names}
+        ] ++ Keyword.get(options, :query, [])
+      )
 
     canonical_request =
       canonical_request(method, canonical_uri, query, signed_headers, @unsigned_payload)

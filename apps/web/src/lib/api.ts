@@ -115,7 +115,16 @@ export interface ShortLink {
   byte_size?: number | null;
   content_type?: string | null;
   download?: { url: string };
+  track_download?: string;
+  view_count: number;
+  download_count: number;
   expires_at: string;
+}
+
+export interface LinkStat {
+  date: string;
+  views: number;
+  downloads: number;
 }
 
 export const shortPageUrl = (code: string) =>
@@ -125,7 +134,7 @@ export const createTextTransfer = (
   token: string,
   input: { recipientId?: string; body: string }
 ) =>
-  request<{ transfer: Transfer; short_link: ShortLink }>("/api/v1/transfers", {
+  request<{ transfer: Transfer; short_link?: ShortLink }>("/api/v1/transfers", {
     method: "POST",
     token,
     body: {
@@ -157,7 +166,7 @@ export const createFileTransfer = (
   });
 
 export const completeTransfer = (token: string, id: string) =>
-  request<{ transfer: Transfer; short_link: ShortLink }>(
+  request<{ transfer: Transfer; short_link?: ShortLink }>(
     `/api/v1/transfers/${id}/complete`,
     {
       method: "POST",
@@ -185,12 +194,24 @@ export const createShortLink = (token: string, url: string) =>
   });
 
 export const listShortLinks = (token: string) =>
-  request<{ short_links: ShortLink[] }>("/api/v1/short_links", { token });
+  request<{ short_links: ShortLink[]; stats: LinkStat[] }>(
+    "/api/v1/short_links",
+    {
+      token,
+    }
+  );
 
 export const getShortLink = (code: string) =>
   request<{ short_link: ShortLink }>(
     `/api/v1/short_links/${encodeURIComponent(code)}`
   );
+
+export const getShortLinkStats = (token: string, code: string) =>
+  request<{
+    stats: LinkStat[];
+    view_count: number;
+    download_count: number;
+  }>(`/api/v1/short_links/${encodeURIComponent(code)}/stats`, { token });
 
 export const resolveAssetUrl = (url: string): string => {
   if (url.startsWith("http://") || url.startsWith("https://")) {

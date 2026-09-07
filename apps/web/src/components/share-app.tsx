@@ -17,17 +17,8 @@ import {
   type Peer,
   type Transfer,
 } from "#/lib/api.ts";
-import { connectRoom } from "#/lib/cable.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { uploadFile } from "#/lib/upload.ts";
-
-const mergePeers = (current: Peer[], incoming: Peer[]): Peer[] => {
-  const next = new Map(current.map((peer) => [peer.id, peer]));
-  for (const peer of incoming) {
-    next.set(peer.id, peer);
-  }
-  return [...next.values()];
-};
 
 const readTransfer = (payload: Record<string, unknown>): Transfer | null => {
   if (typeof payload.id !== "string") {
@@ -73,8 +64,8 @@ const involvesPeer = (transfer: Transfer, selfId: string, peerId: string) =>
   (transfer.sender_id === peerId && transfer.recipient_id === selfId);
 
 export function ShareApp() {
-  const { token, self, peers, setPeers, rename, joinRoom } = useAppSession();
-  const [connected, setConnected] = useState(false);
+  const { token, self, peers, connected, joinRoom, subscribeToEvents } =
+    useAppSession();
   const [selected, setSelected] = useState<Peer | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -84,45 +75,26 @@ export function ShareApp() {
   selectedRef.current = selected;
 
   useEffect(() => {
-    return connectRoom(token, {
-      onConnect: () => {
-        setConnected(true);
-      },
-      onDisconnect: () => {
-        setConnected(false);
-      },
-      onEvent: (payload) => {
-        const { type } = payload;
-        if (type === "peer_joined" || type === "peer_updated") {
-          const peer = payload as unknown as Peer;
-          if (!peer.id || peer.id === self.id) {
-            return;
-          }
-          setPeers((current) => mergePeers(current, [peer]));
-        }
-        if (type === "peer_left" && typeof payload.id === "string") {
-          setPeers((current) =>
-            current.filter((peer) => peer.id !== payload.id)
-          );
-        }
-        if (type === "text_received" || type === "transfer_offered") {
-          const incoming = readTransfer(payload);
-          const peer = selectedRef.current;
-          if (!incoming || !peer) {
-            return;
-          }
-          if (!involvesPeer(incoming, self.id, peer.id)) {
-            return;
-          }
-          setTransfers((current) =>
-            current.some((item) => item.id === incoming.id)
-              ? current
-              : [...current, incoming]
-          );
-        }
-      },
+    return subscribeToEvents((payload) => {
+      const { type } = payload;
+      if (type !== "text_received" && type !== "transfer_offered") {
+        return;
+      }
+      const incoming = readTransfer(payload);
+      const peer = selectedRef.current;
+      if (!incoming || !peer) {
+        return;
+      }
+      if (!involvesPeer(incoming, self.id, peer.id)) {
+        return;
+      }
+      setTransfers((current) =>
+        current.some((item) => item.id === incoming.id)
+          ? current
+          : [...current, incoming]
+      );
     });
-  }, [self, setPeers, token]);
+  }, [self.id, subscribeToEvents]);
 
   const selectedId = selected?.id ?? null;
 
@@ -240,7 +212,6 @@ export function ShareApp() {
           device={self}
           token={token}
           onJoinRoom={joinRoom}
-          onRename={rename}
         />
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {peers.length === 0 ? (

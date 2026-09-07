@@ -1,21 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Download } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { FilePreview } from "#/components/file-preview.tsx";
-import { Button } from "#/components/motion/button/index.tsx";
+import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
+import {
+  Button,
+  MagneticButtonLink,
+} from "#/components/motion/button/index.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
+import { ShaderBackground } from "#/components/motion/shader-background.tsx";
 import { ThemeSwitch } from "#/components/theme-switch.tsx";
-import { getShortLink, type ShortLink } from "#/lib/api.ts";
+import FolderComponent from "#/components/ui/folder-component.tsx";
+import { getShortLink, resolveAssetUrl, type ShortLink } from "#/lib/api.ts";
 
 export const Route = createFileRoute("/s/$code")({
   component: ShortLinkPage,
 });
 
+function NeuroPageBackground() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === "light";
+
+  return (
+    <ShaderBackground
+      className="pointer-events-none absolute inset-0"
+      colorBack={isLight ? "#ffffff" : "#000000"}
+      colorFront={isLight ? "#0a0a0a" : "#ffffff"}
+      colorMid="#47a6ff"
+      speed={0.4}
+      variant="neuro-noise"
+    />
+  );
+}
+
 function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-background relative min-h-svh">
-      <ThemeSwitch className="absolute top-4 right-4" />
-      {children}
+    <div className="bg-background relative min-h-svh overflow-hidden">
+      <NeuroPageBackground />
+      <ThemeSwitch className="absolute top-4 right-4 z-10" />
+      <div className="relative z-10">{children}</div>
     </div>
   );
 }
@@ -85,6 +109,7 @@ function ShortLinkPage() {
             Message
           </p>
           <p className="text-lg whitespace-pre-wrap">{drop.body}</p>
+          <ExpiryCountdown expiresAt={drop.expires_at} />
           <Button
             type="button"
             variant="outline"
@@ -101,16 +126,26 @@ function ShortLinkPage() {
 
   return (
     <PageShell>
-      <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
-        <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
-          File
-        </p>
-        <FilePreview
-          byteSize={drop.byte_size}
-          contentType={drop.content_type}
-          downloadUrl={drop.download?.url}
-          filename={drop.filename}
-        />
+      <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center p-6">
+        <div className="flex flex-col gap-4 rounded-2xl bg-black p-6 text-white">
+          <FolderComponent className="h-auto" size="md" />
+          {drop.filename ? (
+            <p className="truncate text-center font-medium">{drop.filename}</p>
+          ) : null}
+          <ExpiryCountdown className="text-white/60" expiresAt={drop.expires_at} />
+          {drop.track_download ? (
+            <MagneticButtonLink
+              className="w-full"
+              href={resolveAssetUrl(drop.track_download)}
+              magneticClassName="w-full"
+              rel="noopener"
+              target="_blank"
+            >
+              <Download aria-hidden="true" />
+              Download
+            </MagneticButtonLink>
+          ) : null}
+        </div>
       </main>
     </PageShell>
   );

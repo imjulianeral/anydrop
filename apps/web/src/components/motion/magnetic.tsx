@@ -1,7 +1,13 @@
 "use client";
 
-import { motion, useMotionValue, useReducedMotion, useSpring } from "motion/react";
+import {
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+} from "motion/react";
 import { useRef, type ReactNode } from "react";
+
 import { SPRING_MOUSE } from "#/lib/ease.ts";
 import { useHoverCapable } from "#/lib/hooks/use-hover-capable.ts";
 import { cn } from "#/lib/utils.ts";
@@ -12,7 +18,11 @@ export interface MagneticProps {
   className?: string;
 }
 
-export function Magnetic({ children, strength = 0.35, className }: MagneticProps) {
+export function Magnetic({
+  children,
+  strength = 0.35,
+  className,
+}: MagneticProps) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const canHover = useHoverCapable();
@@ -23,12 +33,14 @@ export function Magnetic({ children, strength = 0.35, className }: MagneticProps
   const sx = useSpring(x, SPRING_MOUSE);
   const sy = useSpring(y, SPRING_MOUSE);
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const el = ref.current;
-    if (!el || !enabled) return;
+    if (!el || !enabled) {
+      return;
+    }
     const rect = el.getBoundingClientRect();
-    x.set((e.clientX - rect.left - rect.width / 2) * strength);
-    y.set((e.clientY - rect.top - rect.height / 2) * strength);
+    x.set((event.clientX - (rect.left + rect.width / 2)) * strength);
+    y.set((event.clientY - (rect.top + rect.height / 2)) * strength);
   };
 
   const onLeave = () => {
@@ -37,14 +49,15 @@ export function Magnetic({ children, strength = 0.35, className }: MagneticProps
   };
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      onMouseMove={onMove}
+      className={cn("inline-flex w-fit", className)}
       onMouseLeave={onLeave}
-      style={{ x: sx, y: sy }}
-      className={cn("inline-block", className)}
+      onMouseMove={onMove}
     >
-      {children}
-    </motion.div>
+      <motion.div className="flex w-full" style={{ x: sx, y: sy }}>
+        {children}
+      </motion.div>
+    </div>
   );
 }

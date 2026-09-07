@@ -32,11 +32,29 @@ defmodule Anyshare.ObjectStore do
     end
   end
 
-  @spec presign_get(String.t()) :: String.t()
-  def presign_get(key) do
+  @spec presign_get(String.t(), keyword()) :: String.t()
+  def presign_get(key, options \\ []) do
+    disposition = content_disposition(Keyword.get(options, :filename))
+
     case r2_config() do
-      {:ok, config} -> Signer.presign(config, :get, key, expires: @presign_ttl_seconds)
-      :local -> "/api/v1/local_blobs/#{encode_key(key)}"
+      {:ok, config} ->
+        query =
+          if disposition do
+            [{"response-content-disposition", disposition}]
+          else
+            []
+          end
+
+        Signer.presign(config, :get, key, expires: @presign_ttl_seconds, query: query)
+
+      :local ->
+        path = "/api/v1/local_blobs/#{encode_key(key)}"
+
+        if Keyword.get(options, :filename) do
+          path <> "?download=1"
+        else
+          path
+        end
     end
   end
 
@@ -135,6 +153,13 @@ defmodule Anyshare.ObjectStore do
     do: segment not in ["", ".", ".."] and not String.contains?(segment, <<0>>)
 
   defp encode_key(key), do: URI.encode(key, &URI.char_unreserved?/1)
+
+  defp content_disposition(filename) when is_binary(filename) and filename != "" do
+    safe = filename |> Path.basename() |> String.replace(~r/["\\]/u, "_")
+    ~s(attachment; filename="#{safe}")
+  end
+
+  defp content_disposition(_filename), do: nil
 
   defp r2_config do
     config = Application.get_env(:anyshare, :r2, %{})

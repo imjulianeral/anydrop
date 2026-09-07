@@ -6,6 +6,7 @@ import {
   MessageContent,
   MessageScroller,
 } from "#/components/agents/message.tsx";
+import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
 import { FilePreview } from "#/components/file-preview.tsx";
 import type { Transfer } from "#/lib/api.ts";
 import { initials } from "#/lib/media.ts";
@@ -62,6 +63,7 @@ export function ChatThread({
                   )}
                 </MessageBubbleContent>
               </MessageBubble>
+              <ExpiryCountdown expiresAt={transfer.expires_at} />
             </MessageContent>
           </Message>
         );

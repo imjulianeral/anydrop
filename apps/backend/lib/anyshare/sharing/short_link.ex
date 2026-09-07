@@ -12,7 +12,10 @@ defmodule Anyshare.Sharing.ShortLink do
   schema "short_links" do
     belongs_to :device, Anyshare.Accounts.Device
     belongs_to :transfer, Anyshare.Sharing.Transfer
+    has_many :events, Anyshare.Sharing.LinkEvent, foreign_key: :code, references: :code
     field :target_url, :string
+    field :view_count, :integer, default: 0
+    field :download_count, :integer, default: 0
     field :expires_at, :naive_datetime_usec
     field :created_at, :naive_datetime_usec
   end
@@ -22,6 +25,8 @@ defmodule Anyshare.Sharing.ShortLink do
           device_id: String.t() | nil,
           transfer_id: String.t() | nil,
           target_url: String.t() | nil,
+          view_count: integer(),
+          download_count: integer(),
           expires_at: NaiveDateTime.t() | nil,
           created_at: NaiveDateTime.t() | nil
         }

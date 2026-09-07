@@ -28,18 +28,7 @@ defmodule AnyshareWeb.Api.V1.TransferController do
       {:ok, %{kind: "text"} = transfer, recipient} ->
         :ok = Sharing.deliver_text(transfer, recipient)
 
-        case Sharing.mint_short_link(current_device, transfer) do
-          {:ok, link} ->
-            conn
-            |> put_status(:created)
-            |> json(%{
-              transfer: Sharing.transfer_json(transfer, current_device),
-              short_link: Sharing.short_link_json(link)
-            })
-
-          {:error, error} ->
-            short_link_error(conn, error)
-        end
+        respond_transfer(conn, :created, current_device, transfer)
 
       {:ok, transfer, _recipient} ->
         content_type = present(transfer.content_type) || "application/octet-stream"
@@ -94,17 +83,7 @@ defmodule AnyshareWeb.Api.V1.TransferController do
             do: Anyshare.Repo.get(Anyshare.Accounts.Device, transfer.recipient_id)
 
         :ok = Sharing.offer_transfer(transfer, recipient)
-
-        case Sharing.mint_short_link(current_device, transfer) do
-          {:ok, link} ->
-            json(conn, %{
-              transfer: Sharing.transfer_json(transfer, current_device, download: true),
-              short_link: Sharing.short_link_json(link)
-            })
-
-          {:error, error} ->
-            short_link_error(conn, error)
-        end
+        respond_transfer(conn, :ok, current_device, transfer, download: true)
 
       {:error, :not_found} ->
         ControllerHelpers.error(conn, :not_found, "not found")
@@ -114,6 +93,24 @@ defmodule AnyshareWeb.Api.V1.TransferController do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         ControllerHelpers.changeset_error(conn, changeset)
+    end
+  end
+
+  defp respond_transfer(conn, status, device, transfer, json_opts \\ []) do
+    body = %{transfer: Sharing.transfer_json(transfer, device, json_opts)}
+
+    if present(transfer.recipient_id) do
+      conn |> put_status(status) |> json(body)
+    else
+      case Sharing.mint_short_link(device, transfer) do
+        {:ok, link} ->
+          conn
+          |> put_status(status)
+          |> json(Map.put(body, :short_link, Sharing.short_link_json(link)))
+
+        {:error, error} ->
+          short_link_error(conn, error)
+      end
     end
   end
 

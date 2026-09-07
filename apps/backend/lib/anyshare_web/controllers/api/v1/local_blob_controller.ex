@@ -3,16 +3,17 @@ defmodule AnyshareWeb.Api.V1.LocalBlobController do
 
   alias Anyshare.ObjectStore
 
-  def show(conn, %{"key" => key_parts}) do
-    key = key_from(key_parts)
+  def show(conn, params) do
+    key = key_from(params["key"])
 
     case ObjectStore.local_file(key) do
       {:ok, path} ->
         filename = path |> Path.basename() |> String.replace(~r/["\\]/u, "_")
+        kind = if params["download"] == "1", do: "attachment", else: "inline"
 
         conn
-        |> put_resp_content_type("application/octet-stream")
-        |> put_resp_header("content-disposition", ~s(attachment; filename="#{filename}"))
+        |> put_resp_content_type(MIME.from_path(filename))
+        |> put_resp_header("content-disposition", ~s(#{kind}; filename="#{filename}"))
         |> send_file(200, path)
 
       {:error, _reason} ->

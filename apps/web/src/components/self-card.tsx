@@ -27,7 +27,6 @@ interface SelfCardProps {
   device: Peer;
   token: string;
   onJoinRoom: (code: string | null) => Promise<void>;
-  onRename: (name: string) => Promise<void>;
 }
 
 export function SelfCard({
@@ -35,10 +34,8 @@ export function SelfCard({
   device,
   token,
   onJoinRoom,
-  onRename,
 }: SelfCardProps) {
   const Icon = kindIcon[device.device_kind];
-  const [name, setName] = useState(device.display_name);
   const [roomInput, setRoomInput] = useState(device.room_code ?? "");
   const [qr, setQr] = useState<string | null>(null);
 
@@ -109,26 +106,6 @@ export function SelfCard({
         >
           {connected ? "Live" : "Reconnecting"}
         </AnimatedBadge>
-      </div>
-
-      <div className="flex items-end gap-2">
-        <Input
-          className="min-w-0 flex-1"
-          label="Display name"
-          value={name}
-          onChange={setName}
-        />
-        <Button
-          disabled={name.trim() === device.display_name || name.trim() === ""}
-          size="sm"
-          type="button"
-          variant="outline"
-          onClick={() => {
-            onRename(name.trim()).catch(reportError);
-          }}
-        >
-          Save
-        </Button>
       </div>
 
       <div className="flex items-end gap-2">
