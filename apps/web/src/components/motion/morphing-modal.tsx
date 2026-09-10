@@ -1,12 +1,9 @@
 "use client";
 // beui.dev/components/motion/morphing-modal
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect } from "react";
+
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
 import { PresenceGate } from "#/lib/presence-gate.tsx";
 import { cn } from "#/lib/utils.ts";
@@ -63,7 +60,7 @@ export function MorphingModal({
               transition={{ duration: 0.2, ease: EASE_OUT }}
               {...gate}
               onClick={onClose}
-              className="pointer-events-auto fixed inset-0 z-[80] bg-background/5 [backdrop-filter:blur(14px)_saturate(140%)] [-webkit-backdrop-filter:blur(14px)_saturate(140%)]"
+              className="bg-background/5 pointer-events-auto fixed inset-0 z-[80] [backdrop-filter:blur(14px)_saturate(140%)] [-webkit-backdrop-filter:blur(14px)_saturate(140%)]"
             />
           )}
         </PresenceGate>
@@ -78,7 +75,7 @@ export function MorphingModal({
               inert={!isPresent}
               className={cn(
                 "pointer-events-none fixed inset-4 z-[80] flex justify-center",
-                placement === "bottom" ? "items-end pb-4" : "items-center",
+                placement === "bottom" ? "items-end pb-4" : "items-center"
               )}
             >
               <motion.div
@@ -95,8 +92,8 @@ export function MorphingModal({
                 transition={SPRING_PANEL}
                 {...gate}
                 className={cn(
-                  "pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-3xl border border-border bg-background shadow-2xl will-change-transform",
-                  className,
+                  "border-border bg-background pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-3xl border shadow-2xl will-change-transform",
+                  className
                 )}
               >
                 <motion.div layout="position" className="p-5">

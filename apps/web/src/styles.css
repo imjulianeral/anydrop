@@ -144,3 +144,55 @@ body {
     @apply font-sans;
   }
 }
+
+.short-link-scroll {
+  scrollbar-width: none;
+}
+
+.short-link-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.short-link-folder [data-slot="folder"] {
+  zoom: 0.8;
+}
+
+@media (min-height: 800px) and (min-width: 768px) {
+  .short-link-folder [data-slot="folder"] {
+    zoom: 1;
+  }
+}
+
+@media (max-height: 700px) {
+  .short-link-folder [data-slot="folder"] {
+    zoom: 0.7;
+  }
+
+  .short-link-description {
+    display: none;
+  }
+
+  .short-link-body h1 {
+    font-size: 1.75rem;
+    line-height: 1.15;
+  }
+}
+
+@media (max-height: 500px) {
+  .short-link-body {
+    gap: 0.5rem;
+  }
+
+  .short-link-folder [data-slot="folder"] {
+    zoom: 0.5;
+  }
+
+  .short-link-page main {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .short-link-page header {
+    top: 0.75rem;
+  }
+}

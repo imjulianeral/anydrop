@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { Button } from "#/components/motion/button/index.tsx";
 import {
   MorphPopover,
@@ -94,13 +95,13 @@ export function PromptInput({
   const measurementRef = useRef<HTMLDivElement>(null);
   const [internalValue, setInternalValue] = useState(defaultValue);
   const [internalModel, setInternalModel] = useState(
-    defaultModel ?? models[0]?.value,
+    defaultModel ?? models[0]?.value
   );
   const [actionsOpen, setActionsOpen] = useState(false);
   const currentValue = value ?? internalValue;
   const currentModelValue = model ?? internalModel;
   const currentModel = models.find(
-    (option) => option.value === currentModelValue,
+    (option) => option.value === currentModelValue
   );
   const canSubmit = Boolean(currentValue.trim()) && !disabled && !loading;
 
@@ -112,7 +113,7 @@ export function PromptInput({
     const lineHeight = 24;
     const nextHeight = Math.min(
       Math.max(measurement.scrollHeight, minRows * lineHeight),
-      maxRows * lineHeight,
+      maxRows * lineHeight
     );
     const height = `${nextHeight}px`;
     if (textarea.style.height !== height) textarea.style.height = height;
@@ -168,15 +169,15 @@ export function PromptInput({
     <form
       onSubmit={submit}
       className={cn(
-        "relative w-full rounded-2xl border border-border/80 bg-background p-2 transition-colors focus-within:border-foreground/25",
+        "border-border/80 bg-background focus-within:border-foreground/25 relative w-full rounded-2xl border p-2 transition-colors",
         disabled && "opacity-60",
-        className,
+        className
       )}
     >
       <div
         ref={measurementRef}
         aria-hidden="true"
-        className="pointer-events-none invisible absolute inset-x-2 top-0 whitespace-pre-wrap px-2 text-sm leading-6 [overflow-wrap:break-word]"
+        className="pointer-events-none invisible absolute inset-x-2 top-0 px-2 text-sm leading-6 [overflow-wrap:break-word] whitespace-pre-wrap"
       >
         {`${currentValue}\u200b`}
       </div>
@@ -190,7 +191,7 @@ export function PromptInput({
         {...textareaProps}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
-        className="scrollbar-hide block w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/55"
+        className="scrollbar-hide text-foreground placeholder:text-muted-foreground/55 block w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-sm leading-6 outline-none"
       />
 
       <div className="mt-1 flex min-h-8 items-center gap-1">
@@ -231,19 +232,19 @@ export function PromptInput({
                     onAction?.(action.value);
                     setActionsOpen(false);
                   }}
-                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                  className="hover:bg-muted focus-visible:bg-muted flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors outline-none disabled:pointer-events-none disabled:opacity-50"
                 >
                   {action.icon ? (
-                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center text-muted-foreground [&_svg]:size-4">
+                    <span className="text-muted-foreground mt-0.5 grid size-5 shrink-0 place-items-center [&_svg]:size-4">
                       {action.icon}
                     </span>
                   ) : null}
                   <span className="min-w-0">
-                    <span className="block text-sm text-foreground">
+                    <span className="text-foreground block text-sm">
                       {action.label}
                     </span>
                     {action.description ? (
-                      <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">
+                      <span className="text-muted-foreground mt-0.5 block text-xs leading-4">
                         {action.description}
                       </span>
                     ) : null}
@@ -261,14 +262,14 @@ export function PromptInput({
             disabled={disabled || loading}
             className="min-w-0"
           >
-            <SelectTrigger className="h-8 w-auto max-w-52 rounded-xl border-0 bg-transparent px-2 py-0 text-xs hover:bg-muted focus-visible:ring-2">
+            <SelectTrigger className="hover:bg-muted h-8 w-auto max-w-52 rounded-xl border-0 bg-transparent px-2 py-0 text-xs focus-visible:ring-2">
               <span className="flex min-w-0 items-center gap-1.5">
                 {currentModel?.icon ? (
-                  <span className="grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3.5">
+                  <span className="text-muted-foreground grid size-4 shrink-0 place-items-center [&_svg]:size-3.5">
                     {currentModel.icon}
                   </span>
                 ) : null}
-                <span className="truncate text-muted-foreground">
+                <span className="text-muted-foreground truncate">
                   {currentModel?.label ?? "Choose model"}
                 </span>
               </span>
@@ -283,11 +284,11 @@ export function PromptInput({
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     {option.icon ? (
-                      <span className="grid size-5 shrink-0 place-items-center text-muted-foreground [&_svg]:size-4">
+                      <span className="text-muted-foreground grid size-5 shrink-0 place-items-center [&_svg]:size-4">
                         {option.icon}
                       </span>
                     ) : null}
-                    <span className="min-w-0 truncate text-sm text-foreground">
+                    <span className="text-foreground min-w-0 truncate text-sm">
                       {option.label}
                     </span>
                   </span>
@@ -308,7 +309,9 @@ export function PromptInput({
           <AnimatePresence initial={false} mode="popLayout">
             <motion.span
               key={loading ? "stop" : "send"}
-              initial={reduce ? { opacity: 1 } : { opacity: 0, y: 3, scale: 0.8 }}
+              initial={
+                reduce ? { opacity: 1 } : { opacity: 0, y: 3, scale: 0.8 }
+              }
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3, scale: 0.8 }}
               transition={reduce ? { duration: 0 } : SPRING_SWAP}

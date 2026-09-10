@@ -42,49 +42,53 @@ defmodule Anyshare.ObjectStore.Signer do
     canonical_request =
       canonical_request(method, canonical_uri, query, signed_headers, @unsigned_payload)
 
-    signature = signature(config.secret_access_key, date, config.region, scope, canonical_request)
+    signature =
+      signature(config.secret_access_key, date, amz_date, config.region, scope, canonical_request)
 
     "#{uri.scheme}://#{uri.authority}#{canonical_uri}?#{query}&X-Amz-Signature=#{signature}"
   end
 
   @spec signed_delete(config(), String.t(), keyword()) :: {String.t(), [{String.t(), String.t()}]}
   def signed_delete(config, key, options \\ []) do
+    signed_request(config, :delete, key, options)
+  end
+
+  def signed_request(config, method, key, options \\ []) do
     now = Keyword.get(options, :now, DateTime.utc_now())
     uri = URI.parse(config.endpoint)
     canonical_uri = object_path(uri.path, config.bucket, key)
     host = authority(uri)
     amz_date = Calendar.strftime(now, "%Y%m%dT%H%M%SZ")
     date = Calendar.strftime(now, "%Y%m%d")
-    payload_hash = sha256("")
+    payload_hash = sha256(Keyword.get(options, :body, ""))
+    query = canonical_query(Keyword.get(options, :query, []))
     scope = "#{date}/#{config.region}/#{@service}/aws4_request"
 
     signed_headers =
-      normalize_headers([
-        {"host", host},
-        {"x-amz-content-sha256", payload_hash},
-        {"x-amz-date", amz_date}
-      ])
+      normalize_headers(
+        [
+          {"host", host},
+          {"x-amz-content-sha256", payload_hash},
+          {"x-amz-date", amz_date}
+        ] ++ Keyword.get(options, :headers, [])
+      )
 
     signed_header_names = Enum.map_join(signed_headers, ";", &elem(&1, 0))
 
     canonical_request =
-      canonical_request(:delete, canonical_uri, "", signed_headers, payload_hash)
+      canonical_request(method, canonical_uri, query, signed_headers, payload_hash)
 
-    signature = signature(config.secret_access_key, date, config.region, scope, canonical_request)
+    signature =
+      signature(config.secret_access_key, date, amz_date, config.region, scope, canonical_request)
 
     authorization =
       "#{@algorithm} Credential=#{config.access_key_id}/#{scope}, " <>
         "SignedHeaders=#{signed_header_names}, Signature=#{signature}"
 
     url = "#{uri.scheme}://#{uri.authority}#{canonical_uri}"
+    url = if query == "", do: url, else: url <> "?" <> query
 
-    {url,
-     [
-       {"authorization", authorization},
-       {"host", host},
-       {"x-amz-content-sha256", payload_hash},
-       {"x-amz-date", amz_date}
-     ]}
+    {url, [{"authorization", authorization} | signed_headers]}
   end
 
   defp canonical_request(method, uri, query, headers, payload_hash) do
@@ -102,13 +106,12 @@ defmodule Anyshare.ObjectStore.Signer do
     |> Enum.join("\n")
   end
 
-  defp signature(secret, date, region, scope, canonical_request) do
+  defp signature(secret, date, amz_date, region, scope, canonical_request) do
     string_to_sign =
-      [@algorithm, scope_date(scope), scope, sha256(canonical_request)]
+      [@algorithm, amz_date, scope, sha256(canonical_request)]
       |> Enum.join("\n")
 
-    secret
-    |> hmac("AWS4#{secret}", date)
+    hmac("AWS4#{secret}", date)
     |> hmac(region)
     |> hmac(@service)
     |> hmac("aws4_request")
@@ -116,10 +119,7 @@ defmodule Anyshare.ObjectStore.Signer do
     |> Base.encode16(case: :lower)
   end
 
-  defp hmac(_ignored, key, data), do: :crypto.mac(:hmac, :sha256, key, data)
   defp hmac(key, data), do: :crypto.mac(:hmac, :sha256, key, data)
-
-  defp scope_date(scope), do: scope |> String.split("/", parts: 2) |> hd()
 
   defp canonical_query(values) do
     values

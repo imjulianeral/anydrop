@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import {
   PreviewRail,
   type PreviewRailItem,
@@ -29,7 +30,9 @@ function truncateMessageText(text: string, limit: number) {
 
 function getMessageText(message: HTMLElement) {
   const surface =
-    message.querySelector<HTMLElement>('[data-slot="message-bubble-content"]') ??
+    message.querySelector<HTMLElement>(
+      '[data-slot="message-bubble-content"]'
+    ) ??
     message.querySelector<HTMLElement>('[data-slot="message-content"]') ??
     message;
   return (surface.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -37,7 +40,7 @@ function getMessageText(message: HTMLElement) {
 
 function getMessagePreview(
   message: HTMLElement,
-  assistantResponse?: HTMLElement,
+  assistantResponse?: HTMLElement
 ) {
   const text = getMessageText(message);
   if (!text) {
@@ -155,7 +158,7 @@ export function MessageScroller({
         externalViewportRef.current = node;
       }
     },
-    [externalViewportRef],
+    [externalViewportRef]
   );
 
   const setFollowing = useCallback(
@@ -164,7 +167,7 @@ export function MessageScroller({
       followingRef.current = next;
       onFollowChange?.(next);
     },
-    [onFollowChange],
+    [onFollowChange]
   );
 
   const updateActiveRailItem = useCallback(() => {
@@ -202,9 +205,7 @@ export function MessageScroller({
       }
     }
 
-    setActiveRailId((current) =>
-      current === nearestId ? current : nearestId,
-    );
+    setActiveRailId((current) => (current === nearestId ? current : nearestId));
   }, [followThreshold, navigation]);
 
   const syncRailItems = useCallback(() => {
@@ -214,7 +215,7 @@ export function MessageScroller({
     if (!content || !viewport) return;
 
     const messages = Array.from(
-      content.querySelectorAll<HTMLElement>('[data-slot="message"]'),
+      content.querySelectorAll<HTMLElement>('[data-slot="message"]')
     );
     const targets = new Map<string, HTMLElement>();
     const nextItems = messages.map((message, index) => {
@@ -251,12 +252,12 @@ export function MessageScroller({
             item.id === nextItems[index]?.id &&
             item.label === nextItems[index]?.label &&
             item.description === nextItems[index]?.description &&
-            item.ariaLabel === nextItems[index]?.ariaLabel,
+            item.ariaLabel === nextItems[index]?.ariaLabel
         );
       return unchanged ? current : nextItems;
     });
     setRailOverflowing(
-      viewport.scrollHeight > viewport.clientHeight + 1 && messages.length > 1,
+      viewport.scrollHeight > viewport.clientHeight + 1 && messages.length > 1
     );
   }, [navigation]);
 
@@ -280,9 +281,12 @@ export function MessageScroller({
       viewport.scrollTop = viewport.scrollHeight;
     }
     if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
-    scrollTimerRef.current = window.setTimeout(() => {
-      programmaticScrollRef.current = false;
-    }, behavior === "smooth" ? 320 : 0);
+    scrollTimerRef.current = window.setTimeout(
+      () => {
+        programmaticScrollRef.current = false;
+      },
+      behavior === "smooth" ? 320 : 0
+    );
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -365,7 +369,7 @@ export function MessageScroller({
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       if (railFrameRef.current) cancelAnimationFrame(railFrameRef.current);
     },
-    [],
+    []
   );
 
   const scrollToRailItem = useCallback(
@@ -399,11 +403,14 @@ export function MessageScroller({
         viewport.scrollTop = top;
       }
       if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
-      scrollTimerRef.current = window.setTimeout(() => {
-        programmaticScrollRef.current = false;
-      }, behavior === "smooth" ? 320 : 0);
+      scrollTimerRef.current = window.setTimeout(
+        () => {
+          programmaticScrollRef.current = false;
+        },
+        behavior === "smooth" ? 320 : 0
+      );
     },
-    [railItems, reduce, scrollToEnd, setFollowing, smooth],
+    [railItems, reduce, scrollToEnd, setFollowing, smooth]
   );
 
   const viewport = (
@@ -430,12 +437,12 @@ export function MessageScroller({
         onViewportKeyDown?.(event);
       }}
       className={cn(
-        "h-full overflow-y-auto overscroll-contain outline-none [overflow-anchor:none] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        "focus-visible:ring-ring h-full overflow-y-auto overscroll-contain outline-none [overflow-anchor:none] focus-visible:ring-2 focus-visible:ring-inset",
         navigation === "rail"
-          ? "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          ? "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           : "[scrollbar-gutter:stable]",
         viewportClassName,
-        navigation === "rail" && railOverflowing && "pr-10",
+        navigation === "rail" && railOverflowing && "pr-10"
       )}
     >
       <div
@@ -475,7 +482,7 @@ export function MessageScroller({
             railOverflowing
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0",
-            railClassName,
+            railClassName
           )}
         >
           {viewport}

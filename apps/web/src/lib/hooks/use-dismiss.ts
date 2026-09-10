@@ -32,7 +32,7 @@ const openScopes = new Set<(target: Element) => boolean>();
 
 function claimedByAnotherScope(
   self: (target: Element) => boolean,
-  target: Element,
+  target: Element
 ) {
   for (const scope of openScopes) {
     if (scope !== self && scope(target)) return true;
@@ -88,7 +88,7 @@ export function useDismiss(
     behavior = "pass-through",
     escape: dismissOnEscape = true,
     ignore,
-  }: DismissOptions = {},
+  }: DismissOptions = {}
 ) {
   useEffect(() => {
     if (!open) return;

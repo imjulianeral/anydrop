@@ -50,13 +50,25 @@ if config_env() == :prod do
     server: true
 end
 
+r2 = %{
+  access_key_id: unwrap_redacted.(System.get_env("R2_ACCESS_KEY_ID")),
+  secret_access_key: unwrap_redacted.(System.get_env("R2_SECRET_ACCESS_KEY")),
+  bucket: System.get_env("R2_BUCKET"),
+  endpoint: System.get_env("R2_ENDPOINT"),
+  region: System.get_env("R2_REGION", "auto")
+}
+
+alchemy_dev? = System.get_env("ALCHEMY_DEV") in ~w(true 1)
+
+if config_env() == :prod and not alchemy_dev? do
+  for key <- [:access_key_id, :secret_access_key, :bucket, :endpoint] do
+    unless is_binary(r2[key]) and r2[key] != "" do
+      raise "R2_#{key |> Atom.to_string() |> String.upcase()} is required in production"
+    end
+  end
+end
+
 config :anyshare,
   allowed_origins: System.get_env("ALLOWED_ORIGINS", ""),
   expire_secret: unwrap_redacted.(System.get_env("EXPIRE_SECRET")),
-  r2: %{
-    access_key_id: unwrap_redacted.(System.get_env("R2_ACCESS_KEY_ID")),
-    secret_access_key: unwrap_redacted.(System.get_env("R2_SECRET_ACCESS_KEY")),
-    bucket: System.get_env("R2_BUCKET"),
-    endpoint: System.get_env("R2_ENDPOINT"),
-    region: System.get_env("R2_REGION", "auto")
-  }
+  r2: r2

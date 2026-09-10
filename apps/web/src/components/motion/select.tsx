@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -26,7 +27,11 @@ const INSTANT_TRANSITION: Transition = { duration: 0 };
 
 // Spring with bounce powers the unfold/separation; per-property timings in the
 // content choreograph it (see SelectContent). Mirrors bouncy-accordion's feel.
-const CHEVRON_TRANSITION: Transition = { type: "spring", duration: 0.4, bounce: 0.3 };
+const CHEVRON_TRANSITION: Transition = {
+  type: "spring",
+  duration: 0.4,
+  bounce: 0.3,
+};
 
 const LIST_VARIANTS: Variants = {
   hidden: {},
@@ -115,7 +120,7 @@ export function Select({
       if (!openControlled) setInternalOpen(next);
       onOpenChange?.(next);
     },
-    [onOpenChange, openControlled],
+    [onOpenChange, openControlled]
   );
 
   const select = useCallback(
@@ -124,7 +129,7 @@ export function Select({
       onValueChange?.(next);
       setOpen(false);
     },
-    [controlled, onValueChange, setOpen],
+    [controlled, onValueChange, setOpen]
   );
 
   const register = useCallback((v: string, label: string) => {
@@ -183,7 +188,7 @@ export function Select({
       baseId,
       disabled,
       placement,
-    ],
+    ]
   );
 
   return (
@@ -236,10 +241,10 @@ export function SelectTrigger({ className, children }: SelectTriggerProps) {
         borderBottomRightRadius: isTop ? INSTANT_TRANSITION : kfT,
       }}
       className={cn(
-        "relative z-10 flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors",
-        "hover:border-(--color-border-strong) focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "border-border bg-background text-foreground relative z-10 flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm transition-colors outline-none",
+        "focus-visible:ring-foreground/20 hover:border-(--color-border-strong) focus-visible:ring-2",
         "disabled:pointer-events-none disabled:opacity-50",
-        className,
+        className
       )}
     >
       {children}
@@ -265,7 +270,10 @@ export function SelectValue({ placeholder, className }: SelectValueProps) {
   const label = ctx.labelFor(ctx.value);
   return (
     <span
-      className={cn(label ? "text-foreground" : "text-muted-foreground", className)}
+      className={cn(
+        label ? "text-foreground" : "text-muted-foreground",
+        className
+      )}
     >
       {label ?? placeholder ?? "Select"}
     </span>
@@ -375,9 +383,9 @@ export function SelectContent({ className, children }: SelectContentProps) {
       // flush against the trigger, then separates into its own rounded pill;
       // sits above or below depending on available space
       className={cn(
-        "absolute left-0 right-0 z-20 rounded-xl border border-border bg-background shadow-lg",
+        "border-border bg-background absolute right-0 left-0 z-20 rounded-xl border shadow-lg",
         isTop ? "bottom-full" : "top-full",
-        className,
+        className
       )}
     >
       <motion.div
@@ -424,12 +432,12 @@ export function SelectItem({
         disabled={disabled}
         onClick={() => ctx.select(value)}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm outline-none transition-colors",
+          "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors outline-none",
           selected
             ? "bg-muted text-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted",
           "disabled:pointer-events-none disabled:opacity-50",
-          className,
+          className
         )}
       >
         {children}

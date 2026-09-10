@@ -5,6 +5,7 @@ defmodule Anyshare.ObjectStore do
 
   @presign_ttl_seconds 15 * 60
   @read_length 1_000_000
+  @max_single_put_bytes 5 * 1024 * 1024 * 1024 - 5 * 1024 * 1024
 
   @spec presign_put(String.t(), keyword()) :: map()
   def presign_put(key, options) do
@@ -13,11 +14,14 @@ defmodule Anyshare.ObjectStore do
 
     case r2_config() do
       {:ok, config} ->
+        if byte_size > @max_single_put_bytes do
+          raise ArgumentError, "R2 uploads above 5 GiB minus 5 MiB require multipart upload"
+        end
+
         url =
           Signer.presign(config, :put, key,
             expires: @presign_ttl_seconds,
             headers: [
-              {"content-length", Integer.to_string(byte_size)},
               {"content-type", content_type}
             ]
           )
@@ -161,7 +165,7 @@ defmodule Anyshare.ObjectStore do
 
   defp content_disposition(_filename), do: nil
 
-  defp r2_config do
+  def r2_config do
     config = Application.get_env(:anyshare, :r2, %{})
 
     keys = [:access_key_id, :secret_access_key, :bucket, :endpoint]

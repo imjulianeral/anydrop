@@ -16,7 +16,7 @@ defmodule Anyshare.MixProject do
   def application do
     [
       mod: {Anyshare.Application, []},
-      extra_applications: [:crypto, :inets, :logger, :public_key, :runtime_tools, :ssl]
+      extra_applications: [:crypto, :inets, :logger, :public_key, :runtime_tools, :ssl, :xmerl]
     ]
   end
 

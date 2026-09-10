@@ -6,7 +6,8 @@ defmodule Anyshare.Sharing.Transfer do
 
   @kinds ~w(file text)
   @statuses ~w(pending uploaded delivered expired failed)
-  @max_file_bytes 2 * 1024 * 1024 * 1024
+  # R2's documented 5 TiB object limit excludes 5 GiB.
+  @max_file_bytes 5 * 1024 * 1024 * 1024 * 1024 - 5 * 1024 * 1024 * 1024
   @max_text_length 64 * 1024
 
   @primary_key {:id, :string, autogenerate: false}
@@ -20,6 +21,8 @@ defmodule Anyshare.Sharing.Transfer do
     field :content_type, :string
     field :body, :string
     field :r2_key, :string
+    field :upload_id, :string
+    field :upload_part_size, :integer
     field :status, :string
     field :expires_at, :naive_datetime_usec
     field :created_at, :naive_datetime_usec
@@ -37,6 +40,8 @@ defmodule Anyshare.Sharing.Transfer do
           content_type: String.t() | nil,
           body: String.t() | nil,
           r2_key: String.t() | nil,
+          upload_id: String.t() | nil,
+          upload_part_size: integer() | nil,
           status: String.t() | nil,
           expires_at: NaiveDateTime.t() | nil,
           created_at: NaiveDateTime.t() | nil
@@ -55,6 +60,8 @@ defmodule Anyshare.Sharing.Transfer do
       :content_type,
       :body,
       :r2_key,
+      :upload_id,
+      :upload_part_size,
       :status,
       :expires_at,
       :created_at

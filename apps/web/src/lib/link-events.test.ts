@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyShortLinkEventToLink,
   applyShortLinkEventToStats,
+  dateKeyInTimeZone,
   readShortLinkEvent,
+  statsFromEvents,
+  weekdayLabel,
 } from "./link-events.ts";
 
 const event = {
@@ -11,7 +14,7 @@ const event = {
   kind: "view" as const,
   viewCount: 4,
   downloadCount: 1,
-  date: "2026-09-05",
+  occurredAt: "2026-09-07T01:00:00.000Z",
 };
 
 describe("readShortLinkEvent", () => {
@@ -23,7 +26,7 @@ describe("readShortLinkEvent", () => {
         kind: "view",
         view_count: 4,
         download_count: 1,
-        date: "2026-09-05",
+        occurred_at: "2026-09-07T01:00:00.000Z",
       })
     ).toEqual(event);
   });
@@ -46,15 +49,59 @@ describe("applyShortLinkEventToLink", () => {
   });
 });
 
+describe("statsFromEvents", () => {
+  it("puts a UTC Monday event on Sunday in Sao Paulo", () => {
+    const now = new Date("2026-09-07T01:00:00.000Z");
+    const stats = statsFromEvents(
+      [{ occurred_at: "2026-09-07T01:00:00.000Z", kind: "view" }],
+      { days: 7, now, timeZone: "America/Sao_Paulo" }
+    );
+
+    expect(stats.at(-1)?.date).toBe("2026-09-06");
+    expect(stats.find((row) => row.date === "2026-09-06")?.views).toBe(1);
+    expect(
+      stats.find((row) => row.date === "2026-09-07")?.views
+    ).toBeUndefined();
+  });
+
+  it("keeps a UTC Monday event on Monday in UTC", () => {
+    const now = new Date("2026-09-07T01:00:00.000Z");
+    const stats = statsFromEvents(
+      [{ occurred_at: "2026-09-07T01:00:00.000Z", kind: "view" }],
+      { days: 7, now, timeZone: "UTC" }
+    );
+
+    expect(stats.at(-1)?.date).toBe("2026-09-07");
+    expect(stats.find((row) => row.date === "2026-09-07")?.views).toBe(1);
+  });
+});
+
 describe("applyShortLinkEventToStats", () => {
-  it("increments today's matching bucket", () => {
+  it("increments the local day for a UTC timestamp", () => {
     const stats = [
-      { date: "2026-09-04", views: 1, downloads: 0 },
-      { date: "2026-09-05", views: 3, downloads: 1 },
+      { date: "2026-09-06", views: 1, downloads: 0 },
+      { date: "2026-09-07", views: 3, downloads: 1 },
     ];
-    expect(applyShortLinkEventToStats(stats, event)).toEqual([
-      { date: "2026-09-04", views: 1, downloads: 0 },
-      { date: "2026-09-05", views: 4, downloads: 1 },
+    expect(
+      applyShortLinkEventToStats(stats, event, "America/Sao_Paulo")
+    ).toEqual([
+      { date: "2026-09-06", views: 2, downloads: 0 },
+      { date: "2026-09-07", views: 3, downloads: 1 },
     ]);
+  });
+});
+
+describe("dateKeyInTimeZone", () => {
+  it("uses the civil date in the given zone", () => {
+    const instant = new Date("2026-09-07T01:00:00.000Z");
+    expect(dateKeyInTimeZone(instant, "America/Sao_Paulo")).toBe("2026-09-06");
+    expect(dateKeyInTimeZone(instant, "UTC")).toBe("2026-09-07");
+  });
+});
+
+describe("weekdayLabel", () => {
+  it("labels a local calendar date without shifting the day", () => {
+    expect(weekdayLabel("2026-09-06", "en-US")).toBe("Sun");
+    expect(weekdayLabel("2026-09-07", "en-US")).toBe("Mon");
   });
 });

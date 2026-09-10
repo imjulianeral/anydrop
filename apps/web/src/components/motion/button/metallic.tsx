@@ -2,8 +2,10 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { forwardRef, useState } from "react";
+
 import { EASE_IN_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
+
 import { Button, type ButtonProps } from "./base";
 
 export interface MetallicButtonProps extends Omit<
@@ -39,7 +41,7 @@ export const MetallicButton = forwardRef<
     onHoverEnd,
     ...rest
   },
-  ref,
+  ref
 ) {
   const reduce = useReducedMotion();
   const still = paused || Boolean(reduce);
@@ -59,12 +61,12 @@ export const MetallicButton = forwardRef<
         onHoverEnd?.(event, info);
       }}
       className={cn(
-        "group relative isolate overflow-hidden border-0 bg-transparent text-foreground",
-        "hover:bg-transparent hover:text-foreground",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "group text-foreground relative isolate overflow-hidden border-0 bg-transparent",
+        "hover:text-foreground hover:bg-transparent",
+        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
         "shadow-[0_8px_22px_rgba(0,0,0,0.16)]",
         size === "icon" && "rounded-full",
-        className,
+        className
       )}
       {...rest}
     >
@@ -77,14 +79,14 @@ export const MetallicButton = forwardRef<
 
       <motion.span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-[-58%] z-[1] w-[52%] -skew-x-12 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.5)_48%,transparent)] opacity-50 blur-[3px] mix-blend-screen"
+        className="pointer-events-none absolute inset-y-0 left-[-58%] z-[1] w-[52%] -skew-x-12 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.5)_48%,transparent)] opacity-50 mix-blend-screen blur-[3px]"
         animate={still ? undefined : { x: hovered ? "310%" : "0%" }}
         transition={still ? undefined : CHROME_SHIMMER}
       />
 
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-[2px] z-[2] rounded-[inherit] bg-background transition-colors group-hover:bg-muted/40"
+        className="bg-background group-hover:bg-muted/40 pointer-events-none absolute inset-[2px] z-[2] rounded-[inherit] transition-colors"
       />
 
       <span

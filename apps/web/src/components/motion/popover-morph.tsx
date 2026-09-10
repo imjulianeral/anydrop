@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+
 import { usePopoverPortalPosition } from "#/components/motion/popover-position.ts";
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
@@ -79,7 +80,7 @@ export function MorphPopover({
       if (!controlled) setInternalOpen(next);
       onOpenChange?.(next);
     },
-    [controlled, onOpenChange],
+    [controlled, onOpenChange]
   );
   const toggle = useCallback(() => setOpen(!open), [setOpen, open]);
 
@@ -92,7 +93,7 @@ export function MorphPopover({
   // state, so a trigger arriving while the panel is open re-anchors it.
   const anchorRef = useMemo<React.MutableRefObject<HTMLElement | null>>(
     () => ({ current: trigger ?? root }),
-    [root, trigger],
+    [root, trigger]
   );
 
   // The panel is a `role="dialog"` and goes inert the moment it closes, so
@@ -143,7 +144,7 @@ export function MorphPopover({
       registerTrigger: setTrigger,
       contentRef,
     }),
-    [open, setOpen, toggle, baseId, anchorRef],
+    [open, setOpen, toggle, baseId, anchorRef]
   );
 
   return (
@@ -236,7 +237,7 @@ export function MorphPopoverContent({
   const layout = usePopoverPortalPosition(
     ctx.triggerRef,
     ctx.contentRef,
-    portalReady && ctx.open,
+    portalReady && ctx.open
   );
 
   useEffect(() => setPortalReady(true), []);
@@ -303,8 +304,8 @@ export function MorphPopoverContent({
             variants={clip}
             style={{ borderRadius: radius }}
             className={cn(
-              "overflow-hidden border border-border bg-background",
-              className,
+              "border-border bg-background overflow-hidden border",
+              className
             )}
           >
             {children}
@@ -312,6 +313,6 @@ export function MorphPopoverContent({
         </motion.div>
       ) : null}
     </AnimatePresence>,
-    document.body,
+    document.body
   );
 }

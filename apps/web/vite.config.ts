@@ -10,7 +10,19 @@ const config = defineConfig({
   plugins: [
     devtools(),
     tailwindcss(),
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      codeSplittingOptions: {
+        // Splitting this file emits `s.$code.tsx?tsr-split=*`, and workerd
+        // serves percent-encoded `$` paths as HTML instead of the module.
+        splitBehavior: ({ routeId }) => {
+          if (routeId === "/s/$code") {
+            return [];
+          }
+        },
+      },
+    }),
     viteReact(),
   ],
   server: {

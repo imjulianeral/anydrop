@@ -21,6 +21,7 @@ import {
 import {
   applyShortLinkEventToStats,
   readShortLinkEvent,
+  statsFromEvents,
 } from "#/lib/link-events.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -51,7 +52,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
         if (!cancelled) {
           setActivity({
             status: "ready",
-            stats: payload.stats,
+            stats: statsFromEvents(payload.events ?? []),
           });
         }
       } catch {
@@ -151,7 +152,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
       {activity.status === "ready" ? (
         <>
           <LinksActivityChart
-            description="Views for this link, last 7 days (UTC)."
+            description="Views for this link, last 7 days."
             framed={false}
             metrics={["views"]}
             stats={activity.stats}
@@ -159,7 +160,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
           />
           {isFile ? (
             <LinksActivityChart
-              description="Downloads for this file, last 7 days (UTC)."
+              description="Downloads for this file, last 7 days."
               framed={false}
               metrics={["downloads"]}
               stats={activity.stats}

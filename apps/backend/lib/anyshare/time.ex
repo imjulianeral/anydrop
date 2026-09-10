@@ -3,10 +3,13 @@ defmodule Anyshare.Time do
 
   @spec now() :: NaiveDateTime.t()
   def now do
-    DateTime.utc_now()
+    utc_now()
     |> DateTime.to_naive()
     |> NaiveDateTime.truncate(:second)
   end
+
+  @spec utc_now() :: DateTime.t()
+  def utc_now, do: DateTime.utc_now()
 
   @spec iso8601(NaiveDateTime.t() | DateTime.t()) :: String.t()
   def iso8601(%NaiveDateTime{} = datetime), do: NaiveDateTime.to_iso8601(datetime) <> "Z"

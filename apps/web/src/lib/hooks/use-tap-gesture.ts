@@ -61,6 +61,6 @@ export function useTapGesture<S>(): TapGesture<S> {
         record.current = null;
       },
     }),
-    [],
+    []
   );
 }

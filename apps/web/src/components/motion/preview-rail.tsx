@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { EASE_OUT, SPRING_LAYOUT } from "#/lib/ease.ts";
 import { useDismiss } from "#/lib/hooks/use-dismiss.ts";
 import { useHoverGesture } from "#/lib/hooks/use-hover-gesture.ts";
@@ -50,18 +51,18 @@ function DefaultPreview({ item }: { item: PreviewRailItem }) {
   return (
     <div
       data-slot="preview-rail-card"
-      className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+      className="border-border bg-card rounded-2xl border p-4 shadow-sm"
     >
       <p
         data-slot="preview-rail-title"
-        className="font-medium text-card-foreground"
+        className="text-card-foreground font-medium"
       >
         {item.label}
       </p>
       {item.description ? (
         <div
           data-slot="preview-rail-description"
-          className="mt-1 text-sm leading-6 text-muted-foreground"
+          className="text-muted-foreground mt-1 text-sm leading-6"
         >
           {item.description}
         </div>
@@ -93,7 +94,7 @@ export function PreviewRail({
   const reduce = useReducedMotion();
   const rootRef = useRef<HTMLDivElement>(null);
   const [internalActiveId, setInternalActiveId] = useState(
-    defaultActiveId ?? items[0]?.id ?? "",
+    defaultActiveId ?? items[0]?.id ?? ""
   );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // A finger cannot hover, so a tap lights the tick instead. Kept apart from
@@ -142,11 +143,11 @@ export function PreviewRail({
         }
       }}
       className={cn(
-        "isolate relative flex w-full overflow-visible",
+        "relative isolate flex w-full overflow-visible",
         isHorizontal
           ? "min-h-64 flex-col items-center justify-center"
           : "min-h-80",
-        className,
+        className
       )}
     >
       <nav
@@ -164,16 +165,18 @@ export function PreviewRail({
         className={cn(
           "relative z-10 grid shrink-0",
           isHorizontal
-            ? "h-12 w-fit max-w-full self-center justify-center"
+            ? "h-12 w-fit max-w-full justify-center self-center"
             : "w-12 content-center",
-          railClassName,
+          railClassName
         )}
       >
         {items.map((item, index) => {
           const selected = item.id === selectedId;
           const highlighted = item.id === highlightedId;
           const distance =
-            displayedIndex < 0 ? Number.POSITIVE_INFINITY : Math.abs(index - displayedIndex);
+            displayedIndex < 0
+              ? Number.POSITIVE_INFINITY
+              : Math.abs(index - displayedIndex);
           const scale = highlighted
             ? 1
             : distance === 1
@@ -194,17 +197,17 @@ export function PreviewRail({
                   isHorizontal
                     ? "h-12 w-0.5 origin-bottom"
                     : "h-0.5 w-12 origin-left",
-                  highlighted ? "text-foreground" : undefined,
+                  highlighted ? "text-foreground" : undefined
                 )}
               />
             </>
           );
 
           const sharedClassName = cn(
-            "relative flex text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            "text-muted-foreground focus-visible:ring-ring focus-visible:ring-offset-background relative flex focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
             isHorizontal
               ? "h-12 w-6 items-end justify-center"
-              : "h-6 w-12 items-center",
+              : "h-6 w-12 items-center"
           );
           const sharedStyle = isHorizontal
             ? { width: itemSize }
@@ -227,8 +230,7 @@ export function PreviewRail({
           };
           const handleSelect = (event: MouseEvent<HTMLElement>) => {
             const gesture = tap.take();
-            const tapped =
-              gesture !== null && gesture.pointerType !== "mouse";
+            const tapped = gesture !== null && gesture.pointerType !== "mouse";
 
             if (tapped) {
               // A link would otherwise show its preview and leave the page in
@@ -306,18 +308,16 @@ export function PreviewRail({
               : previewSide === "before"
                 ? "inset-y-0 right-16 left-4 content-center"
                 : "inset-y-0 right-4 left-16 content-center",
-            previewContainerClassName,
+            previewContainerClassName
           )}
         >
           {items.map((item) => (
             <div
               key={item.id}
-              style={
-                isHorizontal ? { width: itemSize } : { height: itemSize }
-              }
+              style={isHorizontal ? { width: itemSize } : { height: itemSize }}
               className={cn(
                 "relative flex items-center",
-                isHorizontal ? "justify-center" : undefined,
+                isHorizontal ? "justify-center" : undefined
               )}
             >
               {item.id === displayedId ? (
@@ -327,9 +327,9 @@ export function PreviewRail({
                       ? "absolute bottom-12 left-1/2 w-72 -translate-x-1/2"
                       : cn(
                           "w-full max-w-sm",
-                          previewSide === "before" && "ml-auto",
+                          previewSide === "before" && "ml-auto"
                         ),
-                    previewClassName,
+                    previewClassName
                   )}
                 >
                   <motion.div

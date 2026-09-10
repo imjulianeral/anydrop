@@ -24,9 +24,32 @@ export interface Transfer {
   download?: { url: string };
 }
 
-export interface UploadTarget {
+export interface PartTarget {
   url: string;
   headers: Record<string, string>;
+}
+
+export interface MultipartTarget {
+  type: "multipart";
+  part_size: number;
+  part_count: number;
+}
+
+export type UploadTarget = (PartTarget & { type: "single" }) | MultipartTarget;
+
+export interface UploadedPart {
+  part_number: number;
+  etag: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
 interface RequestOptions {
@@ -35,6 +58,7 @@ interface RequestOptions {
   body?: unknown;
   rawBody?: BodyInit;
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 const request = async <T>(
@@ -52,6 +76,7 @@ const request = async <T>(
   const response = await fetch(`${apiBase}${path}`, {
     method: options.method ?? "GET",
     headers,
+    signal: options.signal,
     body:
       options.rawBody ??
       (options.body === undefined ? undefined : JSON.stringify(options.body)),
@@ -67,7 +92,7 @@ const request = async <T>(
     } catch {
       // Keep the status message.
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -127,6 +152,11 @@ export interface LinkStat {
   downloads: number;
 }
 
+export interface LinkEventOccurrence {
+  occurred_at: string;
+  kind: "view" | "download";
+}
+
 export const shortPageUrl = (code: string) =>
   `${globalThis.location.origin}/s/${code}`;
 
@@ -165,14 +195,51 @@ export const createFileTransfer = (
     },
   });
 
-export const completeTransfer = (token: string, id: string) =>
+export const completeTransfer = (
+  token: string,
+  id: string,
+  parts?: UploadedPart[]
+) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>(
     `/api/v1/transfers/${id}/complete`,
     {
       method: "POST",
       token,
+      body: parts ? { parts } : undefined,
+      signal: AbortSignal.timeout(150_000),
     }
   );
+
+export const startMultipartUpload = (
+  token: string,
+  id: string,
+  signal: AbortSignal
+) =>
+  request<MultipartTarget>(`/api/v1/transfers/${id}/multipart`, {
+    method: "POST",
+    token,
+    signal: AbortSignal.any([signal, AbortSignal.timeout(90_000)]),
+  });
+
+export const signUploadPart = (
+  token: string,
+  id: string,
+  partNumber: number,
+  signal: AbortSignal
+) =>
+  request<PartTarget>(`/api/v1/transfers/${id}/multipart/parts`, {
+    method: "POST",
+    token,
+    body: { part_number: partNumber },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+  });
+
+export const abortMultipartUpload = (token: string, id: string) =>
+  request<void>(`/api/v1/transfers/${id}/multipart`, {
+    method: "DELETE",
+    token,
+    signal: AbortSignal.timeout(90_000),
+  });
 
 export const getTransfer = (token: string, id: string) =>
   request<{ transfer: Transfer; download?: { url: string } }>(
@@ -194,7 +261,7 @@ export const createShortLink = (token: string, url: string) =>
   });
 
 export const listShortLinks = (token: string) =>
-  request<{ short_links: ShortLink[]; stats: LinkStat[] }>(
+  request<{ short_links: ShortLink[]; events: LinkEventOccurrence[] }>(
     "/api/v1/short_links",
     {
       token,
@@ -208,7 +275,7 @@ export const getShortLink = (code: string) =>
 
 export const getShortLinkStats = (token: string, code: string) =>
   request<{
-    stats: LinkStat[];
+    events: LinkEventOccurrence[];
     view_count: number;
     download_count: number;
   }>(`/api/v1/short_links/${encodeURIComponent(code)}/stats`, { token });

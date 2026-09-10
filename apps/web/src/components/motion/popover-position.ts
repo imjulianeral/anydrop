@@ -38,7 +38,7 @@ export function usePopoverPortalPosition<
 >(
   triggerRef: MutableRefObject<TriggerElement | null>,
   contentRef: MutableRefObject<ContentElement | null>,
-  active: boolean,
+  active: boolean
 ) {
   const [layout, setLayout] = useState<PortalLayout | null>(null);
 

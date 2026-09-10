@@ -12,15 +12,16 @@ defmodule Anyshare.Sharing.LinkEvent do
     belongs_to :short_link, Anyshare.Sharing.ShortLink,
       foreign_key: :code,
       references: :code
+
     field :kind, :string
-    field :occurred_at, :naive_datetime_usec
+    field :occurred_at, :utc_datetime_usec
   end
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
           code: String.t() | nil,
           kind: String.t() | nil,
-          occurred_at: NaiveDateTime.t() | nil
+          occurred_at: DateTime.t() | nil
         }
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()

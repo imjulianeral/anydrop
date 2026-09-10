@@ -37,6 +37,9 @@ defmodule AnyshareWeb.Router do
     post "/transfers", TransferController, :create
     get "/transfers/:id", TransferController, :show
     post "/transfers/:id/complete", TransferController, :complete
+    post "/transfers/:id/multipart", UploadController, :create
+    post "/transfers/:id/multipart/parts", UploadController, :part
+    delete "/transfers/:id/multipart", UploadController, :delete
   end
 
   scope "/internal", AnyshareWeb.Internal do

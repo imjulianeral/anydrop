@@ -8,9 +8,7 @@ import { EmptyState } from "#/components/empty-state.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
 import { PeerTile } from "#/components/peer-tile.tsx";
 import { SelfCard } from "#/components/self-card.tsx";
-import { toast } from "#/lib/toast.ts";
 import {
-  completeTransfer,
   createFileTransfer,
   createTextTransfer,
   listTransfers,
@@ -18,6 +16,7 @@ import {
   type Transfer,
 } from "#/lib/api.ts";
 import { maxFileBytes } from "#/lib/config.ts";
+import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
 
 const readTransfer = (payload: Record<string, unknown>): Transfer | null => {
@@ -181,13 +180,13 @@ export function ShareApp() {
           byteSize: file.size,
           contentType: file.type || "application/octet-stream",
         });
-        await uploadFile(
-          created.upload.url,
+        const completed = await uploadFile(
+          token,
+          created.transfer.id,
+          created.upload,
           file,
-          created.upload.headers,
           setProgress
         );
-        const completed = await completeTransfer(token, created.transfer.id);
         appendTransfer(completed.transfer);
       }
       /* oxlint-enable eslint/no-await-in-loop */

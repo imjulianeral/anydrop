@@ -11,7 +11,7 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
       |> Sharing.list_short_links()
       |> Enum.map(&Sharing.short_link_json/1)
 
-    json(conn, %{short_links: links, stats: Sharing.daily_stats(device)})
+    json(conn, %{short_links: links, events: Sharing.list_events(device)})
   end
 
   def create(conn, params) do
@@ -35,7 +35,7 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
     case Sharing.get_live_short_link(code) do
       %{device_id: device_id} = link when device_id == device.id ->
         json(conn, %{
-          stats: Sharing.daily_stats(device, 7, link.code),
+          events: Sharing.list_events(device, 7, link.code),
           view_count: link.view_count || 0,
           download_count: link.download_count || 0
         })

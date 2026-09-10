@@ -26,6 +26,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -132,7 +133,10 @@ const POSITION_CLASS: Record<ToastPosition, string> = {
 
 let idSeed = 0;
 
-function createToast(input: ToastInput, defaultDuration: number): AnimatedToast {
+function createToast(
+  input: ToastInput,
+  defaultDuration: number
+): AnimatedToast {
   return {
     duration: defaultDuration,
     dismissible: true,
@@ -147,9 +151,11 @@ export function useAnimatedToastStack({
   defaultDuration = 4200,
   limit,
 }: UseAnimatedToastStackOptions = {}) {
-  const toastTimers = useRef<Map<string, { timer: number; signature: string }>>(new Map());
+  const toastTimers = useRef<Map<string, { timer: number; signature: string }>>(
+    new Map()
+  );
   const [toasts, setToasts] = useState<AnimatedToast[]>(() =>
-    initialToasts.map((toast) => createToast(toast, defaultDuration)),
+    initialToasts.map((toast) => createToast(toast, defaultDuration))
   );
 
   const dismissToast = useCallback((id: string) => {
@@ -169,7 +175,7 @@ export function useAnimatedToastStack({
       });
       return toast.id;
     },
-    [defaultDuration, limit],
+    [defaultDuration, limit]
   );
 
   const updateToast = useCallback((id: string, patch: Partial<ToastInput>) => {
@@ -180,10 +186,11 @@ export function useAnimatedToastStack({
               ...toast,
               ...patch,
               id,
-              createdAt: patch.duration === undefined ? toast.createdAt : Date.now(),
+              createdAt:
+                patch.duration === undefined ? toast.createdAt : Date.now(),
             }
-          : toast,
-      ),
+          : toast
+      )
     );
   }, []);
 
@@ -251,7 +258,7 @@ export function useAnimatedToastStack({
       clearToasts,
       setToasts,
     }),
-    [clearToasts, dismissToast, showToast, toasts, updateToast],
+    [clearToasts, dismissToast, showToast, toasts, updateToast]
   );
 }
 
@@ -290,7 +297,7 @@ export function AnimatedToastStack({
         resolvedPlacement === "absolute" && "absolute z-20",
         resolvedPlacement !== "static" && POSITION_CLASS[position],
         classNames?.root,
-        className,
+        className
       )}
     >
       <AnimatePresence initial={false} mode="popLayout">
@@ -338,7 +345,9 @@ const ToastItem = memo(function ToastItem({
   const reduce = useReducedMotion();
   const status = toast.status ?? "neutral";
   const Icon = STATUS_ICON[status];
-  const iconNode = icons?.[status] ?? toast.icon ?? <Icon className="h-3.5 w-3.5" />;
+  const iconNode = icons?.[status] ?? toast.icon ?? (
+    <Icon className="h-3.5 w-3.5" />
+  );
   const canDismiss = toast.dismissible !== false && Boolean(onDismiss);
 
   return (
@@ -375,13 +384,16 @@ const ToastItem = memo(function ToastItem({
           onDismiss(toast.id);
         }
       }}
-      className={cn("pointer-events-auto relative will-change-transform", classNames?.item)}
+      className={cn(
+        "pointer-events-auto relative will-change-transform",
+        classNames?.item
+      )}
       style={{ zIndex: 20 - index }}
     >
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur-xl",
-          classNames?.surface,
+          "border-border bg-card/95 relative overflow-hidden rounded-2xl border p-3 shadow-2xl backdrop-blur-xl",
+          classNames?.surface
         )}
       >
         {renderToast ? (
@@ -393,7 +405,7 @@ const ToastItem = memo(function ToastItem({
               className={cn(
                 "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
                 STATUS_CLASS[status],
-                classNames?.iconWrap,
+                classNames?.iconWrap
               )}
             >
               <AnimatePresence mode="popLayout" initial={false}>
@@ -449,8 +461,8 @@ const ToastItem = memo(function ToastItem({
                 >
                   <p
                     className={cn(
-                      "truncate text-sm font-medium leading-5 text-foreground",
-                      classNames?.title,
+                      "text-foreground truncate text-sm leading-5 font-medium",
+                      classNames?.title
                     )}
                   >
                     {toast.title}
@@ -458,8 +470,8 @@ const ToastItem = memo(function ToastItem({
                   {toast.description ? (
                     <p
                       className={cn(
-                        "mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground",
-                        classNames?.description,
+                        "text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-4",
+                        classNames?.description
                       )}
                     >
                       {toast.description}
@@ -473,8 +485,8 @@ const ToastItem = memo(function ToastItem({
                   type="button"
                   onClick={() => toast.action?.onClick(toast)}
                   className={cn(
-                    "mt-2 inline-flex h-7 items-center rounded-full bg-primary/[0.06] px-3 text-xs font-medium text-foreground transition-colors hover:bg-primary/[0.1]",
-                    classNames?.action,
+                    "bg-primary/[0.06] text-foreground hover:bg-primary/[0.1] mt-2 inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition-colors",
+                    classNames?.action
                   )}
                 >
                   {toast.action.label}
@@ -488,8 +500,8 @@ const ToastItem = memo(function ToastItem({
                 onClick={() => onDismiss?.(toast.id)}
                 aria-label="Dismiss toast"
                 className={cn(
-                  "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/[0.06] hover:text-foreground",
-                  classNames?.close,
+                  "text-muted-foreground hover:bg-primary/[0.06] hover:text-foreground inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
+                  classNames?.close
                 )}
               >
                 <X className="h-3.5 w-3.5" />
@@ -497,7 +509,6 @@ const ToastItem = memo(function ToastItem({
             ) : null}
           </div>
         )}
-
       </div>
     </motion.li>
   );

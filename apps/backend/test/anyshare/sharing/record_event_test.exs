@@ -26,7 +26,9 @@ defmodule Anyshare.Sharing.RecordEventTest do
     assert message.code == link.code
     assert message.view_count == 1
     assert message.download_count == 0
-    assert message.date == Date.to_iso8601(Date.utc_today())
+    assert message.occurred_at =~ "Z"
+    {:ok, occurred_at, 0} = DateTime.from_iso8601(message.occurred_at)
+    assert DateTime.diff(occurred_at, DateTime.utc_now(), :second) <= 2
   end
 
   test "increments downloads", %{device: device, link: link} do

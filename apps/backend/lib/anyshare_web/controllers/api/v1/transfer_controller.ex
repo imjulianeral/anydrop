@@ -34,10 +34,19 @@ defmodule AnyshareWeb.Api.V1.TransferController do
         content_type = present(transfer.content_type) || "application/octet-stream"
 
         upload =
-          ObjectStore.presign_put(transfer.r2_key,
-            content_type: content_type,
-            byte_size: transfer.byte_size
-          )
+          if transfer.upload_part_size do
+            %{
+              type: "multipart",
+              part_size: transfer.upload_part_size,
+              part_count: Anyshare.ObjectStore.Multipart.part_count(transfer)
+            }
+          else
+            ObjectStore.presign_put(transfer.r2_key,
+              content_type: content_type,
+              byte_size: transfer.byte_size
+            )
+            |> Map.put(:type, "single")
+          end
 
         conn
         |> put_status(:created)
@@ -73,10 +82,10 @@ defmodule AnyshareWeb.Api.V1.TransferController do
     end
   end
 
-  def complete(conn, %{"id" => id}) do
+  def complete(conn, %{"id" => id} = params) do
     current_device = conn.assigns.current_device
 
-    case Sharing.complete_transfer(current_device, id) do
+    case Sharing.complete_transfer(current_device, id, Map.get(params, "parts")) do
       {:ok, transfer} ->
         recipient =
           if transfer.recipient_id,
@@ -93,6 +102,9 @@ defmodule AnyshareWeb.Api.V1.TransferController do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         ControllerHelpers.changeset_error(conn, changeset)
+
+      {:error, reason} ->
+        AnyshareWeb.Api.V1.UploadController.error(conn, reason)
     end
   end
 

@@ -27,7 +27,6 @@ import {
   DialogTrigger,
 } from "#/components/ui/dialog.tsx";
 import {
-  completeTransfer,
   createFileTransfer,
   createShortLink,
   createTextTransfer,
@@ -41,6 +40,7 @@ import {
   applyShortLinkEventToLink,
   applyShortLinkEventToStats,
   readShortLinkEvent,
+  statsFromEvents,
 } from "#/lib/link-events.ts";
 import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
@@ -109,7 +109,7 @@ export function LinksPage() {
         const payload = await listShortLinks(token);
         if (!cancelled) {
           setLinks(payload.short_links);
-          setStats(payload.stats ?? []);
+          setStats(statsFromEvents(payload.events ?? []));
         }
       } catch (error) {
         if (!cancelled) {
@@ -215,13 +215,13 @@ export function LinksPage() {
           byteSize: file.size,
           contentType: file.type || "application/octet-stream",
         });
-        await uploadFile(
-          created.upload.url,
+        const completed = await uploadFile(
+          token,
+          created.transfer.id,
+          created.upload,
           file,
-          created.upload.headers,
           setProgress
         );
-        const completed = await completeTransfer(token, created.transfer.id);
         if (!completed.short_link) {
           throw new Error("Could not create link");
         }

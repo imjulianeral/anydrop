@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
 import { motion } from "motion/react";
+import React, { useState } from "react";
+
 import { cn } from "#/lib/utils.ts";
 
 const themes = {
@@ -78,8 +79,8 @@ const FolderComponent = ({
     <div
       data-slot="folder"
       className={cn(
-        "relative w-full h-full flex items-center justify-center",
-        className,
+        "relative flex h-full w-full items-center justify-center",
+        className
       )}
       {...props}
     >
@@ -119,7 +120,7 @@ const FolderComponent = ({
             />
           </div>
 
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+          <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
             <motion.div
               className="absolute"
               animate={{
@@ -171,7 +172,7 @@ const FolderComponent = ({
           </div>
 
           <motion.div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-4"
+            className="absolute top-1/2 left-1/2 mt-4 -translate-x-1/2 -translate-y-1/2"
             style={{
               transformOrigin: "bottom center",
               transformStyle: "preserve-3d",

@@ -35,7 +35,10 @@ export const formatBytes = (bytes: number | null | undefined): string => {
   if (bytes < 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes < 1024 * 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024 * 1024)).toFixed(1)} TB`;
 };
 
 export const initials = (name: string): string =>

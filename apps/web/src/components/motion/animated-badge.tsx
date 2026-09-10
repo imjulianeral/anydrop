@@ -18,6 +18,7 @@ import {
   type Variants,
 } from "motion/react";
 import type { ReactNode } from "react";
+
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -47,8 +48,10 @@ export interface AnimatedBadgeProps extends Omit<
 const STATUS_CLASS: Record<AnimatedBadgeStatus, string> = {
   neutral: "border-border bg-card text-muted-foreground",
   info: "border-primary/30 bg-primary/10 text-primary",
-  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  warning: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  success:
+    "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  warning:
+    "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
   danger: "border-destructive/30 bg-destructive/10 text-destructive",
   loading: "border-primary/30 bg-primary/10 text-primary",
 };
@@ -148,11 +151,11 @@ export function AnimatedBadge({
       layout
       transition={{ type: "spring", stiffness: 420, damping: 30, mass: 0.7 }}
       className={cn(
-        "relative inline-flex shrink-0 items-center overflow-hidden whitespace-nowrap rounded-full border font-medium tabular-nums",
+        "relative inline-flex shrink-0 items-center overflow-hidden rounded-full border font-medium whitespace-nowrap tabular-nums",
         "transition-colors duration-300",
         STATUS_CLASS[status],
         SIZE_CLASS[size],
-        className,
+        className
       )}
       {...rest}
     >

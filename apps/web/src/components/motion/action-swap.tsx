@@ -1,8 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps, type Variants } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  type HTMLMotionProps,
+  type Variants,
+} from "motion/react";
 import { useState } from "react";
 import type { ReactNode } from "react";
+
 import { EASE_OUT, SPRING_PRESS, SPRING_SWAP } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -13,7 +20,11 @@ export type ActionSwapItem = {
   ariaLabel?: string;
 };
 
-export type ActionSwapButtonVariant = "primary" | "secondary" | "outline" | "ghost";
+export type ActionSwapButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "ghost";
 export type ActionSwapButtonSize = "sm" | "md" | "lg" | "icon";
 export type ActionSwapAnimation = "blur" | "roll" | "cascade";
 
@@ -146,7 +157,8 @@ const ICON_VARIANTS: Record<CoreAnimation, Variants> = {
 const VARIANT_CLASS: Record<ActionSwapButtonVariant, string> = {
   primary: "bg-primary text-primary-foreground hover:bg-primary/90",
   secondary: "border border-border bg-card text-foreground hover:border-border",
-  outline: "border border-border bg-transparent text-foreground hover:bg-primary/5",
+  outline:
+    "border border-border bg-transparent text-foreground hover:bg-primary/5",
   ghost: "text-muted-foreground hover:bg-primary/5 hover:text-foreground",
 };
 
@@ -175,18 +187,15 @@ export function ActionSwapText({
   return (
     <span
       className={cn(
-        "relative -my-[0.08em] inline-block max-w-full whitespace-nowrap py-[0.08em] align-bottom",
-        className,
+        "relative -my-[0.08em] inline-block max-w-full py-[0.08em] align-bottom whitespace-nowrap",
+        className
       )}
       style={{
         clipPath: "inset(0 -999px)",
         WebkitClipPath: "inset(0 -999px)",
       }}
     >
-      <span
-        aria-hidden
-        className="invisible inline-block whitespace-nowrap"
-      >
+      <span aria-hidden className="invisible inline-block whitespace-nowrap">
         {cascade
           ? label.split("").map((char, index) => (
               <span
@@ -210,7 +219,7 @@ export function ActionSwapText({
               initial="initial"
               animate="animate"
               exit="exit"
-              className="absolute left-0 top-[0.08em] inline-block whitespace-pre"
+              className="absolute top-[0.08em] left-0 inline-block whitespace-pre"
             >
               {label.split("").map((char, i) => (
                 <motion.span
@@ -232,11 +241,15 @@ export function ActionSwapText({
             key={`${animation}-${value}`}
             variants={TEXT_VARIANTS[coreAnimation]}
             initial={reduce ? false : "initial"}
-            animate={reduce ? { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 } : "animate"}
+            animate={
+              reduce
+                ? { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 }
+                : "animate"
+            }
             exit={reduce ? undefined : "exit"}
             // Truncation lives on the layer that holds the text — the layer
             // moves as a whole, so clipping it never eats the roll.
-            className="absolute left-0 top-[0.08em] inline-block max-w-full truncate will-change-[opacity,filter,transform]"
+            className="absolute top-[0.08em] left-0 inline-block max-w-full truncate will-change-[opacity,filter,transform]"
           >
             {children}
           </motion.span>
@@ -258,14 +271,23 @@ export function ActionSwapIcon({
     animation === "cascade" ? "roll" : animation;
 
   return (
-    <span className={cn("relative inline-grid shrink-0 place-items-center overflow-hidden", className)}>
+    <span
+      className={cn(
+        "relative inline-grid shrink-0 place-items-center overflow-hidden",
+        className
+      )}
+    >
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span
           key={`${animation}-${value}`}
           aria-hidden
           variants={ICON_VARIANTS[coreAnimation]}
           initial={reduce ? false : "initial"}
-          animate={reduce ? { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 } : "animate"}
+          animate={
+            reduce
+              ? { opacity: 1, filter: "blur(0px)", scale: 1, y: 0 }
+              : "animate"
+          }
           exit={reduce ? undefined : "exit"}
           className="col-start-1 row-start-1 inline-flex items-center justify-center will-change-[opacity,filter,transform]"
         >
@@ -292,16 +314,28 @@ export function ActionSwapButton({
   ...rest
 }: ActionSwapButtonProps) {
   const reduce = useReducedMotion();
-  const [internalValue, setInternalValue] = useState(defaultValue ?? items[0]?.id);
+  const [internalValue, setInternalValue] = useState(
+    defaultValue ?? items[0]?.id
+  );
   const currentValue = value ?? internalValue;
-  const activeIndex = Math.max(0, items.findIndex((item) => item.id === currentValue));
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === currentValue)
+  );
   const activeItem = items[activeIndex] ?? items[0];
   const hasIcon = items.some((item) => item.icon);
-  const nextItem = cycle && items.length > 0 ? items[(activeIndex + 1) % items.length] : undefined;
+  const nextItem =
+    cycle && items.length > 0
+      ? items[(activeIndex + 1) % items.length]
+      : undefined;
 
   if (!activeItem) return null;
 
-  const accessibleLabel = activeItem.ariaLabel ?? (iconOnly && typeof activeItem.label === "string" ? activeItem.label : undefined);
+  const accessibleLabel =
+    activeItem.ariaLabel ??
+    (iconOnly && typeof activeItem.label === "string"
+      ? activeItem.label
+      : undefined);
 
   return (
     <motion.button
@@ -314,7 +348,7 @@ export function ActionSwapButton({
         "disabled:pointer-events-none disabled:opacity-50",
         VARIANT_CLASS[variant],
         SIZE_CLASS[size],
-        className,
+        className
       )}
       aria-label={accessibleLabel}
       onClick={(event) => {
@@ -326,7 +360,11 @@ export function ActionSwapButton({
       {...rest}
     >
       {hasIcon ? (
-        <ActionSwapIcon value={activeItem.id} animation={animation} className="h-4 w-4">
+        <ActionSwapIcon
+          value={activeItem.id}
+          animation={animation}
+          className="h-4 w-4"
+        >
           {activeItem.icon ?? null}
         </ActionSwapIcon>
       ) : null}

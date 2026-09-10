@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef } from "react";
+
 import { isHoveringPointer } from "#/lib/touch.ts";
 
 interface BoundaryEvent {
@@ -56,6 +57,6 @@ export function useHoverGesture(): HoverGesture {
         return !arrivedInContact && event.pointerType !== "touch";
       },
     }),
-    [],
+    []
   );
 }

@@ -16,6 +16,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
+
 import { cn } from "#/lib/utils.ts";
 
 export type InputClassNames = {
@@ -68,7 +69,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     type,
     ...rest
   },
-  ref,
+  ref
 ) {
   const reactId = useId();
   const id = idProp ?? reactId;
@@ -94,7 +95,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     animate(
       fieldRef.current,
       { x: [0, -6, 6, -4, 4, -2, 0] },
-      { duration: 0.45 },
+      { duration: 0.45 }
     );
   }, [hasError, reduce]);
 
@@ -104,15 +105,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   };
 
   return (
-    <div
-      className={cn("flex flex-col gap-1.5", className, classNames?.root)}
-    >
+    <div className={cn("flex flex-col gap-1.5", className, classNames?.root)}>
       {label ? (
         <label
           htmlFor={id}
           className={cn(
-            "px-1 text-sm font-medium text-foreground",
-            classNames?.label,
+            "text-foreground px-1 text-sm font-medium",
+            classNames?.label
           )}
         >
           {label}
@@ -133,17 +132,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={cn(
           "relative h-11 overflow-hidden rounded-full border transition-colors duration-200",
           "border-border",
-          focused && !hasError && "border-foreground/40 ring-2 ring-ring/40",
-          hasError && "border-destructive ring-2 ring-destructive/25",
+          focused && !hasError && "border-foreground/40 ring-ring/40 ring-2",
+          hasError && "border-destructive ring-destructive/25 ring-2",
           disabled && "opacity-60",
-          classNames?.field,
+          classNames?.field
         )}
       >
         {leftIcon ? (
           <span
             className={cn(
-              "pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 items-center text-muted-foreground [&_svg]:h-4 [&_svg]:w-4",
-              classNames?.leftIcon,
+              "text-muted-foreground pointer-events-none absolute top-1/2 left-3 flex -translate-y-1/2 items-center [&_svg]:h-4 [&_svg]:w-4",
+              classNames?.leftIcon
             )}
           >
             {leftIcon}
@@ -169,12 +168,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             onBlur?.(event);
           }}
           className={cn(
-            "peer h-full w-full bg-transparent text-base leading-6 text-foreground caret-foreground outline-none",
+            "peer text-foreground caret-foreground h-full w-full bg-transparent text-base leading-6 outline-none",
             "placeholder:text-muted-foreground/60",
             leftIcon ? "pl-10" : "pl-3.5",
             rightSlot || success ? "pr-10" : "pr-3.5",
             disabled && "cursor-not-allowed",
-            classNames?.input,
+            classNames?.input
           )}
         />
 
@@ -183,8 +182,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             viewBox="0 0 24 24"
             fill="none"
             className={cn(
-              "absolute right-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-(--color-success)",
-              classNames?.successIcon,
+              "absolute top-1/2 right-3.5 h-5 w-5 -translate-y-1/2 text-(--color-success)",
+              classNames?.successIcon
             )}
           >
             <motion.path
@@ -201,8 +200,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ) : rightSlot ? (
           <span
             className={cn(
-              "absolute right-0 top-0 flex h-full items-center text-muted-foreground [&_button]:grid [&_button]:size-11 [&_button]:place-items-center [&_svg]:h-4 [&_svg]:w-4",
-              classNames?.rightIcon,
+              "text-muted-foreground absolute top-0 right-0 flex h-full items-center [&_button]:grid [&_button]:size-11 [&_button]:place-items-center [&_svg]:h-4 [&_svg]:w-4",
+              classNames?.rightIcon
             )}
           >
             {rightSlot}
@@ -229,8 +228,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
               }
               transition={{ duration: 0.2 }}
               className={cn(
-                "px-1 text-xs text-destructive",
-                classNames?.errorMessage,
+                "text-destructive px-1 text-xs",
+                classNames?.errorMessage
               )}
             >
               {errorMessage}

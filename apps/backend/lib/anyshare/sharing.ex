@@ -6,6 +6,7 @@ defmodule Anyshare.Sharing do
   alias Anyshare.Accounts
   alias Anyshare.Accounts.Device
   alias Anyshare.ObjectStore
+  alias Anyshare.ObjectStore.Multipart
   alias Anyshare.Repo
   alias Anyshare.RoomEvents
   alias Anyshare.Sharing.LinkEvent
@@ -61,12 +62,26 @@ defmodule Anyshare.Sharing do
 
       attrs =
         if kind == "file" do
-          Map.put(attrs, :r2_key, transfer_key(now, Map.get(params, "filename")))
+          attrs
+          |> Map.put(:r2_key, transfer_key(now, Map.get(params, "filename")))
         else
           attrs
         end
 
-      case %Transfer{} |> Transfer.changeset(attrs) |> Repo.insert() do
+      changeset = Transfer.changeset(%Transfer{}, attrs)
+
+      changeset =
+        if kind == "file" and changeset.valid? do
+          Ecto.Changeset.put_change(
+            changeset,
+            :upload_part_size,
+            Multipart.part_size(Ecto.Changeset.get_field(changeset, :byte_size))
+          )
+        else
+          changeset
+        end
+
+      case Repo.insert(changeset) do
         {:ok, transfer} -> {:ok, transfer, recipient}
         {:error, changeset} -> {:error, changeset}
       end
@@ -82,22 +97,8 @@ defmodule Anyshare.Sharing do
     |> Repo.one()
   end
 
-  @spec complete_transfer(Device.t(), String.t()) ::
-          {:ok, Transfer.t()} | {:error, :not_found | :already_completed | Ecto.Changeset.t()}
-  def complete_transfer(sender, id) do
-    case Repo.get_by(Transfer, id: id, sender_id: sender.id) do
-      nil ->
-        {:error, :not_found}
-
-      %Transfer{status: "pending"} = transfer ->
-        transfer
-        |> Transfer.changeset(%{status: "uploaded"})
-        |> Repo.update()
-
-      _transfer ->
-        {:error, :already_completed}
-    end
-  end
+  def complete_transfer(sender, id, parts \\ nil),
+    do: Anyshare.Uploads.complete(sender, id, parts)
 
   @spec create_short_link(Device.t(), String.t()) ::
           {:ok, ShortLink.t()} | {:error, Ecto.Changeset.t() | :code_allocation_failed}
@@ -151,12 +152,14 @@ defmodule Anyshare.Sharing do
       when kind in ["view", "download"] do
     field = if kind == "view", do: :view_count, else: :download_count
 
+    occurred_at = Time.utc_now()
+
     %LinkEvent{}
     |> LinkEvent.changeset(%{
       id: Ecto.UUID.generate(),
       code: code,
       kind: kind,
-      occurred_at: Time.now()
+      occurred_at: occurred_at
     })
     |> Repo.insert!()
 
@@ -171,7 +174,7 @@ defmodule Anyshare.Sharing do
           kind: kind,
           view_count: link.view_count || 0,
           download_count: link.download_count || 0,
-          date: Date.to_iso8601(Date.utc_today())
+          occurred_at: Time.iso8601(occurred_at)
         })
 
       _missing ->
@@ -183,11 +186,9 @@ defmodule Anyshare.Sharing do
     _error -> :ok
   end
 
-  @spec daily_stats(Device.t(), pos_integer(), String.t() | nil) :: [map()]
-  def daily_stats(device, days \\ 7, code \\ nil) do
-    today = Date.utc_today()
-    start_date = Date.add(today, 1 - days)
-    start_at = NaiveDateTime.new!(start_date, ~T[00:00:00])
+  @spec list_events(Device.t(), pos_integer(), String.t() | nil) :: [map()]
+  def list_events(device, days \\ 7, code \\ nil) do
+    start_at = DateTime.add(Time.utc_now(), -(days + 1) * 86_400, :second)
 
     query =
       from(event in LinkEvent,
@@ -195,24 +196,16 @@ defmodule Anyshare.Sharing do
         on: link.code == event.code,
         where: link.device_id == ^device.id,
         where: event.occurred_at >= ^start_at,
-        group_by: [fragment("(?::date)", event.occurred_at), event.kind],
-        select: {fragment("(?::date)", event.occurred_at), event.kind, count(event.id)}
+        order_by: [asc: event.occurred_at],
+        select: %{occurred_at: event.occurred_at, kind: event.kind}
       )
 
     query = if code, do: where(query, [_event, link], link.code == ^code), else: query
 
-    counts =
-      query
-      |> Repo.all()
-      |> Map.new(fn {date, kind, count} -> {{to_date(date), kind}, count} end)
-
-    Enum.map(0..(days - 1), fn offset ->
-      date = Date.add(start_date, offset)
-
+    Enum.map(Repo.all(query), fn event ->
       %{
-        date: Date.to_iso8601(date),
-        views: Map.get(counts, {date, "view"}, 0),
-        downloads: Map.get(counts, {date, "download"}, 0)
+        occurred_at: Time.iso8601(event.occurred_at),
+        kind: event.kind
       }
     end)
   end
@@ -238,6 +231,7 @@ defmodule Anyshare.Sharing do
     )
     |> Repo.all()
     |> Enum.each(fn transfer ->
+      if transfer.upload_id, do: Multipart.abort(transfer)
       if present(transfer.r2_key), do: ObjectStore.delete(transfer.r2_key)
 
       transfer
@@ -377,10 +371,6 @@ defmodule Anyshare.Sharing do
       download_count: link.download_count || 0
     }
   end
-
-  defp to_date(%Date{} = date), do: date
-  defp to_date(%NaiveDateTime{} = datetime), do: NaiveDateTime.to_date(datetime)
-  defp to_date(%DateTime{} = datetime), do: DateTime.to_date(datetime)
 
   defp drop_json(transfer) do
     payload = %{

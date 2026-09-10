@@ -16,19 +16,21 @@ defmodule AnyshareWeb.ShortLinkStatsControllerTest do
     %{token: token, device: device, link: link}
   end
 
-  test "returns seven days for only the requested link without recording a view", %{
+  test "returns utc event times for only the requested link without recording a view", %{
     conn: conn,
     token: token,
     device: device,
     link: link
   } do
     {:ok, other_link} = Sharing.create_short_link(device, "https://example.com/other")
-    today = Date.utc_today()
-    yesterday = Date.add(today, -1)
+    now = Time.utc_now()
+    today = now
+    yesterday = DateTime.add(now, -86_400, :second)
+    stale = DateTime.add(now, -9 * 86_400, :second)
     record_event(link, "view", today)
     record_event(link, "view", today)
     record_event(link, "download", yesterday)
-    record_event(link, "view", Date.add(today, -7))
+    record_event(link, "view", stale)
     record_event(other_link, "view", today)
 
     link
@@ -41,23 +43,15 @@ defmodule AnyshareWeb.ShortLinkStatsControllerTest do
       |> get("/api/v1/short_links/#{String.downcase(link.code)}/stats")
 
     payload = json_response(conn, 200)
-    stats = payload["stats"]
+    events = payload["events"]
     assert payload["view_count"] == 2
     assert payload["download_count"] == 1
-    assert length(stats) == 7
-    assert hd(stats)["date"] == Date.to_iso8601(Date.add(today, -6))
-    assert hd(stats)["views"] == 0
-    assert hd(stats)["downloads"] == 0
-    assert List.last(stats) == %{"date" => Date.to_iso8601(today), "views" => 2, "downloads" => 0}
-
-    assert Enum.at(stats, -2) == %{
-             "date" => Date.to_iso8601(yesterday),
-             "views" => 0,
-             "downloads" => 1
-           }
-
+    assert Enum.map(events, & &1["kind"]) == ["download", "view", "view"]
+    assert Enum.all?(events, &String.ends_with?(&1["occurred_at"], "Z"))
+    assert Enum.at(events, 0)["occurred_at"] == Time.iso8601(yesterday)
+    assert Enum.at(events, 1)["occurred_at"] == Time.iso8601(today)
     assert Repo.get!(ShortLink, link.code).view_count == 2
-    assert List.last(Sharing.daily_stats(device)).views == 3
+    assert length(Sharing.list_events(device)) == 4
   end
 
   test "requires authentication", %{conn: conn, link: link} do
@@ -99,13 +93,13 @@ defmodule AnyshareWeb.ShortLinkStatsControllerTest do
     assert json_response(conn, 404) == %{"error" => "not found"}
   end
 
-  defp record_event(link, kind, date) do
+  defp record_event(link, kind, occurred_at) do
     %LinkEvent{}
     |> LinkEvent.changeset(%{
       id: Ecto.UUID.generate(),
       code: link.code,
       kind: kind,
-      occurred_at: NaiveDateTime.new!(date, ~T[00:00:00])
+      occurred_at: occurred_at
     })
     |> Repo.insert!()
   end

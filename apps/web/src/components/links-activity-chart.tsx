@@ -9,6 +9,7 @@ import {
   type ChartConfig,
 } from "#/components/ui/chart.tsx";
 import type { LinkStat } from "#/lib/api.ts";
+import { weekdayLabel } from "#/lib/link-events.ts";
 import { cn } from "#/lib/utils.ts";
 
 const chartConfig = {
@@ -21,11 +22,6 @@ const chartConfig = {
     color: "var(--chart-2)",
   },
 } satisfies ChartConfig;
-
-const weekday = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "short",
-  });
 
 export type ActivityMetric = "views" | "downloads";
 
@@ -43,7 +39,7 @@ export function LinksActivityChart({
   stats,
   metrics = defaultMetrics,
   title = "Activity",
-  description = "Views and downloads across your live links, last 7 days (UTC).",
+  description = "Views and downloads across your live links, last 7 days.",
   framed = true,
 }: LinksActivityChartProps) {
   const showViews = metrics.includes("views");
@@ -67,7 +63,7 @@ export function LinksActivityChart({
           <XAxis
             axisLine={false}
             dataKey="date"
-            tickFormatter={weekday}
+            tickFormatter={(value) => weekdayLabel(String(value))}
             tickLine={false}
             tickMargin={8}
           />

@@ -1075,9 +1075,7 @@ export function AnimatedSidebarMenuButton({
         aria-hidden={panel.collapsed}
         className={cn(
           "relative z-10 min-w-0 truncate",
-          panel.collapsed
-            ? "pointer-events-none hidden"
-            : "flex-1"
+          panel.collapsed ? "pointer-events-none hidden" : "flex-1"
         )}
       >
         {children}
@@ -1107,9 +1105,7 @@ export function AnimatedSidebarMenuButton({
 
   const interactiveClassName = cn(
     "relative flex min-h-9 w-full min-w-0 items-center overflow-hidden rounded-xl text-sm font-medium outline-none",
-    panel.collapsed
-      ? "justify-center px-0"
-      : "gap-2.5 px-3 text-left",
+    panel.collapsed ? "justify-center px-0" : "gap-2.5 px-3 text-left",
     "text-muted-foreground hover:text-foreground transition-colors",
     "focus-visible:bg-muted/70 focus-visible:ring-ring focus-visible:ring-2",
     isActive && "text-foreground",

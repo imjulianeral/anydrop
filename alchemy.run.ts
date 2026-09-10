@@ -8,6 +8,7 @@ import * as Layer from "effect/Layer";
 
 import Api from "./infra/Api.ts";
 import { LocalPostgres } from "./infra/db.ts";
+import { Files } from "./infra/files.ts";
 import { websitePort } from "./infra/ports.ts";
 
 const webDir = `${import.meta.dirname}/apps/web`;
@@ -27,8 +28,8 @@ export default Alchemy.Stack(
       yield* LocalPostgres;
     }
 
-    const bucket = yield* Cloudflare.R2.Bucket("Bucket");
     const api = yield* Api;
+    const files = yield* Files;
     const website = yield* Cloudflare.Website.Vite("Website", {
       assets: {
         notFoundHandling: "single-page-application",
@@ -42,7 +43,7 @@ export default Alchemy.Stack(
 
     return {
       apiUrl: api.url,
-      bucketName: bucket.bucketName,
+      filesBucket: files.bucketName,
       websiteUrl: website.url,
     };
   })
