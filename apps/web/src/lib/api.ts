@@ -144,6 +144,7 @@ export interface ShortLink {
   view_count: number;
   download_count: number;
   expires_at: string;
+  created_at: string;
 }
 
 export interface LinkStat {

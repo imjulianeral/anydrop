@@ -278,7 +278,8 @@ defmodule Anyshare.Sharing do
       counts_json(link)
       |> Map.merge(%{
         code: link.code,
-        expires_at: Time.iso8601(link.expires_at)
+        expires_at: Time.iso8601(link.expires_at),
+        created_at: Time.iso8601(link.created_at)
       })
       |> Map.merge(drop_json(transfer))
 
@@ -296,6 +297,7 @@ defmodule Anyshare.Sharing do
     |> Map.merge(%{
       code: link.code,
       expires_at: Time.iso8601(link.expires_at),
+      created_at: Time.iso8601(link.created_at),
       kind: "url",
       url: link.target_url
     })

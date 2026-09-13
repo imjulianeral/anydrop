@@ -1,4 +1,5 @@
-import { MessageSquare, Radio } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, MessageSquare, Radio } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
@@ -17,103 +18,74 @@ import {
 } from "#/lib/api.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { toast } from "#/lib/toast.ts";
+import {
+  involvesPeer,
+  mergeTransfers,
+  readTransfer,
+} from "#/lib/transfer-events.ts";
 import { uploadFile } from "#/lib/upload.ts";
+import { cn } from "#/lib/utils.ts";
 
-const readTransfer = (payload: Record<string, unknown>): Transfer | null => {
-  if (typeof payload.id !== "string") {
-    return null;
-  }
-  if (payload.kind !== "file" && payload.kind !== "text") {
-    return null;
-  }
-  if (typeof payload.sender_id !== "string") {
-    return null;
-  }
-  const download =
-    payload.download && typeof payload.download === "object"
-      ? (payload.download as { url?: string })
-      : undefined;
-  return {
-    id: payload.id,
-    sender_id: payload.sender_id,
-    recipient_id:
-      typeof payload.recipient_id === "string" ? payload.recipient_id : null,
-    kind: payload.kind,
-    filename: typeof payload.filename === "string" ? payload.filename : null,
-    byte_size: typeof payload.byte_size === "number" ? payload.byte_size : null,
-    content_type:
-      typeof payload.content_type === "string" ? payload.content_type : null,
-    body: typeof payload.body === "string" ? payload.body : undefined,
-    status: typeof payload.status === "string" ? payload.status : "delivered",
-    expires_at:
-      typeof payload.expires_at === "string"
-        ? payload.expires_at
-        : new Date().toISOString(),
-    created_at:
-      typeof payload.created_at === "string"
-        ? payload.created_at
-        : new Date().toISOString(),
-    download:
-      typeof download?.url === "string" ? { url: download.url } : undefined,
-  };
-};
+interface ShareAppProps {
+  peerId?: string;
+  peerName?: string;
+  messageId?: string;
+  onSelectPeer: (peer: Peer) => void;
+}
 
-const involvesPeer = (transfer: Transfer, selfId: string, peerId: string) =>
-  (transfer.sender_id === selfId && transfer.recipient_id === peerId) ||
-  (transfer.sender_id === peerId && transfer.recipient_id === selfId);
-
-export function ShareApp() {
+export function ShareApp({
+  peerId,
+  peerName,
+  messageId,
+  onSelectPeer,
+}: ShareAppProps) {
   const { token, self, peers, connected, joinRoom, subscribeToEvents } =
     useAppSession();
-  const [selected, setSelected] = useState<Peer | null>(null);
+  const selected = peerId
+    ? (peers.find((peer) => peer.id === peerId) ?? {
+        id: peerId,
+        display_name: peerName ?? "Device",
+      })
+    : null;
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
-
-  useEffect(() => {
-    return subscribeToEvents((payload) => {
-      const { type } = payload;
-      if (type !== "text_received" && type !== "transfer_offered") {
-        return;
-      }
-      const incoming = readTransfer(payload);
-      const peer = selectedRef.current;
-      if (!incoming || !peer) {
-        return;
-      }
-      if (!involvesPeer(incoming, self.id, peer.id)) {
-        return;
-      }
-      setTransfers((current) =>
-        current.some((item) => item.id === incoming.id)
-          ? current
-          : [...current, incoming]
-      );
-    });
-  }, [self.id, subscribeToEvents]);
-
+  const [loadedPeerId, setLoadedPeerId] = useState<string | null>(null);
   const selectedId = selected?.id ?? null;
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
 
   useEffect(() => {
+    setTransfers([]);
     if (!selectedId) {
-      setTransfers([]);
       setLoadingThread(false);
+      setLoadedPeerId(null);
       return;
     }
     let cancelled = false;
+    const unsubscribe = subscribeToEvents((payload) => {
+      if (
+        payload.type !== "text_received" &&
+        payload.type !== "transfer_offered"
+      ) {
+        return;
+      }
+      const incoming = readTransfer(payload);
+      if (!incoming || !involvesPeer(incoming, self.id, selectedId)) {
+        return;
+      }
+      setTransfers((current) => mergeTransfers(current, [incoming]));
+    });
     setLoadingThread(true);
     const load = async () => {
       try {
         const payload = await listTransfers(token, selectedId);
         if (!cancelled) {
-          setTransfers(payload.transfers);
+          setTransfers((current) => mergeTransfers(payload.transfers, current));
         }
       } catch (error) {
         if (!cancelled) {
-          setTransfers([]);
           toast.add({
             title: "Could not load messages",
             description: error instanceof Error ? error.message : undefined,
@@ -122,6 +94,7 @@ export function ShareApp() {
         }
       } finally {
         if (!cancelled) {
+          setLoadedPeerId(selectedId);
           setLoadingThread(false);
         }
       }
@@ -129,10 +102,17 @@ export function ShareApp() {
     void load();
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, [selectedId, token]);
+  }, [selectedId, self.id, subscribeToEvents, token]);
 
   const appendTransfer = (next: Transfer) => {
+    if (
+      !selectedRef.current ||
+      !involvesPeer(next, self.id, selectedRef.current)
+    ) {
+      return;
+    }
     setTransfers((current) =>
       current.some((item) => item.id === next.id) ? current : [...current, next]
     );
@@ -204,7 +184,12 @@ export function ShareApp() {
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="border-border/70 flex w-80 shrink-0 flex-col border-r">
+      <aside
+        className={cn(
+          "border-border/70 w-full shrink-0 flex-col border-r md:flex md:w-80",
+          selected ? "hidden" : "flex"
+        )}
+      >
         <SelfCard
           key={`${self.display_name}-${self.room_code ?? ""}`}
           connected={connected}
@@ -226,7 +211,7 @@ export function ShareApp() {
                 key={peer.id}
                 peer={peer}
                 selected={selected?.id === peer.id}
-                onSelect={setSelected}
+                onSelect={onSelectPeer}
               />
             ))
           )}
@@ -234,7 +219,10 @@ export function ShareApp() {
       </aside>
 
       <section
-        className="flex min-w-0 flex-1 flex-col"
+        className={cn(
+          "min-w-0 flex-1 flex-col md:flex",
+          selected ? "flex" : "hidden"
+        )}
         onDragOver={(event) => {
           if (!selected) {
             return;
@@ -254,10 +242,23 @@ export function ShareApp() {
       >
         {selected ? (
           <>
-            <header className="border-border/70 flex items-center border-b px-6 py-4">
+            <header className="border-border/70 flex items-center gap-3 border-b px-6 py-4">
+              <Link
+                to="/"
+                search={(previous) => ({
+                  ...previous,
+                  peer: undefined,
+                  peerName: undefined,
+                  message: undefined,
+                })}
+                aria-label="Back to devices"
+                className="flex size-8 items-center justify-center rounded-full outline-offset-2 md:hidden"
+              >
+                <ArrowLeft aria-hidden="true" className="size-4" />
+              </Link>
               <h2 className="font-heading text-lg">{selected.display_name}</h2>
             </header>
-            {loadingThread ? (
+            {loadingThread || loadedPeerId !== selectedId ? (
               <div className="flex flex-1 items-center justify-center">
                 <Loader label="Loading messages" variant="dots" />
               </div>
@@ -270,6 +271,8 @@ export function ShareApp() {
               />
             ) : (
               <ChatThread
+                key={selected.id}
+                focusedMessageId={messageId}
                 peerName={selected.display_name}
                 selfId={self.id}
                 selfName={self.display_name}

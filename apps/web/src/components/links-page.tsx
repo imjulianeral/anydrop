@@ -508,7 +508,10 @@ function LinkListItem({
                   <span className="sr-only"> downloads</span>
                 </span>
               ) : null}
-              <ExpiryCountdown expiresAt={item.expires_at} />
+              <ExpiryCountdown
+                createdAt={item.created_at}
+                expiresAt={item.expires_at}
+              />
             </p>
           </div>
           <Button

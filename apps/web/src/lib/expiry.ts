@@ -34,6 +34,38 @@ export const remainingLabel = (
   return `Deletes in ${body}`;
 };
 
+export type RemainingTone = "green" | "yellow" | "red";
+
+const GREEN_REMAINING = 0.66;
+const YELLOW_REMAINING = 0.33;
+
+export const remainingRatio = (
+  expiresAt: string,
+  createdAt: string,
+  now = Date.now()
+): number | null => {
+  const end = Date.parse(expiresAt);
+  const start = Date.parse(createdAt);
+  if (Number.isNaN(end) || Number.isNaN(start)) {
+    return null;
+  }
+  const total = end - start;
+  if (total <= 0) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, (end - now) / total));
+};
+
+export const remainingTone = (ratio: number): RemainingTone => {
+  if (ratio >= GREEN_REMAINING) {
+    return "green";
+  }
+  if (ratio >= YELLOW_REMAINING) {
+    return "yellow";
+  }
+  return "red";
+};
+
 const formatRemaining = (
   days: number,
   hours: number,

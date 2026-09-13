@@ -44,6 +44,7 @@ describe("applyShortLinkEventToLink", () => {
       view_count: 3,
       download_count: 1,
       expires_at: "2026-09-12T00:00:00Z",
+      created_at: "2026-09-05T00:00:00Z",
     };
     expect(applyShortLinkEventToLink(link, event).view_count).toBe(4);
   });

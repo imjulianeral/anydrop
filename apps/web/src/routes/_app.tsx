@@ -3,6 +3,7 @@ import { PanelLeft } from "lucide-react";
 
 import { AppSessionProvider } from "#/components/app-session.tsx";
 import { AppSidebar } from "#/components/app-sidebar.tsx";
+import { MessageNotifications } from "#/components/message-notifications.tsx";
 import {
   AnimatedSidebarInset,
   AnimatedSidebarProvider,
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   return (
     <AppSessionProvider>
+      <MessageNotifications />
       <AnimatedSidebarProvider
         className="bg-background h-svh overflow-hidden"
         open={false}

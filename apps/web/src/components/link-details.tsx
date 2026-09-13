@@ -122,6 +122,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
             <dd>
               <ExpiryCountdown
                 className="text-foreground text-sm"
+                createdAt={link.created_at}
                 expiresAt={link.expires_at}
                 format="duration"
               />

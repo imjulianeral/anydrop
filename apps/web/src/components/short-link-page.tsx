@@ -61,6 +61,7 @@ export function ShortLinkPage() {
       <PageShell layout="split">
         <SharedMessage
           body={drop.body ?? ""}
+          createdAt={drop.created_at}
           expiresAt={drop.expires_at}
           onCopy={() => {
             void copyMessage();
@@ -122,7 +123,10 @@ export function ShortLinkPage() {
             <div className="flex justify-between gap-6">
               <dt className="text-muted-foreground shrink-0">Availability</dt>
               <dd className="text-right">
-                <ExpiryCountdown expiresAt={drop.expires_at} />
+                <ExpiryCountdown
+                  createdAt={drop.created_at}
+                  expiresAt={drop.expires_at}
+                />
               </dd>
             </div>
           </dl>
@@ -157,10 +161,12 @@ export function ShortLinkPage() {
 
 function SharedMessage({
   body,
+  createdAt,
   expiresAt,
   onCopy,
 }: {
   body: string;
+  createdAt: string;
   expiresAt: string;
   onCopy: () => void;
 }) {
@@ -216,7 +222,7 @@ function SharedMessage({
           </p>
         </div>
       </div>
-      <ExpiryCountdown expiresAt={expiresAt} />
+      <ExpiryCountdown createdAt={createdAt} expiresAt={expiresAt} />
       <MagneticButton
         className="w-full focus-visible:outline-2 focus-visible:outline-offset-4"
         magneticClassName="w-full shrink-0"
