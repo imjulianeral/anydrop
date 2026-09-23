@@ -1,9 +1,9 @@
 "use client";
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { ChevronRightIcon, CheckIcon } from "lucide-react";
 import * as React from "react";
 
+import { ChevronRightIcon, CheckIcon } from "#/components/rune-icons.tsx";
 import { cn } from "#/lib/utils.ts";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {

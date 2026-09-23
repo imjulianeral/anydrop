@@ -53,6 +53,7 @@ const animals = [
 export type DeviceKind = "phone" | "tablet" | "desktop";
 
 export interface LocalDevice {
+  sessionToken?: string;
   id: string;
   displayName: string;
   deviceKind: DeviceKind;
@@ -83,6 +84,7 @@ export const loadLocalDevice = (): LocalDevice => {
       const parsed = JSON.parse(raw) as Partial<LocalDevice>;
       if (parsed.id && parsed.displayName && parsed.deviceKind) {
         return {
+          sessionToken: parsed.sessionToken,
           id: parsed.id,
           displayName: parsed.displayName,
           deviceKind: parsed.deviceKind,
@@ -94,6 +96,7 @@ export const loadLocalDevice = (): LocalDevice => {
   }
 
   const device: LocalDevice = {
+    sessionToken: generateSessionToken(),
     id: crypto.randomUUID(),
     displayName: generateDisplayName(),
     deviceKind: detectDeviceKind(),
@@ -105,3 +108,8 @@ export const loadLocalDevice = (): LocalDevice => {
 export const saveLocalDevice = (device: LocalDevice): void => {
   globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(device));
 };
+
+export const generateSessionToken = (): string =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");

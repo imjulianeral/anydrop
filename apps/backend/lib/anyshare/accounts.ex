@@ -13,30 +13,16 @@ defmodule Anyshare.Accounts do
   @heartbeat_window_seconds 60
   @uuid ~r/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 
-  @spec create_session(map(), String.t()) :: {:ok, String.t(), Device.t()} | {:error, term()}
-  def create_session(params, ip_hash) do
+  @spec create_session(map(), String.t(), String.t() | nil) ::
+          {:ok, String.t(), Device.t()} | {:error, term()}
+  def create_session(params, ip_hash, credential \\ nil) do
     id = Map.get(params, "id")
 
     if is_binary(id) and Regex.match?(@uuid, id) do
       device = Repo.get(Device, id) || %Device{id: id}
-      token = issue_token()
-      now = Time.now()
 
-      attrs = %{
-        display_name:
-          present(Map.get(params, "display_name")) || present(device.display_name) ||
-            DeviceName.generate(),
-        device_kind:
-          present(Map.get(params, "device_kind")) || present(device.device_kind) || "desktop",
-        ip_hash: ip_hash,
-        token_digest: digest(token),
-        last_seen_at: now,
-        created_at: device.created_at || now
-      }
-
-      case device |> Device.changeset(attrs) |> Repo.insert_or_update() do
-        {:ok, saved_device} -> {:ok, token, saved_device}
-        {:error, changeset} -> {:error, changeset}
+      with {:ok, token} <- session_token(device, credential) do
+        save_session(device, params, ip_hash, token)
       end
     else
       {:error, :invalid_id}
@@ -49,6 +35,7 @@ defmodule Anyshare.Accounts do
     attrs =
       %{ip_hash: ip_hash, last_seen_at: Time.now()}
       |> maybe_put(params, "display_name", :display_name, &Function.identity/1)
+      |> maybe_put(params, "public_key", :public_key, &Function.identity/1)
       |> maybe_put(params, "room_code", :room_code, &Rooms.normalize_code/1)
 
     device
@@ -106,6 +93,7 @@ defmodule Anyshare.Accounts do
   def peer_json(device) do
     %{
       id: device.id,
+      public_key: device.public_key,
       display_name: device.display_name,
       device_kind: device.device_kind,
       room_code: device.room_code,
@@ -113,21 +101,49 @@ defmodule Anyshare.Accounts do
     }
   end
 
+  defp save_session(device, params, ip_hash, token) do
+    now = Time.now()
+
+    attrs = %{
+      display_name:
+        present(Map.get(params, "display_name")) || present(device.display_name) ||
+          DeviceName.generate(),
+      device_kind:
+        present(Map.get(params, "device_kind")) || present(device.device_kind) || "desktop",
+      ip_hash: ip_hash,
+      token_digest: digest(token),
+      last_seen_at: now,
+      created_at: device.created_at || now
+    }
+
+    attrs = maybe_put(attrs, params, "public_key", :public_key, &Function.identity/1)
+
+    case device |> Device.changeset(attrs) |> Repo.insert_or_update() do
+      {:ok, saved_device} -> {:ok, token, saved_device}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp session_token(%Device{token_digest: nil}, nil), do: {:ok, issue_token()}
+
+  defp session_token(device, credential) when is_binary(credential) do
+    if Regex.match?(~r/^[0-9a-f]{64}$/u, credential) and
+         (is_nil(device.token_digest) or
+            Plug.Crypto.secure_compare(device.token_digest, digest(credential))),
+       do: {:ok, credential},
+       else: {:error, :unauthorized}
+  end
+
+  defp session_token(_device, _credential), do: {:error, :unauthorized}
+
   defp peers_query(device) do
     cutoff = NaiveDateTime.add(Time.now(), -@online_window_seconds)
+    connected_ids = Anyshare.Invitations.connected_ids(device.id)
 
-    base =
-      from(peer in Device,
-        where: peer.last_seen_at >= ^cutoff and peer.id != ^device.id
-      )
-
-    case present(device.room_code) do
-      nil ->
-        where(base, [peer], peer.ip_hash == ^device.ip_hash)
-
-      room_code ->
-        where(base, [peer], peer.ip_hash == ^device.ip_hash or peer.room_code == ^room_code)
-    end
+    from(peer in Device,
+      where: peer.last_seen_at >= ^cutoff and peer.id != ^device.id,
+      where: peer.ip_hash == ^device.ip_hash or peer.id in ^connected_ids
+    )
   end
 
   defp maybe_put(attrs, params, source_key, destination_key, transform) do

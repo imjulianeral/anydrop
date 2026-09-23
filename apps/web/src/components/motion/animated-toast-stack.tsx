@@ -2,15 +2,6 @@
 // beui.dev/components/motion/animated-toast-stack
 
 import {
-  AlertCircle,
-  Bell,
-  Check,
-  Info,
-  LoaderCircle,
-  X,
-  type LucideIcon,
-} from "lucide-react";
-import {
   AnimatePresence,
   motion,
   useReducedMotion,
@@ -27,6 +18,15 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  AlertCircle,
+  Bell,
+  Check,
+  Info,
+  LoaderCircle,
+  X,
+  type RuneIcon,
+} from "#/components/rune-icons.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -106,7 +106,7 @@ const CONTENT_TRANSITION = {
   ease: EASE_OUT,
 } as const;
 
-const STATUS_ICON: Record<ToastStatus, LucideIcon> = {
+const STATUS_ICON: Record<ToastStatus, RuneIcon> = {
   neutral: Bell,
   info: Info,
   loading: LoaderCircle,

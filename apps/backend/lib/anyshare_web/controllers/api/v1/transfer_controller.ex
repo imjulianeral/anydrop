@@ -63,22 +63,29 @@ defmodule AnyshareWeb.Api.V1.TransferController do
   def show(conn, %{"id" => id}) do
     current_device = conn.assigns.current_device
 
-    case Sharing.get_visible_transfer(current_device, id) do
-      nil ->
+    case Sharing.open_transfer(current_device, id) do
+      {:error, :not_found} ->
         ControllerHelpers.error(conn, :not_found, "not found")
 
-      transfer ->
-        payload = %{transfer: Sharing.transfer_json(transfer, current_device)}
+      {:ok, transfer} ->
+        payload = Sharing.transfer_json(transfer, current_device, download: true, opened: true)
+        json(conn, %{transfer: payload, download: Map.get(payload, :download)})
+    end
+  end
 
-        payload =
-          if transfer.kind == "file" and transfer.status in ["uploaded", "delivered"] and
-               present(transfer.r2_key) do
-            Map.put(payload, :download, %{url: ObjectStore.presign_get(transfer.r2_key)})
-          else
-            payload
-          end
+  def download(conn, %{"id" => id} = params) do
+    case Sharing.download_transfer(id, Map.get(params, "token", ""),
+           consume: params["save"] == "1"
+         ) do
+      {:ok, transfer} ->
+        url = ObjectStore.presign_get(transfer.r2_key, filename: transfer.filename)
 
-        json(conn, payload)
+        if String.starts_with?(url, ["http://", "https://"]),
+          do: redirect(conn, external: url),
+          else: redirect(conn, to: url)
+
+      {:error, :not_found} ->
+        ControllerHelpers.error(conn, :not_found, "not found")
     end
   end
 

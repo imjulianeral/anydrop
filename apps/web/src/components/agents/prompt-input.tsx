@@ -1,7 +1,6 @@
 "use client";
 // beui.dev/components/agents/prompt-input
 
-import { ArrowUp, Plus, Square } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type FormEvent,
@@ -27,6 +26,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "#/components/motion/select.tsx";
+import { ArrowUp, Plus, Square } from "#/components/rune-icons.tsx";
 import { SPRING_SWAP } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 

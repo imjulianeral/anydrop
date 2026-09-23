@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes, initials, mediaKind } from "#/lib/media.ts";
+import { displayFilename, formatBytes, initials, mediaKind } from "#/lib/media.ts";
 
 describe("mediaKind", () => {
   it("detects images from type and filename", () => {
@@ -15,6 +15,11 @@ describe("mediaKind", () => {
 
   it("falls back to a generic file", () => {
     expect(mediaKind("application/zip", "archive.zip")).toBe("file");
+  });
+
+  it("labels the ciphertext blob without using it as a real name", () => {
+    expect(displayFilename("secret.anyshare")).toBe("Encrypted File");
+    expect(displayFilename("notes.pdf")).toBe("notes.pdf");
   });
 });
 

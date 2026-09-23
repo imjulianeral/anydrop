@@ -13,6 +13,7 @@ defmodule AnyshareWeb.Router do
   get "/up", AnyshareWeb.HealthController, :show
   get "/s/:code", AnyshareWeb.ShortLinkController, :show
   get "/api/v1/short_links/:id/download", AnyshareWeb.Api.V1.ShortLinkController, :download
+  get "/api/v1/transfers/:id/download", AnyshareWeb.Api.V1.TransferController, :download
   get "/cable", AnyshareWeb.CablePlug, []
 
   scope "/api/v1", AnyshareWeb.Api.V1 do
@@ -20,6 +21,7 @@ defmodule AnyshareWeb.Router do
 
     post "/sessions", SessionController, :create
     get "/short_links/:id", ShortLinkController, :show
+    post "/short_links/:id/unlock", ShortLinkController, :unlock
     get "/local_blobs/*key", LocalBlobController, :show
     put "/local_blobs/*key", LocalBlobController, :update
   end
@@ -30,6 +32,15 @@ defmodule AnyshareWeb.Router do
     put "/device", DeviceController, :update
     patch "/device", DeviceController, :update
     get "/peers", PeerController, :index
+    get "/groups", GroupController, :index
+    post "/groups", GroupController, :create
+    patch "/groups/:id", GroupController, :update
+    delete "/groups/:id", GroupController, :delete
+    post "/groups/:id/leave", GroupController, :leave
+    get "/groups/:id/transfers", GroupController, :transfers
+    get "/invitations", InvitationController, :index
+    post "/invitations", InvitationController, :create
+    patch "/invitations/:id", InvitationController, :update
     get "/short_links", ShortLinkController, :index
     get "/short_links/:id/stats", ShortLinkController, :stats
     post "/short_links", ShortLinkController, :create

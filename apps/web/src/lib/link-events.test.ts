@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { limitReached } from "./expiry.ts";
 import {
   applyShortLinkEventToLink,
   applyShortLinkEventToStats,
@@ -37,6 +38,29 @@ describe("readShortLinkEvent", () => {
 });
 
 describe("applyShortLinkEventToLink", () => {
+  it("expires a file immediately on its final download without removing the row", () => {
+    const link = {
+      code: event.code,
+      kind: "file" as const,
+      view_count: 3,
+      download_count: 0,
+      max_downloads: 1,
+      expires_at: "2099-09-12T00:00:00Z",
+      created_at: "2099-09-05T00:00:00Z",
+    };
+    const updated = applyShortLinkEventToLink(link, {
+      ...event,
+      kind: "download",
+    });
+    expect(updated.code).toBe(link.code);
+    expect(limitReached(updated.max_downloads, updated.download_count)).toBe(
+      true
+    );
+    expect(
+      applyShortLinkEventToLink(updated, { ...event, downloadCount: 0 })
+        .download_count
+    ).toBe(1);
+  });
   it("updates matching counts", () => {
     const link = {
       code: "ABC1234",

@@ -2,7 +2,8 @@
 // beui.dev/components/motion/morphing-modal
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
 import { PresenceGate } from "#/lib/presence-gate.tsx";
@@ -27,11 +28,12 @@ export function MorphingModal({
 }: MorphingModalProps) {
   const open = viewId !== null;
   const reduce = useReducedMotion();
-  const enterY = reduce ? 0 : placement === "bottom" ? 40 : 20;
+  const offset = placement === "bottom" ? 40 : 20;
+  const enterY = reduce ? 0 : offset;
   const enterScale = reduce ? 1 : 0.97;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {return;}
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -42,10 +44,10 @@ export function MorphingModal({
   // Mounted only while open, and while open the chrome is two fixed siblings
   // rather than one wrapper: the backdrop spans the viewport edges but carries
   // the scrim colour, and the layer positioning the panel sits inset off every
-  // edge (`inset-4`, with the bottom placement's `pb-4` on top of it). Both hang
-  // off `PresenceGate`, so interaction releases in the same commit that starts
-  // the exit rather than when it ends — `open` is already false for those
-  // frames. See tests/fixed-overlay-edge-sampling.test.tsx.
+  // edge (`inset-x-4 top-4`, bottom placement clears `--app-dock-space`). Both
+  // hang off `PresenceGate`, so interaction releases in the same commit that
+  // starts the exit rather than when it ends — `open` is already false for
+  // those frames. See tests/fixed-overlay-edge-sampling.test.tsx.
   return (
     <AnimatePresence initial={false}>
       {open ? (
@@ -60,7 +62,7 @@ export function MorphingModal({
               transition={{ duration: 0.2, ease: EASE_OUT }}
               {...gate}
               onClick={onClose}
-              className="bg-background/5 pointer-events-auto fixed inset-0 z-[80] [backdrop-filter:blur(14px)_saturate(140%)] [-webkit-backdrop-filter:blur(14px)_saturate(140%)]"
+              className="bg-background/5 pointer-events-auto fixed inset-0 z-[80]"
             />
           )}
         </PresenceGate>
@@ -74,8 +76,10 @@ export function MorphingModal({
             <div
               inert={!isPresent}
               className={cn(
-                "pointer-events-none fixed inset-4 z-[80] flex justify-center",
-                placement === "bottom" ? "items-end pb-4" : "items-center"
+                "pointer-events-none fixed inset-x-4 top-4 z-[80] flex justify-center",
+                placement === "bottom"
+                  ? "bottom-(--app-dock-space) items-end"
+                  : "bottom-4 items-center"
               )}
             >
               <motion.div

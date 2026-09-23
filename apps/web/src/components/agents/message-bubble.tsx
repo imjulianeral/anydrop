@@ -1,6 +1,5 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
 import { type HTMLMotionProps, motion, useReducedMotion } from "motion/react";
 import {
   cloneElement,
@@ -16,6 +15,7 @@ import {
 } from "react";
 
 import { MessageSideContext } from "#/components/agents/message-context.tsx";
+import { ChevronDown } from "#/components/rune-icons.tsx";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_SWAP } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 

@@ -1,3 +1,19 @@
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
+import { PromptInput } from "#/components/agents/prompt-input.tsx";
+import { useAppSession } from "#/components/app-session.tsx";
+import { EmptyState } from "#/components/empty-state.tsx";
+import { ExpirationOptions } from "#/components/expiration-options.tsx";
+import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
+import { LinkDetails } from "#/components/link-details.tsx";
+import { LinksActivityChart } from "#/components/links-activity-chart.tsx";
+import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
+import { Button } from "#/components/motion/button/index.tsx";
+import { Input } from "#/components/motion/input.tsx";
+import { Loader } from "#/components/motion/loader.tsx";
+import { MorphingModal } from "#/components/motion/morphing-modal.tsx";
+import { PasswordOptions } from "#/components/password-options.tsx";
 import {
   ChevronLeft,
   Copy,
@@ -7,20 +23,7 @@ import {
   Link2,
   MessageSquare,
   Plus,
-} from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-
-import { PromptInput } from "#/components/agents/prompt-input.tsx";
-import { useAppSession } from "#/components/app-session.tsx";
-import { EmptyState } from "#/components/empty-state.tsx";
-import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
-import { LinkDetails } from "#/components/link-details.tsx";
-import { LinksActivityChart } from "#/components/links-activity-chart.tsx";
-import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
-import { Button } from "#/components/motion/button/index.tsx";
-import { Input } from "#/components/motion/input.tsx";
-import { Loader } from "#/components/motion/loader.tsx";
-import { MorphingModal } from "#/components/motion/morphing-modal.tsx";
+} from "#/components/rune-icons.tsx";
 import {
   Dialog,
   DialogContent,
@@ -31,17 +34,21 @@ import {
   createShortLink,
   createTextTransfer,
   listShortLinks,
-  shortPageUrl,
-  type LinkStat,
-  type ShortLink,
 } from "#/lib/api.ts";
+import type { LinkStat, ShortLink } from "#/lib/api.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
+import { defaultExpiration } from "#/lib/expiration-options.ts";
+import { limitReached } from "#/lib/expiry.ts";
+import { withPreparedFile } from "#/lib/large-secrets.ts";
 import {
   applyShortLinkEventToLink,
   applyShortLinkEventToStats,
   readShortLinkEvent,
   statsFromEvents,
 } from "#/lib/link-events.ts";
+import { linkPageUrl, rememberLinkKey } from "#/lib/link-keys.ts";
+import { displayFilename } from "#/lib/media.ts";
+import { prepareText } from "#/lib/secrets.ts";
 import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
 import { cn } from "#/lib/utils.ts";
@@ -57,6 +64,9 @@ const reportError = (error: unknown, title: string) => {
 };
 
 const linkLabel = (link: ShortLink): string => {
+  if (link.secret) {
+    return link.kind === "file" ? "Secret file" : "Secret message";
+  }
   if (link.kind === "url") {
     return link.url ?? "URL";
   }
@@ -64,7 +74,7 @@ const linkLabel = (link: ShortLink): string => {
     const body = link.body?.trim();
     return body === undefined || body === "" ? "Message" : body;
   }
-  return link.filename ?? "File";
+  return displayFilename(link.filename);
 };
 
 const choices = [
@@ -77,7 +87,7 @@ const choices = [
   {
     id: "link" as const,
     title: "Link",
-    description: "Shorten a URL anyone can open.",
+    description: "Shorten a URL and optionally require a password.",
     icon: Link2,
   },
   {
@@ -94,9 +104,15 @@ export function LinksPage() {
   const [view, setView] = useState<CreateView | null>(null);
   const [shortInput, setShortInput] = useState("");
   const [message, setMessage] = useState("");
+  const [expiration, setExpiration] = useState(defaultExpiration);
+  const [password, setPassword] = useState<string | null>(null);
+  const sendingRef = useRef(false);
   const [shortening, setShortening] = useState(false);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [phase, setPhase] = useState("Uploading");
+  const upload = useRef<AbortController | null>(null);
+  useEffect(() => () => upload.current?.abort(), []);
   const [dragging, setDragging] = useState(false);
   const [links, setLinks] = useState<ShortLink[]>([]);
   const [stats, setStats] = useState<LinkStat[]>([]);
@@ -127,39 +143,50 @@ export function LinksPage() {
     };
   }, [token]);
 
-  useEffect(() => {
-    return subscribeToEvents((payload) => {
-      const event = readShortLinkEvent(payload);
-      if (!event) {
-        return;
-      }
-      setLinks((current) =>
-        current.map((item) => applyShortLinkEventToLink(item, event))
-      );
-      setStats((current) => applyShortLinkEventToStats(current, event));
-    });
-  }, [subscribeToEvents]);
+  useEffect(
+    () =>
+      subscribeToEvents((payload) => {
+        const event = readShortLinkEvent(payload);
+        if (!event) {
+          return;
+        }
+        setLinks((current) =>
+          current.map((item) => applyShortLinkEventToLink(item, event))
+        );
+        setStats((current) => applyShortLinkEventToStats(current, event));
+      }),
+    [subscribeToEvents]
+  );
 
   useEffect(() => {
     if (view === null) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !sending &&
+        !shortening
+      ) {
         setView(null);
+        setExpiration(defaultExpiration);
+        setPassword(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [view]);
+  }, [view, sending, shortening]);
 
   const closeCreate = () => {
     if (sending || shortening) {
       return;
     }
     setView(null);
+    setExpiration(defaultExpiration);
+    setPassword(null);
     setShortInput("");
     setMessage("");
     setProgress(null);
@@ -167,70 +194,115 @@ export function LinksPage() {
   };
 
   const copyLink = async (code: string) => {
-    const url = shortPageUrl(code);
+    const url = linkPageUrl(code);
     await navigator.clipboard.writeText(url);
     toast.add({ description: url, title: "Link copied", type: "success" });
   };
 
-  const rememberLink = async (link: ShortLink) => {
+  const rememberLink = (link: ShortLink) => {
     setLinks((current) => [
       link,
       ...current.filter((item) => item.code !== link.code),
     ]);
-    await copyLink(link.code);
+    void copyLink(link.code).catch(() => {
+      toast.add({
+        title: "Link created",
+        description: "Use Copy to copy your link.",
+        type: "success",
+      });
+    });
     setView(null);
+    setExpiration(defaultExpiration);
+    setPassword(null);
     setShortInput("");
     setMessage("");
     setProgress(null);
   };
 
   const sendText = async (body: string) => {
+    if (sendingRef.current) {
+      return;
+    }
+    sendingRef.current = true;
     setSending(true);
+    let masterKey: Uint8Array | undefined;
     try {
-      const created = await createTextTransfer(token, { body });
+      const prepared = await prepareText(body);
+      ({ masterKey } = prepared);
+      const created = await createTextTransfer(token, {
+        body: prepared.body,
+        secret: prepared.secret,
+        expiration,
+      });
       if (!created.short_link) {
         throw new Error("Could not create link");
       }
-      await rememberLink(created.short_link);
+      rememberLinkKey(created.short_link.code, masterKey);
+      rememberLink(created.short_link);
     } catch (error) {
       reportError(error, "Could not send");
     } finally {
+      masterKey?.fill(0);
+      sendingRef.current = false;
       setSending(false);
     }
   };
 
   const sendFiles = async (files: File[]) => {
+    if (sendingRef.current) {
+      return;
+    }
     const allowed = files.filter((file) => file.size <= maxFileBytes);
     if (allowed.length === 0) {
       return;
     }
+    sendingRef.current = true;
     setSending(true);
+    const controller = new AbortController();
+    upload.current = controller;
     try {
       /* Sequential so the progress bar tracks one file at a time. */
       /* oxlint-disable eslint/no-await-in-loop */
       for (const file of allowed) {
         setProgress(0);
-        const created = await createFileTransfer(token, {
-          filename: file.name,
-          byteSize: file.size,
-          contentType: file.type || "application/octet-stream",
-        });
-        const completed = await uploadFile(
-          token,
-          created.transfer.id,
-          created.upload,
+        setPhase("Encrypting");
+        await withPreparedFile(
           file,
+          {},
+          async (prepared) => {
+            setPhase("Uploading");
+            setProgress(0);
+            const created = await createFileTransfer(token, {
+              filename: prepared.file.name,
+              byteSize: prepared.file.size,
+              contentType: prepared.file.type || "application/octet-stream",
+              secret: prepared.secret,
+              expiration,
+            });
+            const completed = await uploadFile(
+              token,
+              created.transfer.id,
+              created.upload,
+              prepared.file,
+              setProgress,
+              controller.signal
+            );
+            if (!completed.short_link) {
+              throw new Error("Could not create link");
+            }
+            rememberLinkKey(completed.short_link.code, prepared.masterKey);
+            rememberLink(completed.short_link);
+          },
+          controller.signal,
           setProgress
         );
-        if (!completed.short_link) {
-          throw new Error("Could not create link");
-        }
-        await rememberLink(completed.short_link);
       }
       /* oxlint-enable eslint/no-await-in-loop */
     } catch (error) {
       reportError(error, "Upload failed");
     } finally {
+      upload.current = null;
+      sendingRef.current = false;
       setSending(false);
       setProgress(null);
     }
@@ -241,10 +313,23 @@ export function LinksPage() {
     if (url === "") {
       return;
     }
+    if (password !== null && password.trim().length < 12) {
+      toast.add({
+        title: "Use a longer password",
+        description: "Use a password or passphrase with 12–1024 characters.",
+        type: "error",
+      });
+      return;
+    }
     setShortening(true);
     try {
-      const created = await createShortLink(token, url);
-      await rememberLink(created.short_link);
+      const created = await createShortLink(
+        token,
+        url,
+        expiration,
+        password ?? undefined
+      );
+      rememberLink(created.short_link);
     } catch (error) {
       reportError(error, "Could not shorten");
     } finally {
@@ -253,12 +338,13 @@ export function LinksPage() {
   };
 
   return (
-    <main className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col gap-6 px-6 py-8">
+    <main className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col gap-6 px-6 pt-8 pb-(--app-dock-space)">
       <header className="flex shrink-0 items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="font-heading text-lg">Links</h2>
           <p className="text-muted-foreground text-sm">
-            Create a public drop. Anyone with the link can open it.
+            Every message and file is encrypted. A short link can require a
+            password before it opens.
           </p>
         </div>
         <Button
@@ -303,8 +389,8 @@ export function LinksPage() {
       </section>
 
       <MorphingModal
-        className="max-w-md"
-        placement="center"
+        className="max-h-full max-w-md overflow-y-auto"
+        placement="bottom"
         viewId={view}
         onClose={closeCreate}
       >
@@ -316,24 +402,22 @@ export function LinksPage() {
                 Choose what you want to share.
               </p>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               {choices.map((choice) => {
                 const Icon = choice.icon;
                 return (
                   <button
                     key={choice.id}
-                    className="hover:bg-muted focus-visible:ring-ring/50 flex w-full items-start gap-3 rounded-2xl p-3 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none"
+                    className="bg-foreground/[0.04] hover:bg-foreground/[0.08] flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
                     type="button"
                     onClick={() => {
                       setView(choice.id);
                     }}
                   >
-                    <span className="bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-2xl">
-                      <Icon />
-                    </span>
+                    <Icon className="size-4 shrink-0" />
                     <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="font-medium">{choice.title}</span>
-                      <span className="text-muted-foreground text-sm">
+                      <span>{choice.title}</span>
+                      <span className="text-muted-foreground text-sm font-normal">
                         {choice.description}
                       </span>
                     </span>
@@ -351,6 +435,12 @@ export function LinksPage() {
               setView("choose");
             }}
           >
+            <ExpirationOptions
+              value={expiration}
+              onChange={setExpiration}
+              disabled={sending}
+              kind="text"
+            />
             <PromptInput
               disabled={sending}
               loading={sending}
@@ -375,6 +465,17 @@ export function LinksPage() {
             }}
           >
             <div className="flex flex-col gap-3">
+              <ExpirationOptions
+                value={expiration}
+                onChange={setExpiration}
+                disabled={shortening}
+                kind="url"
+              />
+              <PasswordOptions
+                password={password}
+                onChange={setPassword}
+                disabled={shortening}
+              />
               <Input
                 label="URL"
                 placeholder="https://"
@@ -387,15 +488,20 @@ export function LinksPage() {
                   }
                 }}
               />
-              <Button
-                disabled={shortening || shortInput.trim() === ""}
+              <button
+                className="bg-foreground text-background inline-flex h-10 w-full items-center justify-center rounded-full text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                disabled={
+                  shortening ||
+                  shortInput.trim() === "" ||
+                  (password !== null && password.trim().length < 12)
+                }
                 type="button"
                 onClick={() => {
                   void shortenUrl();
                 }}
               >
                 Shorten
-              </Button>
+              </button>
             </div>
           </CreatePane>
         ) : null}
@@ -407,6 +513,16 @@ export function LinksPage() {
               setView("choose");
             }}
           >
+            <ExpirationOptions
+              value={expiration}
+              onChange={setExpiration}
+              disabled={sending}
+              kind="file"
+            />
+            <p className="text-muted-foreground text-sm">
+              Files over 100 MiB need temporary disk space to send and a browser
+              with file-save support to receive, such as desktop Chrome or Edge.
+            </p>
             <div className="flex flex-col gap-3">
               <button
                 className={cn(
@@ -446,6 +562,20 @@ export function LinksPage() {
                   />
                 </div>
               )}
+              {sending ? (
+                <div className="flex items-center justify-between gap-3">
+                  <output className="text-muted-foreground text-sm">
+                    {phase} · {Math.round((progress ?? 0) * 100)}%
+                  </output>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => upload.current?.abort()}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : null}
               <input
                 ref={fileInputRef}
                 className="sr-only"
@@ -488,12 +618,12 @@ function LinkListItem({
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
               <AnimatedBadge showIcon={false} size="sm" status="neutral">
-                {item.kind}
+                {item.secret ? "Secret" : item.kind}
               </AnimatedBadge>
               <p className="truncate text-sm">{label}</p>
             </div>
             <p className="text-muted-foreground truncate font-mono text-xs">
-              {shortPageUrl(item.code)}
+              {linkPageUrl(item.code)}
             </p>
             <p className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs tabular-nums">
               <span className="flex items-center gap-1">
@@ -508,9 +638,14 @@ function LinkListItem({
                   <span className="sr-only"> downloads</span>
                 </span>
               ) : null}
+              {item.password_protected ? <span>Password required</span> : null}
               <ExpiryCountdown
                 createdAt={item.created_at}
                 expiresAt={item.expires_at}
+                expired={limitReached(
+                  item.max_downloads,
+                  item.kind === "file" ? item.download_count : item.view_count
+                )}
               />
             </p>
           </div>

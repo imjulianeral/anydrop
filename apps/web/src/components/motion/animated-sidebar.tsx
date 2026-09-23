@@ -1,7 +1,6 @@
 "use client";
 // beui.dev/components/motion/animated-sidebar
 
-import { ChevronRight } from "lucide-react";
 import {
   AnimatePresence,
   type HTMLMotionProps,
@@ -27,6 +26,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { SharedLayoutBg } from "#/components/motion/shared-layout-bg.tsx";
+import { ChevronRight } from "#/components/rune-icons.tsx";
 import {
   EASE_DRAWER,
   EASE_OUT,

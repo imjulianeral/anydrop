@@ -66,9 +66,10 @@ defmodule AnyshareWeb.MultipartUploadTest do
     {:ok, transfer, _recipient} =
       Sharing.create_transfer(sender, %{
         "kind" => "file",
-        "filename" => "large.bin",
-        "byte_size" => @bytes,
-        "content_type" => "application/octet-stream"
+        "secret" => stream_secret(),
+        "content_type" => "application/octet-stream",
+        "filename" => "secret.anyshare",
+        "byte_size" => @bytes
       })
 
     %{agent: agent, sender: sender, token: token, transfer: transfer}
@@ -85,7 +86,9 @@ defmodule AnyshareWeb.MultipartUploadTest do
     {:ok, local, _recipient} =
       Sharing.create_transfer(sender, %{
         "kind" => "file",
-        "filename" => "large.bin",
+        "secret" => stream_secret(),
+        "content_type" => "application/octet-stream",
+        "filename" => "secret.anyshare",
         "byte_size" => @bytes
       })
 
@@ -121,7 +124,9 @@ defmodule AnyshareWeb.MultipartUploadTest do
       assert {:ok, transfer, _recipient} =
                Sharing.create_transfer(sender, %{
                  "kind" => "file",
-                 "filename" => "large.bin",
+                 "secret" => stream_secret(),
+                 "content_type" => "application/octet-stream",
+                 "filename" => "secret.anyshare",
                  "byte_size" => size
                })
 
@@ -134,7 +139,9 @@ defmodule AnyshareWeb.MultipartUploadTest do
     assert {:error, changeset} =
              Sharing.create_transfer(sender, %{
                "kind" => "file",
-               "filename" => "too-large.bin",
+               "secret" => stream_secret(),
+               "content_type" => "application/octet-stream",
+               "filename" => "secret.anyshare",
                "byte_size" => @max_bytes + 1
              })
 
@@ -152,7 +159,9 @@ defmodule AnyshareWeb.MultipartUploadTest do
     {:ok, transfer, _recipient} =
       Sharing.create_transfer(sender, %{
         "kind" => "file",
-        "filename" => "archive.bin",
+        "secret" => stream_secret(),
+        "content_type" => "application/octet-stream",
+        "filename" => "secret.anyshare",
         "byte_size" => @max_bytes
       })
 
@@ -190,7 +199,9 @@ defmodule AnyshareWeb.MultipartUploadTest do
       conn
       |> post("/api/v1/transfers", %{
         "kind" => "file",
-        "filename" => "large.bin",
+        "secret" => stream_secret(),
+        "content_type" => "application/octet-stream",
+        "filename" => "secret.anyshare",
         "byte_size" => to_string(@bytes)
       })
       |> json_response(201)
@@ -373,4 +384,13 @@ defmodule AnyshareWeb.MultipartUploadTest do
     do: Agent.update(agent, &%{&1 | responses: &1.responses ++ responses})
 
   defp requests(agent), do: Agent.get(agent, & &1.requests)
+
+  defp stream_secret do
+    %{
+      "version" => 3,
+      "kdf" => "hkdf-sha256",
+      "password" => false,
+      "cipher" => "secretstream-xchacha20poly1305"
+    }
+  end
 end

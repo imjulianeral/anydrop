@@ -17,7 +17,7 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
   def create(conn, params) do
     target_url = params |> Map.get("url", "") |> to_string()
 
-    case Sharing.create_short_link(conn.assigns.current_device, target_url) do
+    case Sharing.create_short_link(conn.assigns.current_device, target_url, params) do
       {:ok, link} ->
         conn |> put_status(:created) |> json(%{short_link: Sharing.short_link_json(link)})
 
@@ -47,20 +47,45 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
 
   def show(conn, %{"id" => code}) do
     case Sharing.get_live_short_link(code) do
+      %Sharing.ShortLink{target_url: url, password_verifier: verifier} = link
+      when is_binary(url) and is_binary(verifier) ->
+        json(conn, %{short_link: Sharing.short_link_json(link, reveal: false)})
+
       nil ->
         ControllerHelpers.error(conn, :not_found, "not found")
 
-      link ->
-        Sharing.record_event(link, "view")
+      _link ->
+        case Sharing.consume_short_link(code, "view") do
+          {:error, :not_found} ->
+            ControllerHelpers.error(conn, :not_found, "not found")
+
+          {:ok, link} ->
+            json(conn, %{short_link: Sharing.short_link_json(link)})
+        end
+    end
+  end
+
+  def unlock(conn, %{"id" => code} = params) do
+    password = params |> Map.get("password", "") |> to_string()
+
+    case Sharing.unlock_short_link(code, password) do
+      {:ok, link} ->
         json(conn, %{short_link: Sharing.short_link_json(link)})
+
+      {:error, :not_found} ->
+        ControllerHelpers.error(conn, :not_found, "not found")
+
+      {:error, :invalid_password} ->
+        ControllerHelpers.error(conn, :unauthorized, "incorrect password")
+
+      {:error, :not_protected} ->
+        ControllerHelpers.error(conn, :unprocessable_entity, "this link has no password")
     end
   end
 
   def download(conn, %{"id" => code}) do
-    case Sharing.get_live_short_link(code) do
-      %{transfer: %{kind: "file", status: status, r2_key: key, filename: filename}} = link
-      when status in ["uploaded", "delivered"] and is_binary(key) and key != "" ->
-        Sharing.record_event(link, "download")
+    case Sharing.consume_short_link(code, "download") do
+      {:ok, %{transfer: %{r2_key: key, filename: filename}}} ->
         redirect_to_object(conn, Anyshare.ObjectStore.presign_get(key, filename: filename))
 
       _missing ->

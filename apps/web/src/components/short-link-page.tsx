@@ -1,22 +1,35 @@
 import { getRouteApi } from "@tanstack/react-router";
-import { ArrowUpRight, Copy, Download, Send } from "lucide-react";
 import { useScroll } from "motion/react";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
 import {
   MagneticButton,
   MagneticButtonLink,
 } from "#/components/motion/button/magnetic.tsx";
+import { Input } from "#/components/motion/input.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
 import { ScrollProgress } from "#/components/motion/scroll-progress.tsx";
 import { ShaderBackground } from "#/components/motion/shader-background.tsx";
+import {
+  ArrowUpRight,
+  Copy,
+  Download,
+  Send,
+} from "#/components/rune-icons.tsx";
+import { SecretContent } from "#/components/secret-content.tsx";
 import { ThemeSwitch } from "#/components/theme-switch.tsx";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "#/components/ui/field.tsx";
 import FolderComponent from "#/components/ui/folder-component.tsx";
 import { Separator } from "#/components/ui/separator.tsx";
-import { resolveAssetUrl } from "#/lib/api.ts";
-import { formatBytes } from "#/lib/media.ts";
+import { resolveAssetUrl, unlockShortLink } from "#/lib/api.ts";
+import { displayFilename, formatBytes } from "#/lib/media.ts";
 import { toast } from "#/lib/toast.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -24,12 +37,17 @@ const shortLinkRoute = getRouteApi("/s/$code");
 
 export function ShortLinkPage() {
   const { short_link: drop } = shortLinkRoute.useLoaderData();
+  const [destination, setDestination] = useState(drop.url);
+  const [password, setPassword] = useState("");
+  const [failure, setFailure] = useState("");
+  const [busy, setBusy] = useState(false);
+  const passwordId = useId();
 
   useEffect(() => {
-    if (drop.kind === "url" && drop.url) {
-      globalThis.location.replace(drop.url);
+    if (drop.kind === "url" && destination) {
+      globalThis.location.replace(destination);
     }
-  }, [drop.kind, drop.url]);
+  }, [drop.kind, destination]);
 
   const copyMessage = async () => {
     if (!drop.body) {
@@ -43,6 +61,81 @@ export function ShortLinkPage() {
     }
   };
 
+  const openProtectedLink = async () => {
+    setBusy(true);
+    setFailure("");
+    try {
+      const unlocked = await unlockShortLink(drop.code, password);
+      if (!unlocked.short_link.url) {
+        throw new Error("This link is unavailable.");
+      }
+      setPassword("");
+      setDestination(unlocked.short_link.url);
+    } catch (error) {
+      setFailure(
+        error instanceof Error ? error.message : "Could not open this link."
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (drop.kind === "url" && drop.password_protected && !destination) {
+    return (
+      <PageShell>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void openProtectedLink();
+          }}
+        >
+          <h1 className="text-3xl font-semibold tracking-tight">
+            This link is locked.
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Enter the password from the sender. The destination stays hidden
+            until the password is correct.
+          </p>
+          <FieldGroup>
+            <Field data-invalid={Boolean(failure)} data-disabled={busy}>
+              <FieldLabel htmlFor={passwordId}>Password</FieldLabel>
+              <Input
+                id={passwordId}
+                type="password"
+                autoComplete="current-password"
+                required
+                minLength={12}
+                maxLength={1024}
+                disabled={busy}
+                value={password}
+                error={Boolean(failure)}
+                aria-invalid={Boolean(failure)}
+                aria-describedby={failure ? `${passwordId}-error` : undefined}
+                onChange={(value) => {
+                  setPassword(value);
+                  setFailure("");
+                }}
+              />
+              {failure ? (
+                <FieldError id={`${passwordId}-error`}>{failure}</FieldError>
+              ) : null}
+            </Field>
+          </FieldGroup>
+          <MagneticButton
+            className="w-full focus-visible:outline-2 focus-visible:outline-offset-4"
+            disabled={busy || password.trim().length < 12}
+            magneticClassName="w-full"
+            size="lg"
+            type="submit"
+          >
+            {busy ? "Checking…" : "Open link"}
+          </MagneticButton>
+        </form>
+      </PageShell>
+    );
+  }
+
   if (drop.kind === "url") {
     return (
       <PageShell>
@@ -51,6 +144,23 @@ export function ShortLinkPage() {
           role="status"
         >
           <Loader label="Opening link" variant="dots" />
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (drop.secret) {
+    return (
+      <PageShell>
+        <div className="flex h-full flex-col justify-center gap-6 overflow-y-auto">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            A Secret for you.
+          </h1>
+          <SecretContent key={drop.code} item={drop} />
+          <ExpiryCountdown
+            createdAt={drop.created_at}
+            expiresAt={drop.expires_at}
+          />
         </div>
       </PageShell>
     );
@@ -96,7 +206,7 @@ export function ShortLinkPage() {
             tabIndex={0}
           >
             <h2 className="text-lg leading-snug font-medium [overflow-wrap:anywhere]">
-              {drop.filename || "Shared file"}
+              {displayFilename(drop.filename, "Shared file")}
             </h2>
           </div>
           <Separator />

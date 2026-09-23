@@ -1,5 +1,5 @@
-import { Clock, Download, Eye } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
 import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
@@ -7,22 +7,22 @@ import { FilePreview } from "#/components/file-preview.tsx";
 import { LinksActivityChart } from "#/components/links-activity-chart.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
+import { Clock, Download, Eye } from "#/components/rune-icons.tsx";
+import { SecretContent } from "#/components/secret-content.tsx";
 import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog.tsx";
-import {
-  getShortLinkStats,
-  shortPageUrl,
-  type LinkStat,
-  type ShortLink,
-} from "#/lib/api.ts";
+import { getShortLinkStats } from "#/lib/api.ts";
+import type { LinkStat, ShortLink } from "#/lib/api.ts";
+import { limitReached } from "#/lib/expiry.ts";
 import {
   applyShortLinkEventToStats,
   readShortLinkEvent,
   statsFromEvents,
 } from "#/lib/link-events.ts";
+import { linkPageUrl } from "#/lib/link-keys.ts";
 import { cn } from "#/lib/utils.ts";
 
 type Activity =
@@ -43,6 +43,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
   const isFile = link.kind === "file";
   const views = link.view_count ?? 0;
   const downloads = link.download_count ?? 0;
+  const expired = limitReached(link.max_downloads, isFile ? downloads : views);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,30 +68,35 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
     };
   }, [link.code, token, attempt]);
 
-  useEffect(() => {
-    return subscribeToEvents((payload) => {
-      const event = readShortLinkEvent(payload);
-      if (!event || event.code !== link.code) {
-        return;
-      }
-      setActivity((current) => {
-        if (current.status !== "ready") {
-          return current;
+  useEffect(
+    () =>
+      subscribeToEvents((payload) => {
+        const event = readShortLinkEvent(payload);
+        if (!event || event.code !== link.code) {
+          return;
         }
-        return {
-          status: "ready",
-          stats: applyShortLinkEventToStats(current.stats, event),
-        };
-      });
-    });
-  }, [link.code, subscribeToEvents]);
+        setActivity((current) => {
+          if (current.status !== "ready") {
+            return current;
+          }
+          return {
+            status: "ready",
+            stats: applyShortLinkEventToStats(current.stats, event),
+          };
+        });
+      }),
+    [link.code, subscribeToEvents]
+  );
 
   return (
     <>
       <DialogHeader className="min-w-0 pr-8">
         <DialogTitle className="truncate">{label}</DialogTitle>
         <DialogDescription className="break-all">
-          {shortPageUrl(link.code)}
+          {linkPageUrl(link.code)}
+          {link.password_protected
+            ? " Visitors need the password before this link opens."
+            : ""}
         </DialogDescription>
       </DialogHeader>
 
@@ -124,6 +130,7 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
                 className="text-foreground text-sm"
                 createdAt={link.created_at}
                 expiresAt={link.expires_at}
+                expired={expired}
                 format="duration"
               />
             </dd>
@@ -171,13 +178,17 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
         </>
       ) : null}
 
-      {isFile ? (
+      {link.secret ? (
+        <SecretContent key={link.code} allowStoredKey item={link} />
+      ) : null}
+      {!link.secret && isFile ? (
         <FilePreview
           byteSize={link.byte_size}
           contentType={link.content_type}
           downloadUrl={link.download?.url}
           filename={link.filename}
           trackDownloadUrl={link.track_download}
+          showDownload={!expired}
         />
       ) : null}
     </>

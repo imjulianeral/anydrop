@@ -120,8 +120,8 @@ export const applyShortLinkEventToLink = (
   }
   return {
     ...link,
-    view_count: event.viewCount,
-    download_count: event.downloadCount,
+    view_count: Math.max(link.view_count, event.viewCount),
+    download_count: Math.max(link.download_count, event.downloadCount),
   };
 };
 

@@ -2,15 +2,6 @@
 // beui.dev/components/motion/animated-badge
 
 import {
-  AlertTriangle,
-  Check,
-  Circle,
-  Info,
-  LoaderCircle,
-  X,
-  type LucideIcon,
-} from "lucide-react";
-import {
   AnimatePresence,
   motion,
   useReducedMotion,
@@ -19,6 +10,15 @@ import {
 } from "motion/react";
 import type { ReactNode } from "react";
 
+import {
+  AlertTriangle,
+  Check,
+  Circle,
+  Info,
+  LoaderCircle,
+  X,
+  type RuneIcon,
+} from "#/components/rune-icons.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -66,7 +66,7 @@ const ICON_CLASS: Record<AnimatedBadgeSize, string> = {
   md: "h-3.5 w-3.5",
 };
 
-const ICONS: Record<AnimatedBadgeStatus, LucideIcon> = {
+const ICONS: Record<AnimatedBadgeStatus, RuneIcon> = {
   neutral: Circle,
   info: Info,
   success: Check,

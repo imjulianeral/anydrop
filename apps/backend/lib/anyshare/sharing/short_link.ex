@@ -2,6 +2,8 @@ defmodule Anyshare.Sharing.ShortLink do
   @moduledoc false
 
   use Ecto.Schema
+  alias Anyshare.Sharing.LinkPassword
+
   import Ecto.Changeset
 
   @code ~r/^[A-Z0-9]{7}$/u
@@ -14,8 +16,12 @@ defmodule Anyshare.Sharing.ShortLink do
     belongs_to :transfer, Anyshare.Sharing.Transfer
     has_many :events, Anyshare.Sharing.LinkEvent, foreign_key: :code, references: :code
     field :target_url, :string
+    field :password, :string, virtual: true
+    field :password_verifier, :string
     field :view_count, :integer, default: 0
     field :download_count, :integer, default: 0
+    field :expires_in, :integer, virtual: true
+    field :max_downloads, :integer
     field :expires_at, :naive_datetime_usec
     field :created_at, :naive_datetime_usec
   end
@@ -25,8 +31,10 @@ defmodule Anyshare.Sharing.ShortLink do
           device_id: String.t() | nil,
           transfer_id: String.t() | nil,
           target_url: String.t() | nil,
+          password_verifier: String.t() | nil,
           view_count: integer(),
           download_count: integer(),
+          max_downloads: integer() | nil,
           expires_at: NaiveDateTime.t() | nil,
           created_at: NaiveDateTime.t() | nil
         }
@@ -34,11 +42,23 @@ defmodule Anyshare.Sharing.ShortLink do
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(link, attrs) do
     link
-    |> cast(attrs, [:code, :device_id, :transfer_id, :target_url, :expires_at, :created_at])
+    |> cast(attrs, [
+      :code,
+      :device_id,
+      :transfer_id,
+      :target_url,
+      :password,
+      :expires_in,
+      :max_downloads,
+      :expires_at,
+      :created_at
+    ])
+    |> Anyshare.Sharing.Expiration.validate()
     |> validate_required([:code, :expires_at, :created_at])
     |> validate_format(:code, @code)
     |> validate_length(:target_url, max: @max_url_length)
     |> validate_destination()
+    |> put_password()
     |> unique_constraint(:code, name: :short_links_pkey)
     |> foreign_key_constraint(:device_id)
     |> foreign_key_constraint(:transfer_id)
@@ -71,6 +91,28 @@ defmodule Anyshare.Sharing.ShortLink do
 
       _other ->
         false
+    end
+  end
+
+  defp put_password(changeset) do
+    case get_change(changeset, :password) do
+      password when password in [nil, ""] ->
+        changeset
+
+      password when not is_binary(password) ->
+        add_error(changeset, :password, "is invalid")
+
+      password ->
+        cond do
+          get_field(changeset, :transfer_id) != nil ->
+            add_error(changeset, :password, "is only available for shortened URLs")
+
+          not LinkPassword.valid?(password) ->
+            add_error(changeset, :password, "must be 12–1024 characters")
+
+          true ->
+            put_change(changeset, :password_verifier, LinkPassword.hash(password))
+        end
     end
   end
 end

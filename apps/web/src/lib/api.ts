@@ -1,7 +1,12 @@
 import { apiBase } from "#/lib/config.ts";
 import type { DeviceKind } from "#/lib/device.ts";
 
+import type { ExpirationOptions } from "./expiration-options.ts";
+import { toBase64Url } from "./secret-format.ts";
+import type { Secret } from "./secret-format.ts";
+
 export interface Peer {
+  public_key: string | null;
   id: string;
   display_name: string;
   device_kind: DeviceKind;
@@ -10,6 +15,10 @@ export interface Peer {
 }
 
 export interface Transfer {
+  group_id?: string | null;
+  secret?: Secret;
+  max_downloads?: number | null;
+  download_count?: number;
   id: string;
   sender_id: string;
   recipient_id: string | null;
@@ -43,12 +52,12 @@ export interface UploadedPart {
 }
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number
-  ) {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
   }
 }
 
@@ -102,22 +111,26 @@ const request = async <T>(
 };
 
 export const createSession = (input: {
+  sessionToken?: string;
   id: string;
   displayName: string;
   deviceKind: DeviceKind;
+  public_key?: string;
 }) =>
   request<{ token: string; device: Peer; peers: Peer[] }>("/api/v1/sessions", {
     method: "POST",
+    token: input.sessionToken,
     body: {
       id: input.id,
       display_name: input.displayName,
       device_kind: input.deviceKind,
+      public_key: input.public_key,
     },
   });
 
 export const updateDevice = (
   token: string,
-  input: { displayName?: string; roomCode?: string | null }
+  input: { displayName?: string; roomCode?: string | null; public_key?: string }
 ) =>
   request<{ device: Peer; peers: Peer[] }>("/api/v1/device", {
     method: "PATCH",
@@ -125,15 +138,100 @@ export const updateDevice = (
     body: {
       display_name: input.displayName,
       room_code: input.roomCode,
+      public_key: input.public_key,
     },
   });
 
 export const listPeers = (token: string) =>
-  request<{ peers: Peer[] }>("/api/v1/peers", { token });
+  request<{ peers: Peer[] }>("/api/v1/peers", {
+    token,
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export interface DeviceInvitation {
+  id: string;
+  status: "pending" | "accepted" | "declined" | "disconnected";
+  sender: Peer;
+  recipient: Peer;
+  expires_at: string;
+}
+
+export const listInvitations = (token: string) =>
+  request<{ invitations: DeviceInvitation[] }>("/api/v1/invitations", {
+    token,
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export const sendInvitation = (token: string, target: string) =>
+  request<{ invitation: DeviceInvitation }>("/api/v1/invitations", {
+    method: "POST",
+    token,
+    body: { target },
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export const answerInvitation = (
+  token: string,
+  id: string,
+  action: "accept" | "decline" | "disconnect"
+) =>
+  request<{ invitation: DeviceInvitation }>(
+    `/api/v1/invitations/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      token,
+      body: { action },
+      signal: AbortSignal.timeout(15_000),
+    }
+  );
+
+export interface DeviceGroup {
+  id: string;
+  name: string;
+  owner_id: string;
+  members: Peer[];
+}
+
+export const listGroups = (token: string) =>
+  request<{ groups: DeviceGroup[] }>("/api/v1/groups", {
+    token,
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export const saveGroup = (
+  token: string,
+  input: { name: string; member_ids: string[] },
+  id?: string
+) =>
+  request<{ group: DeviceGroup }>(
+    id ? `/api/v1/groups/${encodeURIComponent(id)}` : "/api/v1/groups",
+    { method: id ? "PATCH" : "POST", token, body: input }
+  );
+
+export const deleteGroup = (token: string, id: string) =>
+  request<undefined>(`/api/v1/groups/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    token,
+  });
+
+export const leaveGroup = (token: string, id: string) =>
+  request<undefined>(`/api/v1/groups/${encodeURIComponent(id)}/leave`, {
+    method: "POST",
+    token,
+  });
+
+export const listGroupTransfers = (token: string, id: string) =>
+  request<{ transfers: Transfer[] }>(
+    `/api/v1/groups/${encodeURIComponent(id)}/transfers`,
+    { token }
+  );
 
 export interface ShortLink {
+  secret?: Secret;
+  max_downloads?: number | null;
   code: string;
   kind: "url" | "text" | "file";
+  password_protected?: boolean;
   url?: string;
   body?: string;
   filename?: string | null;
@@ -158,20 +256,30 @@ export interface LinkEventOccurrence {
   kind: "view" | "download";
 }
 
-export const shortPageUrl = (code: string) =>
-  `${globalThis.location.origin}/s/${code}`;
+export const shortPageUrl = (code: string, masterKey?: Uint8Array) =>
+  `${globalThis.location.origin}/s/${code}${masterKey ? `#${toBase64Url(masterKey)}` : ""}`;
 
 export const createTextTransfer = (
   token: string,
-  input: { recipientId?: string; body: string }
+  input: {
+    recipientId?: string;
+    groupId?: string;
+    body: string;
+    secret: Secret;
+    expiration?: ExpirationOptions;
+  }
 ) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>("/api/v1/transfers", {
     method: "POST",
     token,
     body: {
       recipient_id: input.recipientId,
+      group_id: input.groupId,
       kind: "text",
       body: input.body,
+      secret: input.secret,
+      expires_in: input.expiration?.expiresIn,
+      max_downloads: input.expiration?.maxDownloads,
     },
   });
 
@@ -179,9 +287,12 @@ export const createFileTransfer = (
   token: string,
   input: {
     recipientId?: string;
+    groupId?: string;
     filename: string;
     byteSize: number;
     contentType: string;
+    secret: Secret;
+    expiration?: ExpirationOptions;
   }
 ) =>
   request<{ transfer: Transfer; upload: UploadTarget }>("/api/v1/transfers", {
@@ -189,17 +300,22 @@ export const createFileTransfer = (
     token,
     body: {
       recipient_id: input.recipientId,
+      group_id: input.groupId,
       kind: "file",
       filename: input.filename,
       byte_size: input.byteSize,
       content_type: input.contentType,
+      secret: input.secret,
+      expires_in: input.expiration?.expiresIn,
+      max_downloads: input.expiration?.maxDownloads,
     },
   });
 
 export const completeTransfer = (
   token: string,
   id: string,
-  parts?: UploadedPart[]
+  parts?: UploadedPart[],
+  signal?: AbortSignal
 ) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>(
     `/api/v1/transfers/${id}/complete`,
@@ -207,7 +323,9 @@ export const completeTransfer = (
       method: "POST",
       token,
       body: parts ? { parts } : undefined,
-      signal: AbortSignal.timeout(150_000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(150_000)])
+        : AbortSignal.timeout(150_000),
     }
   );
 
@@ -236,7 +354,7 @@ export const signUploadPart = (
   });
 
 export const abortMultipartUpload = (token: string, id: string) =>
-  request<void>(`/api/v1/transfers/${id}/multipart`, {
+  request<undefined>(`/api/v1/transfers/${id}/multipart`, {
     method: "DELETE",
     token,
     signal: AbortSignal.timeout(90_000),
@@ -254,12 +372,31 @@ export const listTransfers = (token: string, peerId: string) =>
     { token }
   );
 
-export const createShortLink = (token: string, url: string) =>
+export const createShortLink = (
+  token: string,
+  url: string,
+  expiration?: ExpirationOptions,
+  password?: string
+) =>
   request<{ short_link: ShortLink }>("/api/v1/short_links", {
     method: "POST",
     token,
-    body: { url },
+    body: {
+      url,
+      expires_in: expiration?.expiresIn,
+      max_downloads: expiration?.maxDownloads,
+      password,
+    },
   });
+
+export const unlockShortLink = (code: string, password: string) =>
+  request<{ short_link: ShortLink }>(
+    `/api/v1/short_links/${encodeURIComponent(code)}/unlock`,
+    {
+      method: "POST",
+      body: { password },
+    }
+  );
 
 export const listShortLinks = (token: string) =>
   request<{ short_links: ShortLink[]; events: LinkEventOccurrence[] }>(
@@ -282,8 +419,24 @@ export const getShortLinkStats = (token: string, code: string) =>
   }>(`/api/v1/short_links/${encodeURIComponent(code)}/stats`, { token });
 
 export const resolveAssetUrl = (url: string): string => {
-  if (url.startsWith("http://") || url.startsWith("https://")) {
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:")
+  ) {
     return url;
   }
   return `${apiBase}${url}`;
+};
+
+export const savingDownloadUrl = (url: string): string => {
+  if (url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+  const parsed = new URL(url, "https://anydrop.local");
+  parsed.searchParams.set("save", "1");
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return parsed.toString();
+  }
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 };

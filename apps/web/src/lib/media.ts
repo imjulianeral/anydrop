@@ -22,6 +22,14 @@ export const mediaKind = (
   return "file";
 };
 
+const encryptedBlobName = "secret.anyshare";
+
+export const displayFilename = (
+  filename: string | null | undefined,
+  fallback = "File"
+): string =>
+  filename === encryptedBlobName ? "Encrypted File" : filename || fallback;
+
 export const formatBytes = (bytes: number | null | undefined): string => {
   if (bytes === null || bytes === undefined || bytes <= 0) {
     return "";

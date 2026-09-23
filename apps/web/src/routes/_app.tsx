@@ -1,14 +1,9 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { PanelLeft } from "lucide-react";
 
+import { AppDock } from "#/components/app-dock.tsx";
 import { AppSessionProvider } from "#/components/app-session.tsx";
-import { AppSidebar } from "#/components/app-sidebar.tsx";
+import { DocLinks } from "#/components/doc-page.tsx";
 import { MessageNotifications } from "#/components/message-notifications.tsx";
-import {
-  AnimatedSidebarInset,
-  AnimatedSidebarProvider,
-  AnimatedSidebarTrigger,
-} from "#/components/motion/animated-sidebar.tsx";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -18,25 +13,13 @@ function AppLayout() {
   return (
     <AppSessionProvider>
       <MessageNotifications />
-      <AnimatedSidebarProvider
-        className="bg-background h-svh overflow-hidden"
-        open={false}
-      >
-        <AppSidebar />
-        <AnimatedSidebarInset className="min-h-0 overflow-hidden">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 md:hidden">
-            <AnimatedSidebarTrigger>
-              <PanelLeft />
-            </AnimatedSidebarTrigger>
-            <p className="text-muted-foreground text-xs tracking-[0.28em] uppercase">
-              AnyShare
-            </p>
-          </header>
-          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            <Outlet />
-          </div>
-        </AnimatedSidebarInset>
-      </AnimatedSidebarProvider>
+      <div className="bg-background relative h-dvh overflow-hidden [--app-dock-space:calc(6.5rem+env(safe-area-inset-bottom))] sm:[--app-dock-space:calc(5.5rem+env(safe-area-inset-bottom))]">
+        <Outlet />
+        <footer className="absolute right-5 bottom-[calc(var(--app-dock-space)-1rem)] z-20 sm:right-9 sm:bottom-[max(1rem,env(safe-area-inset-bottom))]">
+          <DocLinks />
+        </footer>
+        <AppDock />
+      </div>
     </AppSessionProvider>
   );
 }

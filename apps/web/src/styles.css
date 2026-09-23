@@ -149,6 +149,42 @@ body {
   scrollbar-width: none;
 }
 
+.device-orb {
+  background: color-mix(in oklch, var(--background) 75%, transparent);
+  border-color: color-mix(in oklch, var(--foreground) 16%, transparent);
+  box-shadow:
+    0 16px 40px -16px color-mix(in oklch, var(--foreground) 25%, transparent),
+    inset 0 1px 0 color-mix(in oklch, var(--background) 80%, transparent);
+}
+
+.device-orb-selected {
+  border-color: var(--foreground);
+  box-shadow:
+    0 0 0 5px color-mix(in oklch, var(--background) 30%, transparent),
+    0 20px 48px -16px color-mix(in oklch, var(--foreground) 30%, transparent);
+}
+
+.share-upload-progress {
+  appearance: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--primary);
+}
+
+.share-upload-progress::-webkit-progress-bar {
+  background: var(--muted);
+}
+
+.share-upload-progress::-webkit-progress-value {
+  background: var(--primary);
+}
+
+.share-upload-progress::-moz-progress-bar {
+  background: var(--primary);
+}
+
 .short-link-scroll::-webkit-scrollbar {
   display: none;
 }

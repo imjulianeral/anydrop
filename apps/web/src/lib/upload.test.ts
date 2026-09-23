@@ -38,6 +38,7 @@ const file = (size = fileSize) => {
 };
 
 beforeEach(() => {
+  vi.stubGlobal("Temporal", undefined);
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   signedParts.length = 0;
   receivedParts.length = 0;

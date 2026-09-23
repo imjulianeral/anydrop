@@ -3,6 +3,47 @@ const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+export const limitReached = (
+  limit: number | null | undefined,
+  count: number | undefined
+): boolean => limit != null && limit > 0 && (count ?? 0) >= limit;
+
+const zonedInstant = /(?:Z|[+-]\d{2}:\d{2})$/i;
+
+export const parseInstant = (
+  value: string | null | undefined
+): number | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  const zoned =
+    zonedInstant.test(trimmed) || !trimmed.includes("T")
+      ? trimmed
+      : `${trimmed}Z`;
+  const parsed = Date.parse(zoned);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+export const itemExpired = (
+  item: {
+    status?: string;
+    expires_at?: string;
+    max_downloads?: number | null;
+    download_count?: number;
+  },
+  now = Date.now()
+): boolean => {
+  if (item.status === "expired") {
+    return true;
+  }
+  const end = parseInstant(item.expires_at);
+  if (end !== null && end <= now) {
+    return true;
+  }
+  return limitReached(item.max_downloads, item.download_count);
+};
+
 export interface RemainingLabelOptions {
   includeSeconds?: boolean;
   format?: "phrase" | "duration";
@@ -13,8 +54,8 @@ export const remainingLabel = (
   now = Date.now(),
   options: RemainingLabelOptions = {}
 ): string => {
-  const end = Date.parse(expiresAt);
-  if (Number.isNaN(end)) {
+  const end = parseInstant(expiresAt);
+  if (end === null) {
     return "";
   }
   const ms = end - now;
@@ -44,9 +85,9 @@ export const remainingRatio = (
   createdAt: string,
   now = Date.now()
 ): number | null => {
-  const end = Date.parse(expiresAt);
-  const start = Date.parse(createdAt);
-  if (Number.isNaN(end) || Number.isNaN(start)) {
+  const end = parseInstant(expiresAt);
+  const start = parseInstant(createdAt);
+  if (end === null || start === null) {
     return null;
   }
   const total = end - start;

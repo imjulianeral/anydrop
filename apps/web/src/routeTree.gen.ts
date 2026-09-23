@@ -10,12 +10,24 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppLinksRouteImport } from './routes/_app/links'
 import { Route as SCodeRouteImport } from './routes/s.$code'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -36,10 +48,14 @@ const SCodeRoute = SCodeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/about': typeof AboutRoute
+  '/security': typeof SecurityRoute
   '/links': typeof AppLinksRoute
   '/s/$code': typeof SCodeRoute
 }
 export interface FileRoutesByTo {
+  '/about': typeof AboutRoute
+  '/security': typeof SecurityRoute
   '/links': typeof AppLinksRoute
   '/s/$code': typeof SCodeRoute
   '/': typeof AppIndexRoute
@@ -47,20 +63,31 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/about': typeof AboutRoute
+  '/security': typeof SecurityRoute
   '/_app/links': typeof AppLinksRoute
   '/s/$code': typeof SCodeRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/links' | '/s/$code'
+  fullPaths: '/' | '/about' | '/security' | '/links' | '/s/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/links' | '/s/$code' | '/'
-  id: '__root__' | '/_app' | '/_app/links' | '/s/$code' | '/_app/'
+  to: '/about' | '/security' | '/links' | '/s/$code' | '/'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/about'
+    | '/security'
+    | '/_app/links'
+    | '/s/$code'
+    | '/_app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  AboutRoute: typeof AboutRoute
+  SecurityRoute: typeof SecurityRoute
   SCodeRoute: typeof SCodeRoute
 }
 
@@ -71,6 +98,20 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -111,6 +152,8 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  AboutRoute: AboutRoute,
+  SecurityRoute: SecurityRoute,
   SCodeRoute: SCodeRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,0 +1,4 @@
+Rune Icons by Nexvyn — https://www.runeicons.com/
+Source: https://github.com/Nexvyn/runeicons
+Apache License 2.0.
+Selected normal SVG assets adapted to React with currentColor.

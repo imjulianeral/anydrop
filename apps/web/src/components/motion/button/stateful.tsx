@@ -1,6 +1,5 @@
 "use client";
 
-import { Check, Loader2, X } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -15,6 +14,7 @@ import {
   useState,
 } from "react";
 
+import { Check, Loader2, X } from "#/components/rune-icons.tsx";
 import { EASE_OUT, SPRING_SWAP } from "#/lib/ease.ts";
 
 import { Button, type ButtonProps } from "./base";

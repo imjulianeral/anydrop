@@ -13,15 +13,21 @@ defmodule AnyshareWeb.ShortLinkDownloadControllerTest do
     {:ok, token, device} =
       Accounts.create_session(%{"id" => Ecto.UUID.generate()}, "download-test")
 
-    {:ok, transfer, _recipient} =
-      Sharing.create_transfer(device, %{
-        "kind" => "file",
-        "filename" => "notes.txt",
-        "byte_size" => 4,
-        "content_type" => "text/plain"
+    # Historical plaintext rows remain readable until expiry.
+    transfer =
+      Repo.insert!(%Anyshare.Sharing.Transfer{
+        id: Ecto.UUID.generate(),
+        sender_id: device.id,
+        kind: "file",
+        filename: "notes.txt",
+        byte_size: 4,
+        content_type: "text/plain",
+        status: "uploaded",
+        r2_key: "legacy/notes.txt",
+        created_at: NaiveDateTime.utc_now(),
+        expires_at: NaiveDateTime.add(NaiveDateTime.utc_now(), 21_600)
       })
 
-    {:ok, transfer} = Sharing.complete_transfer(device, transfer.id)
     {:ok, link} = Sharing.mint_short_link(device, transfer)
 
     %{token: token, device: device, link: link}

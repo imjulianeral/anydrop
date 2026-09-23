@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
-  optimizeDeps: { include: ["recharts"] },
+  optimizeDeps: { include: ["recharts", "hash-wasm", "libsodium-wrappers"] },
   plugins: [
     devtools(),
     tailwindcss(),

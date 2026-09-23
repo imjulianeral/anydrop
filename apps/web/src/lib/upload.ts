@@ -53,7 +53,7 @@ export const uploadFile = async (
     uploadSignal.throwIfAborted();
     completing = true;
     const completed = await retry(
-      () => completeTransfer(token, transferId, parts),
+      () => completeTransfer(token, transferId, parts, uploadSignal),
       uploadSignal
     );
     onProgress(1);

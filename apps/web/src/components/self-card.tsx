@@ -1,20 +1,7 @@
-import { Copy, Link2, Monitor, QrCode, Smartphone, Tablet } from "lucide-react";
-import QRCode from "qrcode";
-import { useEffect, useState } from "react";
-
+import { DeviceIdentity } from "#/components/device-identity.tsx";
 import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
-import { Button } from "#/components/motion/button/index.tsx";
-import { Input } from "#/components/motion/input.tsx";
-import { createShortLink, shortPageUrl, type Peer } from "#/lib/api.ts";
-import { toast } from "#/lib/toast.ts";
-
-const reportError = (error: unknown) => {
-  toast.add({
-    description: error instanceof Error ? error.message : undefined,
-    title: "Could not update",
-    type: "error",
-  });
-};
+import { Monitor, Smartphone, Tablet } from "#/components/rune-icons.tsx";
+import type { Peer } from "#/lib/api.ts";
 
 const kindIcon = {
   desktop: Monitor,
@@ -22,78 +9,24 @@ const kindIcon = {
   tablet: Tablet,
 } as const;
 
-interface SelfCardProps {
-  connected: boolean;
-  device: Peer;
-  token: string;
-  onJoinRoom: (code: string | null) => Promise<void>;
-}
-
 export function SelfCard({
   connected,
   device,
-  token,
-  onJoinRoom,
-}: SelfCardProps) {
+}: {
+  connected: boolean;
+  device: Peer;
+}) {
   const Icon = kindIcon[device.device_kind];
-  const [roomInput, setRoomInput] = useState(device.room_code ?? "");
-  const [qr, setQr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!device.room_code) {
-      return;
-    }
-    const joinUrl = `${globalThis.location.origin}?room=${device.room_code}`;
-    let cancelled = false;
-    const renderQr = async () => {
-      try {
-        const dataUrl = await QRCode.toDataURL(joinUrl, {
-          margin: 1,
-          width: 120,
-        });
-        if (!cancelled) {
-          setQr(dataUrl);
-        }
-      } catch {
-        if (!cancelled) {
-          setQr(null);
-        }
-      }
-    };
-    void renderQr();
-    return () => {
-      cancelled = true;
-    };
-  }, [device.room_code]);
-
-  const copyRoom = async () => {
-    if (!device.room_code) {
-      return;
-    }
-    await navigator.clipboard.writeText(device.room_code);
-    toast.add({ title: "Room code copied", type: "success" });
-  };
-
-  const copyInviteLink = async () => {
-    if (!device.room_code) {
-      return;
-    }
-    const joinUrl = `${globalThis.location.origin}?room=${device.room_code}`;
-    const created = await createShortLink(token, joinUrl);
-    await navigator.clipboard.writeText(shortPageUrl(created.short_link.code));
-    toast.add({ title: "Invite link copied", type: "success" });
-  };
-
   return (
-    <section className="border-border/70 flex flex-col gap-4 border-b p-4">
+    <section className="flex flex-col gap-4 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
             This device
           </p>
-          <h1 className="font-heading truncate text-lg tracking-tight">
+          <h2 className="font-heading truncate text-lg tracking-tight">
             {device.display_name}
-          </h1>
+          </h2>
           <p className="text-muted-foreground flex items-center gap-2 text-xs">
             <Icon />
             {device.device_kind}
@@ -107,100 +40,11 @@ export function SelfCard({
           {connected ? "Live" : "Reconnecting"}
         </AnimatedBadge>
       </div>
-
-      <div className="flex items-end gap-2">
-        <Input
-          className="min-w-0 flex-1"
-          label="Room code"
-          maxLength={6}
-          placeholder="Optional"
-          value={roomInput}
-          onChange={(value) => {
-            setRoomInput(value.toUpperCase());
-          }}
-        />
-        <Button
-          size="sm"
-          type="button"
-          variant="outline"
-          onClick={() => {
-            onJoinRoom(roomInput.trim() === "" ? null : roomInput.trim()).catch(
-              reportError
-            );
-          }}
-        >
-          {device.room_code ? "Update" : "Join"}
-        </Button>
-      </div>
-
-      {device.room_code ? (
-        <div className="flex items-center gap-3">
-          {qr ? (
-            <img
-              alt={`QR code for room ${device.room_code}`}
-              className="bg-background size-16 rounded-xl p-1"
-              src={qr}
-            />
-          ) : (
-            <QrCode className="text-muted-foreground" />
-          )}
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="font-mono text-lg tracking-[0.3em]">
-              {device.room_code}
-            </p>
-            <div className="flex flex-wrap gap-1">
-              <Button
-                size="sm"
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  copyRoom().catch(reportError);
-                }}
-              >
-                <Copy />
-                Copy
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  copyInviteLink().catch(reportError);
-                }}
-              >
-                <Link2 />
-                Invite
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  onJoinRoom(null).catch(reportError);
-                }}
-              >
-                Leave
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            const code = crypto
-              .randomUUID()
-              .replaceAll("-", "")
-              .slice(0, 6)
-              .toUpperCase();
-            setRoomInput(code);
-            onJoinRoom(code).catch(reportError);
-          }}
-        >
-          Create room
-        </Button>
-      )}
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Devices on your network appear automatically. To connect from anywhere
+        else, share your nickname or user ID and accept their invitation.
+      </p>
+      <DeviceIdentity device={device} />
     </section>
   );
 }

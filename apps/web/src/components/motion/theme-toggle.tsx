@@ -1,12 +1,12 @@
 "use client";
 // beui.dev/components/motion/theme-toggle
 
-import { Moon, Sun } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
 
 import { ActionSwapIcon } from "#/components/motion/action-swap.tsx";
+import { Moon, Sun } from "#/components/rune-icons.tsx";
 import { EASE_OUT_CSS } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -193,7 +193,7 @@ export function ThemeToggle({
         mounted && isDark ? "Switch to light mode" : "Switch to dark mode"
       }
       onClick={toggle}
-      className={cn("flex items-center justify-center", className)}
+      className={cn("flex cursor-pointer items-center justify-center", className)}
       {...rest}
     >
       {mounted ? (

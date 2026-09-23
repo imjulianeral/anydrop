@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { remainingLabel, remainingRatio, remainingTone } from "./expiry.ts";
+import { itemExpired, remainingLabel, remainingRatio, remainingTone } from "./expiry.ts";
 
 describe("remainingLabel", () => {
   const now = Date.parse("2026-09-05T12:00:00.000Z");
@@ -11,6 +11,10 @@ describe("remainingLabel", () => {
 
   it("marks past times as expired", () => {
     expect(remainingLabel("2026-09-05T11:59:59.000Z", now)).toBe("Expired");
+  });
+
+  it("treats a timezone-less UTC deadline as still live", () => {
+    expect(remainingLabel("2026-09-05T18:00:00", now)).toBe("Deletes in 6h 0m");
   });
 
   it("formats days and hours", () => {
@@ -92,6 +96,42 @@ describe("remainingRatio", () => {
 
   it("returns 0 when the window is empty", () => {
     expect(remainingRatio(createdAt, createdAt)).toBe(0);
+  });
+});
+
+describe("itemExpired", () => {
+  const now = Date.parse("2026-09-05T12:00:00.000Z");
+
+  it("keeps a fresh file available when it has not been downloaded", () => {
+    expect(
+      itemExpired(
+        {
+          status: "uploaded",
+          expires_at: "2026-09-05T18:00:00Z",
+          max_downloads: 1,
+          download_count: 0,
+        },
+        now
+      )
+    ).toBe(false);
+    expect(
+      itemExpired(
+        {
+          status: "uploaded",
+          expires_at: "2026-09-05T18:00:00",
+          max_downloads: null,
+          download_count: 0,
+        },
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("does not treat a missing deadline or a zero limit as expired", () => {
+    expect(itemExpired({ download_count: 0, max_downloads: 0 }, now)).toBe(
+      false
+    );
+    expect(itemExpired({ expires_at: "", download_count: 0 }, now)).toBe(false);
   });
 });
 

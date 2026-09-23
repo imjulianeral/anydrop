@@ -26,7 +26,11 @@ export default class Api extends Cloudflare.Worker<Api>()(
         const allowedOrigins = String(
           (env as Record<string, unknown>).ALLOWED_ORIGINS ?? ""
         );
-        const headers = corsHeaders(request.headers.origin, allowedOrigins);
+        const headers = corsHeaders(
+          request.headers.origin,
+          allowedOrigins,
+          request.originalUrl
+        );
 
         if (request.method === "OPTIONS") {
           return HttpServerResponse.empty({ status: 204, headers });

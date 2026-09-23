@@ -30,7 +30,8 @@ export const allowOrigin = (
 
 export const corsHeaders = (
   origin: string | undefined,
-  allowedOrigins = ""
+  allowedOrigins = "",
+  requestUrl = ""
 ): Record<string, string> => ({
   "Access-Control-Allow-Origin": allowOrigin(origin, allowedOrigins),
   "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD",
@@ -38,4 +39,12 @@ export const corsHeaders = (
   "Access-Control-Expose-Headers": "Authorization",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy":
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  ...(requestUrl.startsWith("https:")
+    ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" }
+    : {}),
 });

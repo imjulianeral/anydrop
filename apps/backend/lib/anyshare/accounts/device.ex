@@ -10,6 +10,7 @@ defmodule Anyshare.Accounts.Device do
   @primary_key {:id, :string, autogenerate: false}
   @foreign_key_type :string
   schema "devices" do
+    field :public_key, :string
     field :display_name, :string
     field :device_kind, :string
     field :ip_hash, :string
@@ -25,6 +26,7 @@ defmodule Anyshare.Accounts.Device do
 
   @type t :: %__MODULE__{
           id: String.t() | nil,
+          public_key: String.t() | nil,
           display_name: String.t() | nil,
           device_kind: String.t() | nil,
           ip_hash: String.t() | nil,
@@ -39,6 +41,7 @@ defmodule Anyshare.Accounts.Device do
     device
     |> cast(attrs, [
       :id,
+      :public_key,
       :display_name,
       :device_kind,
       :ip_hash,
@@ -56,9 +59,28 @@ defmodule Anyshare.Accounts.Device do
       :last_seen_at,
       :created_at
     ])
+    |> validate_public_key()
     |> validate_length(:display_name, max: 40)
     |> validate_inclusion(:device_kind, @kinds)
     |> validate_format(:room_code, @room_code)
     |> unique_constraint(:token_digest, name: :index_devices_on_token_digest)
+  end
+
+  defp validate_public_key(changeset) do
+    case get_field(changeset, :public_key) do
+      nil ->
+        changeset
+
+      value ->
+        case Base.decode64(value) do
+          {:ok, <<0x30, _::binary-size(90)>> = bytes} ->
+            if Base.encode64(bytes) == value,
+              do: changeset,
+              else: add_error(changeset, :public_key, "is invalid")
+
+          _ ->
+            add_error(changeset, :public_key, "is invalid")
+        end
+    end
   end
 end

@@ -14,7 +14,7 @@ defmodule Anyshare.AccountsTest do
     assert Accounts.authenticate("nope") == nil
   end
 
-  test "peers share an IP hash or room code" do
+  test "local discovery ignores old room codes across networks" do
     now = Time.now()
 
     current =
@@ -40,8 +40,8 @@ defmodule Anyshare.AccountsTest do
     peer_ids = current |> Accounts.list_peers() |> Enum.map(& &1.id)
 
     assert nearby.id in peer_ids
-    assert roomed.id in peer_ids
-    assert length(peer_ids) == 2
+    refute roomed.id in peer_ids
+    assert length(peer_ids) == 1
   end
 
   defp insert_device(overrides) do

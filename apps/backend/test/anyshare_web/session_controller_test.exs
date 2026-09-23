@@ -20,4 +20,36 @@ defmodule AnyshareWeb.SessionControllerTest do
     conn = post(conn, "/api/v1/sessions", %{"id" => "not-a-uuid"})
     assert json_response(conn, 422) == %{"error" => "invalid id"}
   end
+
+  test "a public user ID cannot renew a session or replace its encryption key" do
+    id = Ecto.UUID.generate()
+    token = Anyshare.Accounts.issue_token()
+
+    response =
+      build_conn()
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> post("/api/v1/sessions", %{id: id, display_name: "Original"})
+      |> json_response(201)
+
+    assert response["token"] == token
+
+    assert build_conn()
+           |> post("/api/v1/sessions", %{id: id, display_name: "Impostor"})
+           |> json_response(401)
+
+    assert build_conn()
+           |> put_req_header("authorization", "Bearer #{Anyshare.Accounts.issue_token()}")
+           |> post("/api/v1/sessions", %{id: id})
+           |> json_response(401)
+
+    renewed =
+      build_conn()
+      |> put_req_header("authorization", "Bearer #{token}")
+      |> post("/api/v1/sessions", %{id: id})
+      |> json_response(201)
+
+    assert renewed["token"] == token
+    assert renewed["device"]["display_name"] == "Original"
+    refute Map.has_key?(renewed["device"], "token_digest")
+  end
 end

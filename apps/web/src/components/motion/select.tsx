@@ -1,6 +1,5 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
 import {
   motion,
   type Transition,
@@ -20,6 +19,7 @@ import {
   useState,
 } from "react";
 
+import { Check, ChevronDown } from "#/components/rune-icons.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 

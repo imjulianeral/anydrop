@@ -1,6 +1,7 @@
 defmodule AnyshareWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :anyshare
 
+  plug AnyshareWeb.SecurityHeaders
   plug AnyshareWeb.Cors
 
   plug Plug.Static,

@@ -12,12 +12,14 @@ interface ExpiryCountdownProps extends RemainingLabelOptions {
   expiresAt: string;
   createdAt: string;
   className?: string;
+  expired?: boolean;
 }
 
 export function ExpiryCountdown({
   expiresAt,
   createdAt,
   className,
+  expired = false,
   includeSeconds = false,
   format = "phrase",
 }: ExpiryCountdownProps) {
@@ -32,22 +34,29 @@ export function ExpiryCountdown({
     };
   }, []);
 
-  const label = remainingLabel(expiresAt, now, { includeSeconds, format });
+  const label = expired
+    ? "Expired"
+    : remainingLabel(expiresAt, now, { includeSeconds, format });
   if (label === "") {
     return null;
   }
 
-  const ratio = remainingRatio(expiresAt, createdAt, now);
+  const ratio = expired ? 0 : remainingRatio(expiresAt, createdAt, now);
 
   return (
     <span
       className={cn(
         "text-muted-foreground inline-flex items-center gap-1.5 text-xs tabular-nums",
-        className
+        className,
+        label === "Expired" && "text-destructive"
       )}
     >
       {ratio === null ? null : <RemainingCircle ratio={ratio} />}
-      <time dateTime={expiresAt}>{label}</time>
+      {label === "Expired" ? (
+        <span>{label}</span>
+      ) : (
+        <time dateTime={expiresAt}>{label}</time>
+      )}
     </span>
   );
 }
@@ -71,7 +80,7 @@ function RemainingCircle({ ratio }: { ratio: number }) {
       viewBox={`0 0 ${CIRCLE_SIZE} ${CIRCLE_SIZE}`}
     >
       <circle
-        className="stroke-muted-foreground/25"
+        className={ratio === 0 ? TONE_STROKE.red : "stroke-muted-foreground/25"}
         cx={CIRCLE_SIZE / 2}
         cy={CIRCLE_SIZE / 2}
         fill="none"
