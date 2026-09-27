@@ -1,27 +1,25 @@
 "use client";
 // beui.dev/components/motion/animated-sidebar
 
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { HTMLMotionProps, Variants } from "motion/react";
 import {
-  AnimatePresence,
-  type HTMLMotionProps,
-  motion,
-  useReducedMotion,
-  type Variants,
-} from "motion/react";
-import {
-  type ButtonHTMLAttributes,
-  type CSSProperties,
   createContext,
-  forwardRef,
-  type HTMLAttributes,
-  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+} from "react";
+import type {
+  ButtonHTMLAttributes,
+  CSSProperties,
+  HTMLAttributes,
+  ReactNode,
+  Ref,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -33,10 +31,22 @@ import {
   SPRING_LAYOUT,
   SPRING_PRESS,
 } from "#/lib/ease.ts";
+import { useHydrated } from "#/lib/hooks/use-hydrated.ts";
+import { assignRef } from "#/lib/refs.ts";
 import { cn } from "#/lib/utils.ts";
 
 type SidebarState = "expanded" | "collapsed";
 type SidebarSide = "left" | "right";
+
+/** Slides a panel fully out past its own edge. */
+const offscreenX = (side: SidebarSide) => (side === "left" ? "-100%" : "100%");
+
+function sidebarWidth(collapsed: boolean, offcanvas: boolean) {
+  if (offcanvas) {
+    return "0px";
+  }
+  return collapsed ? "var(--sidebar-width-icon)" : "var(--sidebar-width)";
+}
 type SidebarVariant = "sidebar" | "floating" | "inset";
 type SidebarCollapsible = "offcanvas" | "icon" | "none";
 
@@ -125,10 +135,10 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-function subscribeToMobileQuery(callback: () => void) {
+function subscribeToMobileQuery(onChange: () => void) {
   const query = window.matchMedia(MOBILE_QUERY);
-  query.addEventListener("change", callback);
-  return () => query.removeEventListener("change", callback);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
 }
 
 function getMobileSnapshot() {
@@ -232,7 +242,9 @@ export function AnimatedSidebarProvider({
 
   const setOpen = useCallback(
     (nextOpen: boolean) => {
-      if (open === undefined) setInternalOpen(nextOpen);
+      if (open === undefined) {
+        setInternalOpen(nextOpen);
+      }
       onOpenChange?.(nextOpen);
     },
     [onOpenChange, open]
@@ -240,15 +252,20 @@ export function AnimatedSidebarProvider({
 
   const setOpenMobile = useCallback(
     (nextOpen: boolean) => {
-      if (openMobile === undefined) setInternalOpenMobile(nextOpen);
+      if (openMobile === undefined) {
+        setInternalOpenMobile(nextOpen);
+      }
       onOpenMobileChange?.(nextOpen);
     },
     [onOpenMobileChange, openMobile]
   );
 
   const toggleSidebar = useCallback(() => {
-    if (isMobile) setOpenMobile(!mobileOpen);
-    else setOpen(!desktopOpen);
+    if (isMobile) {
+      setOpenMobile(!mobileOpen);
+    } else {
+      setOpen(!desktopOpen);
+    }
   }, [desktopOpen, isMobile, mobileOpen, setOpen, setOpenMobile]);
 
   useEffect(() => {
@@ -266,21 +283,33 @@ export function AnimatedSidebarProvider({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [toggleSidebar]);
 
+  const sidebarContext = useMemo<AnimatedSidebarContextValue>(
+    () => ({
+      isMobile,
+      layoutId: `${generatedId}-active`,
+      open: desktopOpen,
+      openMobile: mobileOpen,
+      reduce,
+      setOpen,
+      setOpenMobile,
+      state: desktopOpen ? "expanded" : "collapsed",
+      toggleSidebar,
+      triggerRef,
+    }),
+    [
+      isMobile,
+      generatedId,
+      desktopOpen,
+      mobileOpen,
+      reduce,
+      setOpen,
+      setOpenMobile,
+      toggleSidebar,
+    ]
+  );
+
   return (
-    <AnimatedSidebarContext.Provider
-      value={{
-        isMobile,
-        layoutId: `${generatedId}-active`,
-        open: desktopOpen,
-        openMobile: mobileOpen,
-        reduce,
-        setOpen,
-        setOpenMobile,
-        state: desktopOpen ? "expanded" : "collapsed",
-        toggleSidebar,
-        triggerRef,
-      }}
-    >
+    <AnimatedSidebarContext.Provider value={sidebarContext}>
       <div
         {...props}
         data-slot="sidebar-wrapper"
@@ -314,8 +343,12 @@ function MobileSidebar({
   side: SidebarSide;
 }) {
   const context = useAnimatedSidebar();
+  const panelContext = useMemo(
+    () => ({ collapsed: false, collapsible: "none" as const, side }),
+    [side]
+  );
   const panelRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHydrated();
   // The sheet is mounted for as long as the viewport is mobile, so it hides
   // itself while closed rather than sitting there transparent and interactive.
   // Opening shows it in the same commit that starts the slide — a delayed show
@@ -327,18 +360,23 @@ function MobileSidebar({
   // from whenever motion settles: a ref keeps it on the current one.
   const openMobileRef = useRef(context.openMobile);
 
-  useEffect(() => setMounted(true), []);
+  if (context.openMobile && hidden) {
+    setHidden(false);
+  }
 
   useEffect(() => {
     openMobileRef.current = context.openMobile;
-    if (context.openMobile) setHidden(false);
   }, [context.openMobile]);
 
   useEffect(() => {
-    if (!context.openMobile) return;
+    if (!context.openMobile) {
+      return;
+    }
 
-    const body = document.body;
-    const scrollY = window.scrollY;
+    const { body } = document;
+    const { scrollY } = window;
+    // Focus returns to the trigger that opened the sheet.
+    const trigger = context.triggerRef.current;
     const previousBodyStyles = {
       left: body.style.left,
       overflow: body.style.overflow,
@@ -367,11 +405,18 @@ function MobileSidebar({
       body.style.right = previousBodyStyles.right;
       body.style.overflow = previousBodyStyles.overflow;
       window.scrollTo(0, scrollY);
-      context.triggerRef.current?.focus({ preventScroll: true });
+      trigger?.focus({ preventScroll: true });
     };
   }, [context.openMobile, context.triggerRef]);
 
-  if (!mounted) return null;
+  let mobileX: number | string = 0;
+  if (!context.reduce) {
+    mobileX = context.openMobile ? "0%" : offscreenX(side);
+  }
+
+  if (!mounted) {
+    return null;
+  }
 
   // This container groups the sheet for hiding and the z-index and carries no
   // box: both children are `fixed` and resolve against the viewport themselves.
@@ -401,6 +446,7 @@ function MobileSidebar({
 
       <motion.div
         ref={panelRef}
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A native <dialog> stays hidden unless opened imperatively; Motion drives this panel.
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
@@ -412,18 +458,14 @@ function MobileSidebar({
         data-side={side}
         initial={false}
         animate={{
-          opacity: context.reduce ? (context.openMobile ? 1 : 0) : 1,
-          x: context.reduce
-            ? 0
-            : context.openMobile
-              ? "0%"
-              : side === "left"
-                ? "-100%"
-                : "100%",
+          opacity: context.reduce && !context.openMobile ? 0 : 1,
+          x: mobileX,
         }}
         transition={context.reduce ? REDUCED_TRANSITION : PANEL_TRANSITION}
         onAnimationComplete={() => {
-          if (!openMobileRef.current) setHidden(true);
+          if (!openMobileRef.current) {
+            setHidden(true);
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -432,13 +474,15 @@ function MobileSidebar({
             return;
           }
 
-          if (event.key !== "Tab") return;
+          if (event.key !== "Tab") {
+            return;
+          }
           const focusable = panelRef.current
-            ? Array.from(
-                panelRef.current.querySelectorAll<HTMLElement>(
+            ? [
+                ...panelRef.current.querySelectorAll<HTMLElement>(
                   FOCUSABLE_SELECTOR
-                )
-              )
+                ),
+              ]
             : [];
 
           if (focusable.length === 0) {
@@ -447,8 +491,11 @@ function MobileSidebar({
             return;
           }
 
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
+          const [first] = focusable;
+          const last = focusable.at(-1);
+          if (!first || !last) {
+            return;
+          }
           if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last.focus();
@@ -465,9 +512,7 @@ function MobileSidebar({
           className
         )}
       >
-        <AnimatedSidebarPanelContext.Provider
-          value={{ collapsed: false, collapsible: "none", side }}
-        >
+        <AnimatedSidebarPanelContext.Provider value={panelContext}>
           {children}
         </AnimatedSidebarPanelContext.Provider>
       </motion.div>
@@ -488,118 +533,113 @@ export interface AnimatedSidebarProps extends Omit<
   panelClassName?: string;
 }
 
-export const AnimatedSidebar = forwardRef<HTMLElement, AnimatedSidebarProps>(
-  function AnimatedSidebar(
-    {
-      side = "left",
-      variant = "sidebar",
-      collapsible = "icon",
-      ariaLabel = "Sidebar",
-      children,
-      className,
-      panelClassName,
-      style,
-      ...props
-    },
-    forwardedRef
-  ) {
-    const context = useAnimatedSidebar();
-    const collapsed = collapsible !== "none" && !context.open;
-    const offcanvas = collapsed && collapsible === "offcanvas";
-    const width = offcanvas
-      ? "0px"
-      : collapsed
-        ? "var(--sidebar-width-icon)"
-        : "var(--sidebar-width)";
+export function AnimatedSidebar({
+  side = "left",
+  variant = "sidebar",
+  collapsible = "icon",
+  ariaLabel = "Sidebar",
+  children,
+  className,
+  panelClassName,
+  style,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarProps & { ref?: Ref<HTMLElement> }) {
+  const context = useAnimatedSidebar();
+  const collapsed = collapsible !== "none" && !context.open;
+  const offcanvas = collapsed && collapsible === "offcanvas";
+  const width = sidebarWidth(collapsed, offcanvas);
+  const panelContext = useMemo(
+    () => ({ collapsed, collapsible, side }),
+    [collapsed, collapsible, side]
+  );
 
-    if (context.isMobile) {
-      return (
-        <MobileSidebar ariaLabel={ariaLabel} className={className} side={side}>
-          {children}
-        </MobileSidebar>
-      );
-    }
-
+  if (context.isMobile) {
     return (
-      <motion.aside
-        {...props}
-        ref={forwardedRef}
-        initial={false}
-        aria-label={ariaLabel}
-        data-slot="sidebar"
-        data-state={collapsed ? "collapsed" : "expanded"}
-        data-collapsible={collapsible}
-        data-variant={variant}
-        data-side={side}
-        animate={{ width }}
-        transition={context.reduce ? { duration: 0 } : SIDEBAR_MORPH_TRANSITION}
-        style={style}
-        className={cn(
-          "group/sidebar relative hidden h-auto shrink-0 will-change-[width] md:block",
-          "peer",
-          side === "right" && "order-last",
-          className
-        )}
-      >
-        <motion.div
-          initial={false}
-          animate={{
-            opacity: offcanvas ? 0 : 1,
-            x: offcanvas ? (side === "left" ? "-100%" : "100%") : "0%",
-          }}
-          transition={context.reduce ? REDUCED_TRANSITION : PANEL_TRANSITION}
-          className={cn(
-            "bg-background sticky top-0 flex h-svh w-full flex-col overflow-hidden",
-            collapsible === "offcanvas" && "w-[var(--sidebar-width)]",
-            variant === "sidebar" &&
-              (side === "left"
-                ? "border-border border-r"
-                : "border-border border-l"),
-            variant === "floating" &&
-              "border-border m-2 h-[calc(100svh-1rem)] rounded-2xl border shadow-sm",
-            variant === "inset" && "m-2 h-[calc(100svh-1rem)] rounded-2xl",
-            panelClassName
-          )}
-        >
-          <AnimatedSidebarPanelContext.Provider
-            value={{ collapsed, collapsible, side }}
-          >
-            {children}
-          </AnimatedSidebarPanelContext.Provider>
-        </motion.div>
-      </motion.aside>
+      <MobileSidebar ariaLabel={ariaLabel} className={className} side={side}>
+        {children}
+      </MobileSidebar>
     );
   }
-);
 
-export interface AnimatedSidebarTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {}
+  return (
+    <motion.aside
+      {...props}
+      ref={forwardedRef}
+      initial={false}
+      aria-label={ariaLabel}
+      data-slot="sidebar"
+      data-state={collapsed ? "collapsed" : "expanded"}
+      data-collapsible={collapsible}
+      data-variant={variant}
+      data-side={side}
+      animate={{ width }}
+      transition={context.reduce ? { duration: 0 } : SIDEBAR_MORPH_TRANSITION}
+      style={style}
+      className={cn(
+        "group/sidebar relative hidden h-auto shrink-0 will-change-[width] md:block",
+        "peer",
+        side === "right" && "order-last",
+        className
+      )}
+    >
+      <motion.div
+        initial={false}
+        animate={{
+          opacity: offcanvas ? 0 : 1,
+          x: offcanvas ? offscreenX(side) : "0%",
+        }}
+        transition={context.reduce ? REDUCED_TRANSITION : PANEL_TRANSITION}
+        className={cn(
+          "bg-background sticky top-0 flex h-svh w-full flex-col overflow-hidden",
+          collapsible === "offcanvas" && "w-[var(--sidebar-width)]",
+          variant === "sidebar" &&
+            (side === "left"
+              ? "border-border border-r"
+              : "border-border border-l"),
+          variant === "floating" &&
+            "border-border m-2 h-[calc(100svh-1rem)] rounded-2xl border shadow-sm",
+          variant === "inset" && "m-2 h-[calc(100svh-1rem)] rounded-2xl",
+          panelClassName
+        )}
+      >
+        <AnimatedSidebarPanelContext.Provider value={panelContext}>
+          {children}
+        </AnimatedSidebarPanelContext.Provider>
+      </motion.div>
+    </motion.aside>
+  );
+}
 
-export const AnimatedSidebarTrigger = forwardRef<
-  HTMLButtonElement,
-  AnimatedSidebarTriggerProps
->(function AnimatedSidebarTrigger(
-  { className, onClick, type = "button", ...props },
-  forwardedRef
-) {
+export type AnimatedSidebarTriggerProps =
+  ButtonHTMLAttributes<HTMLButtonElement>;
+
+export function AnimatedSidebarTrigger({
+  className,
+  onClick,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarTriggerProps & { ref?: Ref<HTMLButtonElement> }) {
   const context = useAnimatedSidebar();
   const expanded = context.isMobile ? context.openMobile : context.open;
 
   return (
     <button
+      type="button"
       {...props}
       ref={(node) => {
-        context.triggerRef.current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
-        else if (forwardedRef) forwardedRef.current = node;
+        assignRef(context.triggerRef, node);
+        assignRef(forwardedRef, node);
       }}
-      type={type}
       aria-label={props["aria-label"] ?? "Toggle sidebar"}
       aria-expanded={expanded}
       data-slot="sidebar-trigger"
       data-state={expanded ? "expanded" : "collapsed"}
       onClick={(event) => {
         onClick?.(event);
-        if (!event.defaultPrevented) context.toggleSidebar();
+        if (!event.defaultPrevented) {
+          context.toggleSidebar();
+        }
       }}
       className={cn(
         "inline-flex size-10 shrink-0 items-center justify-center rounded-xl outline-none",
@@ -608,30 +648,34 @@ export const AnimatedSidebarTrigger = forwardRef<
       )}
     />
   );
-});
+}
 
-export interface AnimatedSidebarCloseProps extends ButtonHTMLAttributes<HTMLButtonElement> {}
+export type AnimatedSidebarCloseProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
-export const AnimatedSidebarClose = forwardRef<
-  HTMLButtonElement,
-  AnimatedSidebarCloseProps
->(function AnimatedSidebarClose(
-  { className, onClick, type = "button", ...props },
-  forwardedRef
-) {
+export function AnimatedSidebarClose({
+  className,
+  onClick,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarCloseProps & { ref?: Ref<HTMLButtonElement> }) {
   const context = useAnimatedSidebar();
 
   return (
     <button
+      type="button"
       {...props}
       ref={forwardedRef}
-      type={type}
       aria-label={props["aria-label"] ?? "Close sidebar"}
       onClick={(event) => {
         onClick?.(event);
-        if (event.defaultPrevented) return;
-        if (context.isMobile) context.setOpenMobile(false);
-        else context.setOpen(false);
+        if (event.defaultPrevented) {
+          return;
+        }
+        if (context.isMobile) {
+          context.setOpenMobile(false);
+        } else {
+          context.setOpen(false);
+        }
       }}
       className={cn(
         "inline-flex size-10 shrink-0 items-center justify-center rounded-xl outline-none",
@@ -640,32 +684,33 @@ export const AnimatedSidebarClose = forwardRef<
       )}
     />
   );
-});
+}
 
-export interface AnimatedSidebarRailProps extends ButtonHTMLAttributes<HTMLButtonElement> {}
+export type AnimatedSidebarRailProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
-export const AnimatedSidebarRail = forwardRef<
-  HTMLButtonElement,
-  AnimatedSidebarRailProps
->(function AnimatedSidebarRail(
-  { className, onClick, type = "button", ...props },
-  forwardedRef
-) {
+export function AnimatedSidebarRail({
+  className,
+  onClick,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarRailProps & { ref?: Ref<HTMLButtonElement> }) {
   const context = useAnimatedSidebar();
   const panel = useAnimatedSidebarPanel();
 
   return (
     <button
+      type="button"
       {...props}
       ref={forwardedRef}
-      type={type}
       data-side={panel.side}
       aria-label={props["aria-label"] ?? "Toggle sidebar"}
       title="Toggle sidebar"
       tabIndex={-1}
       onClick={(event) => {
         onClick?.(event);
-        if (!event.defaultPrevented) context.toggleSidebar();
+        if (!event.defaultPrevented) {
+          context.toggleSidebar();
+        }
       }}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 outline-none md:block",
@@ -675,14 +720,15 @@ export const AnimatedSidebarRail = forwardRef<
       )}
     />
   );
-});
+}
 
-export interface AnimatedSidebarInsetProps extends HTMLMotionProps<"main"> {}
+export type AnimatedSidebarInsetProps = HTMLMotionProps<"main">;
 
-export const AnimatedSidebarInset = forwardRef<
-  HTMLElement,
-  AnimatedSidebarInsetProps
->(function AnimatedSidebarInset({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarInset({
+  className,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarInsetProps & { ref?: Ref<HTMLElement> }) {
   return (
     <motion.main
       {...props}
@@ -695,12 +741,13 @@ export const AnimatedSidebarInset = forwardRef<
       )}
     />
   );
-});
+}
 
-export const AnimatedSidebarHeader = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarHeader({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarHeader({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       {...props}
@@ -709,12 +756,13 @@ export const AnimatedSidebarHeader = forwardRef<
       className={cn("flex shrink-0 flex-col gap-2 p-3", className)}
     />
   );
-});
+}
 
-export const AnimatedSidebarContent = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarContent({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarContent({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       {...props}
@@ -726,12 +774,13 @@ export const AnimatedSidebarContent = forwardRef<
       )}
     />
   );
-});
+}
 
-export const AnimatedSidebarFooter = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarFooter({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarFooter({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       {...props}
@@ -743,12 +792,13 @@ export const AnimatedSidebarFooter = forwardRef<
       )}
     />
   );
-});
+}
 
-export const AnimatedSidebarGroup = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarGroup({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarGroup({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       {...props}
@@ -757,15 +807,14 @@ export const AnimatedSidebarGroup = forwardRef<
       className={cn("flex w-full min-w-0 flex-col px-1 py-1.5", className)}
     />
   );
-});
+}
 
-export const AnimatedSidebarGroupLabel = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarGroupLabel(
-  { children, className, ...props },
-  forwardedRef
-) {
+export function AnimatedSidebarGroupLabel({
+  children,
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   const { collapsed } = useAnimatedSidebarPanel();
 
   return (
@@ -783,12 +832,13 @@ export const AnimatedSidebarGroupLabel = forwardRef<
       {children}
     </div>
   );
-});
+}
 
-export const AnimatedSidebarGroupContent = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(function AnimatedSidebarGroupContent({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarGroupContent({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
       {...props}
@@ -797,15 +847,14 @@ export const AnimatedSidebarGroupContent = forwardRef<
       className={cn("w-full min-w-0", className)}
     />
   );
-});
+}
 
-export const AnimatedSidebarMenu = forwardRef<
-  HTMLUListElement,
-  HTMLAttributes<HTMLUListElement>
->(function AnimatedSidebarMenu(
-  { children, className, ...props },
-  forwardedRef
-) {
+export function AnimatedSidebarMenu({
+  children,
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLAttributes<HTMLUListElement> & { ref?: Ref<HTMLUListElement> }) {
   return (
     <SharedLayoutBg
       {...props}
@@ -823,12 +872,13 @@ export const AnimatedSidebarMenu = forwardRef<
       {children}
     </SharedLayoutBg>
   );
-});
+}
 
-export const AnimatedSidebarMenuItem = forwardRef<
-  HTMLLIElement,
-  HTMLMotionProps<"li">
->(function AnimatedSidebarMenuItem({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarMenuItem({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLMotionProps<"li"> & { ref?: Ref<HTMLLIElement> }) {
   return (
     <motion.li
       {...props}
@@ -839,7 +889,7 @@ export const AnimatedSidebarMenuItem = forwardRef<
       className={cn("relative", className)}
     />
   );
-});
+}
 
 export interface AnimatedSidebarMenuSubProps extends Omit<
   HTMLMotionProps<"ul">,
@@ -849,13 +899,13 @@ export interface AnimatedSidebarMenuSubProps extends Omit<
   children?: ReactNode;
 }
 
-export const AnimatedSidebarMenuSub = forwardRef<
-  HTMLUListElement,
-  AnimatedSidebarMenuSubProps
->(function AnimatedSidebarMenuSub(
-  { open, children, className, ...props },
-  forwardedRef
-) {
+export function AnimatedSidebarMenuSub({
+  open,
+  children,
+  className,
+  ref: forwardedRef,
+  ...props
+}: AnimatedSidebarMenuSubProps & { ref?: Ref<HTMLUListElement> }) {
   const context = useAnimatedSidebar();
   const panel = useAnimatedSidebarPanel();
 
@@ -882,12 +932,13 @@ export const AnimatedSidebarMenuSub = forwardRef<
       ) : null}
     </AnimatePresence>
   );
-});
+}
 
-export const AnimatedSidebarMenuSubItem = forwardRef<
-  HTMLLIElement,
-  HTMLMotionProps<"li">
->(function AnimatedSidebarMenuSubItem({ className, ...props }, forwardedRef) {
+export function AnimatedSidebarMenuSubItem({
+  className,
+  ref: forwardedRef,
+  ...props
+}: HTMLMotionProps<"li"> & { ref?: Ref<HTMLLIElement> }) {
   return (
     <motion.li
       {...props}
@@ -897,7 +948,7 @@ export const AnimatedSidebarMenuSubItem = forwardRef<
       className={cn("relative min-w-0", className)}
     />
   );
-});
+}
 
 export interface AnimatedSidebarMenuSubButtonProps {
   children: ReactNode;
@@ -934,7 +985,9 @@ export function AnimatedSidebarMenuSubButton({
       return;
     }
     onSelect?.();
-    if (context.isMobile && closeOnSelect) context.setOpenMobile(false);
+    if (context.isMobile && closeOnSelect) {
+      context.setOpenMobile(false);
+    }
   };
 
   const content = (
@@ -1003,6 +1056,88 @@ export interface AnimatedSidebarMenuButtonProps {
   className?: string;
 }
 
+/** New tabs open without access back to this page unless told otherwise. */
+function linkRel(rel: string | undefined, target: string | undefined) {
+  if (rel !== undefined) {
+    return rel;
+  }
+  return target === "_blank" ? "noreferrer noopener" : undefined;
+}
+
+function MenuButtonContent({
+  children,
+  icon,
+  badge,
+  isActive,
+  ariaExpanded,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+  badge?: ReactNode;
+  isActive: boolean;
+  ariaExpanded?: boolean;
+}) {
+  const context = useAnimatedSidebar();
+  const panel = useAnimatedSidebarPanel();
+  const labelTransition = panel.collapsed
+    ? LABEL_EXIT_TRANSITION
+    : LABEL_ENTER_TRANSITION;
+  return (
+    <>
+      {isActive ? (
+        <motion.span
+          layoutId={context.layoutId}
+          transition={context.reduce ? { duration: 0 } : SPRING_LAYOUT}
+          className="bg-muted absolute inset-0 rounded-xl"
+        />
+      ) : null}
+      {icon ? (
+        <span
+          aria-hidden="true"
+          className="relative z-10 grid size-5 shrink-0 place-items-center [&_svg]:size-5"
+        >
+          {icon}
+        </span>
+      ) : null}
+      <motion.span
+        initial={false}
+        animate={{
+          opacity: panel.collapsed ? 0 : 1,
+          x: panel.collapsed ? -4 : 0,
+        }}
+        transition={context.reduce ? REDUCED_TRANSITION : labelTransition}
+        aria-hidden={panel.collapsed}
+        className={cn(
+          "relative z-10 min-w-0 truncate",
+          panel.collapsed ? "pointer-events-none hidden" : "flex-1"
+        )}
+      >
+        {children}
+      </motion.span>
+      {badge && !panel.collapsed ? (
+        <span className="text-muted-foreground relative z-10 shrink-0 text-xs">
+          {badge}
+        </span>
+      ) : null}
+      {ariaExpanded === undefined ? null : (
+        <motion.span
+          aria-hidden="true"
+          initial={false}
+          animate={{
+            opacity: panel.collapsed ? 0 : 1,
+            rotate: ariaExpanded ? 90 : 0,
+            x: panel.collapsed ? 4 : 0,
+          }}
+          transition={context.reduce ? { duration: 0 } : SPRING_LAYOUT}
+          className="text-muted-foreground relative z-10 grid size-4 shrink-0 place-items-center"
+        >
+          <ChevronRight className="size-3.5" />
+        </motion.span>
+      )}
+    </>
+  );
+}
+
 export function AnimatedSidebarMenuButton({
   children,
   icon,
@@ -1043,65 +1178,17 @@ export function AnimatedSidebarMenuButton({
   };
 
   const content = (
-    <>
-      {isActive ? (
-        <motion.span
-          layoutId={context.layoutId}
-          transition={context.reduce ? { duration: 0 } : SPRING_LAYOUT}
-          className="bg-muted absolute inset-0 rounded-xl"
-        />
-      ) : null}
-      {icon ? (
-        <span
-          aria-hidden="true"
-          className="relative z-10 grid size-5 shrink-0 place-items-center [&_svg]:size-5"
-        >
-          {icon}
-        </span>
-      ) : null}
-      <motion.span
-        initial={false}
-        animate={{
-          opacity: panel.collapsed ? 0 : 1,
-          x: panel.collapsed ? -4 : 0,
-        }}
-        transition={
-          context.reduce
-            ? REDUCED_TRANSITION
-            : panel.collapsed
-              ? LABEL_EXIT_TRANSITION
-              : LABEL_ENTER_TRANSITION
-        }
-        aria-hidden={panel.collapsed}
-        className={cn(
-          "relative z-10 min-w-0 truncate",
-          panel.collapsed ? "pointer-events-none hidden" : "flex-1"
-        )}
-      >
-        {children}
-      </motion.span>
-      {badge && !panel.collapsed ? (
-        <span className="text-muted-foreground relative z-10 shrink-0 text-xs">
-          {badge}
-        </span>
-      ) : null}
-      {ariaExpanded !== undefined ? (
-        <motion.span
-          aria-hidden="true"
-          initial={false}
-          animate={{
-            opacity: panel.collapsed ? 0 : 1,
-            rotate: ariaExpanded ? 90 : 0,
-            x: panel.collapsed ? 4 : 0,
-          }}
-          transition={context.reduce ? { duration: 0 } : SPRING_LAYOUT}
-          className="text-muted-foreground relative z-10 grid size-4 shrink-0 place-items-center"
-        >
-          <ChevronRight className="size-3.5" />
-        </motion.span>
-      ) : null}
-    </>
+    <MenuButtonContent
+      icon={icon}
+      badge={badge}
+      isActive={isActive}
+      ariaExpanded={ariaExpanded}
+    >
+      {children}
+    </MenuButtonContent>
   );
+  const collapsedLabel = panel.collapsed ? textLabel : undefined;
+  const whileTap = context.reduce || disabled ? undefined : { scale: 0.98 };
 
   const interactiveClassName = cn(
     "relative flex min-h-9 w-full min-w-0 items-center overflow-hidden rounded-xl text-sm font-medium outline-none",
@@ -1117,15 +1204,15 @@ export function AnimatedSidebarMenuButton({
     <motion.a
       href={href}
       target={target}
-      rel={rel ?? (target === "_blank" ? "noreferrer noopener" : undefined)}
+      rel={linkRel(rel, target)}
       aria-current={isActive ? "page" : undefined}
       aria-expanded={ariaExpanded}
       aria-disabled={disabled || undefined}
-      aria-label={panel.collapsed ? textLabel : undefined}
-      title={panel.collapsed ? textLabel : undefined}
+      aria-label={collapsedLabel}
+      title={collapsedLabel}
       tabIndex={disabled ? -1 : undefined}
       onClick={select}
-      whileTap={context.reduce || disabled ? undefined : { scale: 0.98 }}
+      whileTap={whileTap}
       transition={SPRING_PRESS}
       className={interactiveClassName}
     >
@@ -1137,10 +1224,10 @@ export function AnimatedSidebarMenuButton({
       disabled={disabled}
       aria-current={isActive ? "page" : undefined}
       aria-expanded={ariaExpanded}
-      aria-label={panel.collapsed ? textLabel : undefined}
-      title={panel.collapsed ? textLabel : undefined}
+      aria-label={collapsedLabel}
+      title={collapsedLabel}
       onClick={select}
-      whileTap={context.reduce || disabled ? undefined : { scale: 0.98 }}
+      whileTap={whileTap}
       transition={SPRING_PRESS}
       className={interactiveClassName}
     >

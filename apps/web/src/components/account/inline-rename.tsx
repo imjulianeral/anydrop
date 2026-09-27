@@ -1,4 +1,4 @@
-import { Check, Pencil, X } from "lucide-react";
+import { Check, LoaderCircle, Pencil, X } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
@@ -55,6 +55,7 @@ export function InlineRename({
   return (
     <form
       className="flex min-w-0 items-center gap-1"
+      aria-busy={busy}
       onSubmit={(event) => {
         event.preventDefault();
         save();
@@ -78,12 +79,13 @@ export function InlineRename({
         type="submit"
         variant="ghost"
         size="icon-sm"
-        aria-label={`Save ${label}`}
+        aria-label={busy ? `Saving ${label}` : `Save ${label}`}
         disabled={busy || name === ""}
       >
-        <Check />
+        {busy ? <LoaderCircle className="animate-spin" /> : <Check />}
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="icon-sm"
         aria-label="Cancel"

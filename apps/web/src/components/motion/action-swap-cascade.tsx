@@ -5,9 +5,11 @@ import {
   ActionSwapButton,
   ActionSwapIcon,
   ActionSwapText,
-  type ActionSwapButtonProps,
-  type ActionSwapIconProps,
-  type ActionSwapTextProps,
+} from "./action-swap.tsx";
+import type {
+  ActionSwapButtonProps,
+  ActionSwapIconProps,
+  ActionSwapTextProps,
 } from "./action-swap.tsx";
 
 export type {

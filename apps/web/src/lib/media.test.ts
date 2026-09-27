@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { displayFilename, formatBytes, initials, mediaKind } from "#/lib/media.ts";
+import {
+  displayFilename,
+  formatBytes,
+  initials,
+  mediaKind,
+} from "#/lib/media.ts";
 
-describe("mediaKind", () => {
+describe(mediaKind, () => {
   it("detects images from type and filename", () => {
     expect(mediaKind("image/png", "photo.bin")).toBe("image");
     expect(mediaKind("application/octet-stream", "cover.webp")).toBe("image");
@@ -23,7 +28,7 @@ describe("mediaKind", () => {
   });
 });
 
-describe("formatBytes", () => {
+describe(formatBytes, () => {
   it("formats common sizes", () => {
     expect(formatBytes(0)).toBe("");
     expect(formatBytes(512)).toBe("512 B");
@@ -32,7 +37,7 @@ describe("formatBytes", () => {
   });
 });
 
-describe("initials", () => {
+describe(initials, () => {
   it("uses the first two words", () => {
     expect(initials("Amber Fox")).toBe("AF");
   });

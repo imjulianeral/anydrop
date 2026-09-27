@@ -1,24 +1,19 @@
 "use client";
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type HTMLMotionProps,
-  type Variants,
-} from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { HTMLMotionProps, Variants } from "motion/react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { EASE_OUT, SPRING_PRESS, SPRING_SWAP } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
-export type ActionSwapItem = {
+export interface ActionSwapItem {
   id: string;
   label: ReactNode;
   icon?: ReactNode;
   ariaLabel?: string;
-};
+}
 
 export type ActionSwapButtonVariant =
   | "primary"
@@ -74,13 +69,13 @@ const CASCADE_STAGGER = 0.025;
 
 const CASCADE_LETTER_VARIANTS: Variants = {
   initial: { opacity: 0, y: "105%", filter: ROLL_BLUR },
-  animate: (delay: number = 0) => ({
+  animate: (delay = 0) => ({
     opacity: 1,
     y: "0%",
     filter: "blur(0px)",
     transition: { ...SPRING_SWAP, delay },
   }),
-  exit: (delay: number = 0) => ({
+  exit: (delay = 0) => ({
     opacity: 0,
     y: "-105%",
     filter: ROLL_BLUR,
@@ -187,17 +182,13 @@ export function ActionSwapText({
   return (
     <span
       className={cn(
-        "relative -my-[0.08em] inline-block max-w-full py-[0.08em] align-bottom whitespace-nowrap",
+        "relative -my-[0.08em] inline-block max-w-full py-[0.08em] align-bottom whitespace-nowrap [clip-path:inset(0_-999px)]",
         className
       )}
-      style={{
-        clipPath: "inset(0 -999px)",
-        WebkitClipPath: "inset(0 -999px)",
-      }}
     >
       <span aria-hidden className="invisible inline-block whitespace-nowrap">
         {cascade
-          ? label.split("").map((char, index) => (
+          ? [...label].map((char, index) => (
               <span
                 // biome-ignore lint/suspicious/noArrayIndexKey: position is the slot identity.
                 key={index}
@@ -221,7 +212,7 @@ export function ActionSwapText({
               exit="exit"
               className="absolute top-[0.08em] left-0 inline-block whitespace-pre"
             >
-              {label.split("").map((char, i) => (
+              {[...label].map((char, i) => (
                 <motion.span
                   // biome-ignore lint/suspicious/noArrayIndexKey: position is the slot identity — the letter at a position is exactly what rolls.
                   key={i}
@@ -298,6 +289,32 @@ export function ActionSwapIcon({
   );
 }
 
+/** The shown item, and the one a press moves to when cycling. */
+function swapItems(
+  items: ActionSwapItem[],
+  currentValue: string | undefined,
+  cycle: boolean
+) {
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.id === currentValue)
+  );
+  const activeItem = items[activeIndex] ?? items[0];
+  const nextItem =
+    cycle && items.length > 0
+      ? items[(activeIndex + 1) % items.length]
+      : undefined;
+  return { activeItem, nextItem };
+}
+
+/** Icon-only buttons fall back to a string label for their accessible name. */
+function swapLabel(item: ActionSwapItem, iconOnly: boolean) {
+  if (item.ariaLabel !== undefined) {
+    return item.ariaLabel;
+  }
+  return iconOnly && typeof item.label === "string" ? item.label : undefined;
+}
+
 export function ActionSwapButton({
   items,
   value,
@@ -306,36 +323,30 @@ export function ActionSwapButton({
   variant = "secondary",
   size = "md",
   animation = "blur",
-  iconOnly = size === "icon",
+  iconOnly: iconOnlyProp,
   cycle = true,
   className,
   disabled,
   onClick,
   ...rest
 }: ActionSwapButtonProps) {
+  const iconOnly = iconOnlyProp ?? size === "icon";
   const reduce = useReducedMotion();
   const [internalValue, setInternalValue] = useState(
     defaultValue ?? items[0]?.id
   );
-  const currentValue = value ?? internalValue;
-  const activeIndex = Math.max(
-    0,
-    items.findIndex((item) => item.id === currentValue)
+  const { activeItem, nextItem } = swapItems(
+    items,
+    value ?? internalValue,
+    cycle
   );
-  const activeItem = items[activeIndex] ?? items[0];
   const hasIcon = items.some((item) => item.icon);
-  const nextItem =
-    cycle && items.length > 0
-      ? items[(activeIndex + 1) % items.length]
-      : undefined;
 
-  if (!activeItem) return null;
+  if (!activeItem) {
+    return null;
+  }
 
-  const accessibleLabel =
-    activeItem.ariaLabel ??
-    (iconOnly && typeof activeItem.label === "string"
-      ? activeItem.label
-      : undefined);
+  const accessibleLabel = swapLabel(activeItem, iconOnly);
 
   return (
     <motion.button
@@ -353,8 +364,12 @@ export function ActionSwapButton({
       aria-label={accessibleLabel}
       onClick={(event) => {
         onClick?.(event);
-        if (event.defaultPrevented || disabled || !cycle || !nextItem) return;
-        if (value === undefined) setInternalValue(nextItem.id);
+        if (event.defaultPrevented || disabled || !cycle || !nextItem) {
+          return;
+        }
+        if (value === undefined) {
+          setInternalValue(nextItem.id);
+        }
         onValueChange?.(nextItem.id, nextItem);
       }}
       {...rest}
@@ -368,11 +383,11 @@ export function ActionSwapButton({
           {activeItem.icon ?? null}
         </ActionSwapIcon>
       ) : null}
-      {!iconOnly ? (
+      {iconOnly ? null : (
         <ActionSwapText value={activeItem.id} animation={animation}>
           {activeItem.label}
         </ActionSwapText>
-      ) : null}
+      )}
     </motion.button>
   );
 }

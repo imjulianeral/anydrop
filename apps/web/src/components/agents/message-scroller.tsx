@@ -3,26 +3,26 @@
 
 import { useReducedMotion } from "motion/react";
 import {
-  type ComponentPropsWithRef,
-  type Ref,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import type { ComponentPropsWithRef, Ref } from "react";
 
-import {
-  PreviewRail,
-  type PreviewRailItem,
-} from "#/components/motion/preview-rail.tsx";
+import { PreviewRail } from "#/components/motion/preview-rail.tsx";
+import type { PreviewRailItem } from "#/components/motion/preview-rail.tsx";
+import { assignRef } from "#/lib/refs.ts";
 import { cn } from "#/lib/utils.ts";
 
 const PREVIEW_TITLE_LENGTH = 56;
 const PREVIEW_DESCRIPTION_LENGTH = 88;
 
 function truncateMessageText(text: string, limit: number) {
-  if (text.length <= limit) return text;
+  if (text.length <= limit) {
+    return text;
+  }
   const excerpt = text.slice(0, limit);
   const boundary = excerpt.lastIndexOf(" ");
   return `${excerpt.slice(0, boundary > limit * 0.65 ? boundary : limit).trim()}…`;
@@ -35,7 +35,7 @@ function getMessageText(message: HTMLElement) {
     ) ??
     message.querySelector<HTMLElement>('[data-slot="message-content"]') ??
     message;
-  return (surface.textContent ?? "").replace(/\s+/g, " ").trim();
+  return (surface.textContent ?? "").replaceAll(/\s+/gu, " ").trim();
 }
 
 function getMessagePreview(
@@ -132,9 +132,9 @@ export function MessageScroller({
   const contentRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(followOutput);
   const programmaticScrollRef = useRef(false);
-  const scrollTimerRef = useRef<number | undefined>(undefined);
-  const frameRef = useRef<number | undefined>(undefined);
-  const railFrameRef = useRef<number | undefined>(undefined);
+  const scrollTimerRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const railFrameRef = useRef<number | null>(null);
   const railIdRef = useRef(new WeakMap<HTMLElement, string>());
   const railIdCounterRef = useRef(0);
   const railTargetsRef = useRef(new Map<string, HTMLElement>());
@@ -152,18 +152,16 @@ export function MessageScroller({
   const setViewportRef = useCallback(
     (node: HTMLElement | null) => {
       viewportRef.current = node;
-      if (typeof externalViewportRef === "function") {
-        externalViewportRef(node);
-      } else if (externalViewportRef) {
-        externalViewportRef.current = node;
-      }
+      assignRef(externalViewportRef, node);
     },
     [externalViewportRef]
   );
 
   const setFollowing = useCallback(
     (next: boolean) => {
-      if (followingRef.current === next) return;
+      if (followingRef.current === next) {
+        return;
+      }
       followingRef.current = next;
       onFollowChange?.(next);
     },
@@ -171,10 +169,14 @@ export function MessageScroller({
   );
 
   const updateActiveRailItem = useCallback(() => {
-    if (navigation !== "rail") return;
+    if (navigation !== "rail") {
+      return;
+    }
     const viewport = viewportRef.current;
     const targets = [...railTargetsRef.current.entries()];
-    if (!viewport || targets.length === 0) return;
+    if (!viewport || targets.length === 0) {
+      return;
+    }
 
     const viewportRect = viewport.getBoundingClientRect();
     if (viewport.scrollTop <= followThreshold) {
@@ -209,14 +211,18 @@ export function MessageScroller({
   }, [followThreshold, navigation]);
 
   const syncRailItems = useCallback(() => {
-    if (navigation !== "rail") return;
+    if (navigation !== "rail") {
+      return;
+    }
     const content = contentRef.current;
     const viewport = viewportRef.current;
-    if (!content || !viewport) return;
+    if (!content || !viewport) {
+      return;
+    }
 
-    const messages = Array.from(
-      content.querySelectorAll<HTMLElement>('[data-slot="message"]')
-    );
+    const messages = [
+      ...content.querySelectorAll<HTMLElement>('[data-slot="message"]'),
+    ];
     const targets = new Map<string, HTMLElement>();
     const nextItems = messages.map((message, index) => {
       let id = railIdRef.current.get(message);
@@ -262,8 +268,12 @@ export function MessageScroller({
   }, [navigation]);
 
   const scheduleRailSync = useCallback(() => {
-    if (navigation !== "rail") return;
-    if (railFrameRef.current) cancelAnimationFrame(railFrameRef.current);
+    if (navigation !== "rail") {
+      return;
+    }
+    if (railFrameRef.current) {
+      cancelAnimationFrame(railFrameRef.current);
+    }
     railFrameRef.current = requestAnimationFrame(() => {
       syncRailItems();
       updateActiveRailItem();
@@ -272,7 +282,9 @@ export function MessageScroller({
 
   const scrollToEnd = useCallback((behavior: ScrollBehavior) => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport) {
+      return;
+    }
 
     programmaticScrollRef.current = true;
     if (typeof viewport.scrollTo === "function") {
@@ -280,7 +292,9 @@ export function MessageScroller({
     } else {
       viewport.scrollTop = viewport.scrollHeight;
     }
-    if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+    if (scrollTimerRef.current) {
+      window.clearTimeout(scrollTimerRef.current);
+    }
     scrollTimerRef.current = window.setTimeout(
       () => {
         programmaticScrollRef.current = false;
@@ -291,7 +305,9 @@ export function MessageScroller({
 
   const handleScroll = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport || programmaticScrollRef.current) return;
+    if (!viewport || programmaticScrollRef.current) {
+      return;
+    }
 
     const distance =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
@@ -305,21 +321,29 @@ export function MessageScroller({
 
   useLayoutEffect(() => {
     followingRef.current = followOutput;
-    if (!followOutput) return;
+    if (!followOutput) {
+      return;
+    }
 
     frameRef.current = requestAnimationFrame(() => scrollToEnd("auto"));
     return () => {
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
     };
   }, [followOutput, scrollToEnd]);
 
   useEffect(() => {
     const content = contentRef.current;
-    if (!content || typeof ResizeObserver === "undefined") return;
+    if (!content || typeof ResizeObserver === "undefined") {
+      return;
+    }
 
     const observer = new ResizeObserver(() => {
       scheduleRailSync();
-      if (!followOutput || !followingRef.current) return;
+      if (!followOutput || !followingRef.current) {
+        return;
+      }
       scrollToEnd(reduce || !smooth ? "auto" : "smooth");
     });
     observer.observe(content);
@@ -327,17 +351,23 @@ export function MessageScroller({
     return () => observer.disconnect();
   }, [followOutput, reduce, scheduleRailSync, scrollToEnd, smooth]);
 
+  // Leaving rail navigation drops its items in the same render.
+  if (navigation !== "rail" && (railItems.length > 0 || railOverflowing)) {
+    setRailItems([]);
+    setRailOverflowing(false);
+  }
+
   useEffect(() => {
     if (navigation !== "rail") {
       railTargetsRef.current.clear();
-      setRailItems([]);
-      setRailOverflowing(false);
       return;
     }
 
     const content = contentRef.current;
     const viewport = viewportRef.current;
-    if (!content || !viewport) return;
+    if (!content || !viewport) {
+      return;
+    }
 
     scheduleRailSync();
     const mutationObserver =
@@ -365,9 +395,15 @@ export function MessageScroller({
 
   useEffect(
     () => () => {
-      if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
-      if (railFrameRef.current) cancelAnimationFrame(railFrameRef.current);
+      if (scrollTimerRef.current) {
+        window.clearTimeout(scrollTimerRef.current);
+      }
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      if (railFrameRef.current) {
+        cancelAnimationFrame(railFrameRef.current);
+      }
     },
     []
   );
@@ -376,7 +412,9 @@ export function MessageScroller({
     (item: PreviewRailItem) => {
       const viewport = viewportRef.current;
       const target = railTargetsRef.current.get(item.id);
-      if (!viewport || !target) return;
+      if (!viewport || !target) {
+        return;
+      }
 
       const lastItem = railItems.at(-1)?.id === item.id;
       setActiveRailId(item.id);
@@ -402,7 +440,9 @@ export function MessageScroller({
       } else {
         viewport.scrollTop = top;
       }
-      if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current);
+      if (scrollTimerRef.current) {
+        window.clearTimeout(scrollTimerRef.current);
+      }
       scrollTimerRef.current = window.setTimeout(
         () => {
           programmaticScrollRef.current = false;
@@ -414,6 +454,7 @@ export function MessageScroller({
   );
 
   const viewport = (
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- These handlers only observe scrolling in the region.
     <section
       ref={setViewportRef}
       aria-label={label}

@@ -2,8 +2,8 @@
 // beui.dev/components/motion/morphing-modal
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect } from "react";
+import type { ReactNode } from "react";
 
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
 import { PresenceGate } from "#/lib/presence-gate.tsx";
@@ -33,7 +33,9 @@ export function MorphingModal({
   const enterScale = reduce ? 1 : 0.97;
 
   useEffect(() => {
-    if (!open) {return;}
+    if (!open) {
+      return;
+    }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {

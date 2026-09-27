@@ -21,7 +21,7 @@ export function SelfCard({
     <section className="flex flex-col gap-4 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-muted-foreground text-xs tracking-[0.2em] uppercase">
+          <p className="text-muted-foreground tracking-eyebrow text-xs uppercase">
             This device
           </p>
           <h2 className="font-heading truncate text-lg tracking-tight">

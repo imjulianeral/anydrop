@@ -1,13 +1,9 @@
 "use client";
 
-import {
-  type MutableRefObject,
-  useCallback,
-  useLayoutEffect,
-  useState,
-} from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
+import type { MutableRefObject } from "react";
 
-export type PortalLayout = {
+export interface PortalLayout {
   trigger: {
     left: number;
     top: number;
@@ -18,7 +14,7 @@ export type PortalLayout = {
     width: number;
     height: number;
   };
-};
+}
 
 function sameLayout(a: PortalLayout | null, b: PortalLayout) {
   return (
@@ -45,7 +41,9 @@ export function usePopoverPortalPosition<
   const update = useCallback(() => {
     const trigger = triggerRef.current;
     const content = contentRef.current;
-    if (!trigger || !content) return;
+    if (!trigger || !content) {
+      return;
+    }
 
     const rect = trigger.getBoundingClientRect();
     const next: PortalLayout = {
@@ -65,13 +63,19 @@ export function usePopoverPortalPosition<
 
   useLayoutEffect(() => {
     update();
-    if (!active) return;
+    if (!active) {
+      return;
+    }
 
     const trigger = triggerRef.current;
     const content = contentRef.current;
     const observer = new ResizeObserver(update);
-    if (trigger) observer.observe(trigger);
-    if (content) observer.observe(content);
+    if (trigger) {
+      observer.observe(trigger);
+    }
+    if (content) {
+      observer.observe(content);
+    }
 
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);

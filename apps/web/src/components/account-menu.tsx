@@ -39,6 +39,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "#/components/ui/dialog.tsx";
+import { attempt } from "#/lib/attempt.ts";
 import {
   addPasskey,
   deleteAccount,
@@ -174,6 +175,143 @@ function headerCopy(
       };
 }
 
+/** "2 passkeys · Google": the ways this account can sign in. */
+function signInSummary(user: AccountUser) {
+  const count = user.passkeys.length;
+  const methods: string[] = [];
+  if (count > 0) {
+    methods.push(`${count} ${count === 1 ? "passkey" : "passkeys"}`);
+  }
+  if (user.google) {
+    methods.push("Google");
+  }
+  return methods.join(" · ");
+}
+
+function AccountHome({
+  user,
+  busy,
+  passkeysSupported,
+  onRename,
+  onAddPasskey,
+  onOpenSecurity,
+  onSignOut,
+}: {
+  user: AccountUser;
+  busy: boolean;
+  passkeysSupported: boolean;
+  onRename: (name: string) => Promise<boolean>;
+  onAddPasskey: () => void;
+  onOpenSecurity: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-5" aria-busy={busy}>
+      <div className="flex items-center gap-4 py-2">
+        <AccountAvatar className="size-12" picture={user.google?.picture} />
+        <div className="min-w-0 flex-1">
+          <InlineRename
+            value={user.name}
+            label="your name"
+            busy={busy}
+            onSave={onRename}
+          >
+            <p className="truncate font-medium">{user.name}</p>
+            <p className="text-muted-foreground truncate text-sm">
+              {user.email ?? "Passkey account"}
+            </p>
+          </InlineRename>
+        </div>
+      </div>
+      {user.passkeys.length === 0 && passkeysSupported && (
+        <div className="bg-primary/5 flex flex-col gap-3 rounded-2xl p-4">
+          <div className="flex items-start gap-3">
+            <Fingerprint
+              aria-hidden="true"
+              className="text-primary mt-0.5 size-5 shrink-0"
+            />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">Create a passkey</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Sign in faster with your fingerprint, face or screen lock — and
+                without Google.
+              </p>
+            </div>
+          </div>
+          <ActionButton
+            className="w-full"
+            disabled={busy}
+            onClick={onAddPasskey}
+          >
+            Create a passkey
+          </ActionButton>
+        </div>
+      )}
+      <ActionButton
+        variant="secondary"
+        className="h-auto w-full justify-between py-2.5"
+        onClick={onOpenSecurity}
+      >
+        <ShieldCheck aria-hidden="true" className="size-4" />
+        <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
+          <span>Sign-in & security</span>
+          <span className="text-muted-foreground text-xs font-normal">
+            {signInSummary(user)}
+          </span>
+        </span>
+        <ArrowRight aria-hidden="true" className="size-4" />
+      </ActionButton>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Your transfer history stays with this browser. Signing in does not
+        restore another device’s history.
+      </p>
+      <ActionButton
+        variant="ghost"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive w-full"
+        disabled={busy}
+        onClick={onSignOut}
+      >
+        <LogOut aria-hidden="true" className="size-4" />
+        Sign out
+      </ActionButton>
+    </div>
+  );
+}
+
+function isPasskeyFlow(view: View): view is PasskeyFlow {
+  return view === "signin" || view === "signup" || view === "add";
+}
+
+function TriggerIcon({ user }: { user: AccountUser | null | undefined }) {
+  if (!user) {
+    return <CircleUser className="size-5" />;
+  }
+  return <AccountAvatar picture={user.google?.picture} />;
+}
+
+function AccountMessages({
+  error,
+  notice,
+}: {
+  error: string | null;
+  notice: string | null;
+}) {
+  return (
+    <>
+      {error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <output aria-live="polite" className="text-muted-foreground text-sm">
+          {notice}
+        </output>
+      ) : null}
+    </>
+  );
+}
+
 export function AccountMenu() {
   const [session, setSession] = useState<AccountSession | null>(null);
   const [open, setOpen] = useState(false);
@@ -244,24 +382,26 @@ export function AccountMenu() {
     setBusy(true);
     setErrorMessage(null);
     setNotice(null);
-    try {
-      const message = await action(await refresh());
-      if (message === null) {
-        return;
+    await attempt(
+      async () => {
+        const message = await action(await refresh());
+        if (message === null) {
+          return;
+        }
+        const updated = await refresh();
+        if (updated.user) {
+          signalAccount(updated.rp_id, updated.user);
+        }
+        setNotice(message);
+        if (nextView) {
+          setView(nextView);
+        }
+      },
+      {
+        onError: (error) => setErrorMessage(describeError(error)),
+        onSettled: () => setBusy(false),
       }
-      const updated = await refresh();
-      if (updated.user) {
-        signalAccount(updated.rp_id, updated.user);
-      }
-      setNotice(message);
-      if (nextView) {
-        setView(nextView);
-      }
-    } catch (error) {
-      setErrorMessage(describeError(error));
-    } finally {
-      setBusy(false);
-    }
+    );
   };
 
   /**
@@ -347,7 +487,9 @@ export function AccountMenu() {
       return saved;
     };
 
-  const isFlowView = view === "signin" || view === "signup" || view === "add";
+  const isFlowView = isPasskeyFlow(view);
+  const triggerLabel = user ? "Your account" : "Sign in";
+  const modalViewId = `${user ? "user" : "guest"}-${view}`;
 
   return (
     <Dialog
@@ -360,15 +502,20 @@ export function AccountMenu() {
       }}
     >
       <DialogTrigger
-        aria-label={user ? "Your account" : "Sign in"}
-        title={user ? "Your account" : "Sign in"}
-        className="focus-visible:ring-ring focus-visible:ring-offset-background flex size-full cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        render={
+          <button
+            type="button"
+            aria-label={triggerLabel}
+            title={triggerLabel}
+            className="focus-visible:ring-ring focus-visible:ring-offset-background flex size-full cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          />
+        }
       >
-        {user ? <AccountAvatar /> : <CircleUser className="size-5" />}
+        <TriggerIcon user={user} />
       </DialogTrigger>
       <DialogPortal keepMounted>
         <MorphingModal
-          viewId={open ? `${user ? "user" : "guest"}-${view}` : null}
+          viewId={open ? modalViewId : null}
           onClose={() => setOpen(false)}
           placement="bottom"
           className="max-h-full"
@@ -385,10 +532,12 @@ export function AccountMenu() {
                   <ArrowLeft />
                 </Button>
               )}
-              <DialogHeader className="min-w-0 flex-1 gap-2">
-                <DialogTitle>{title}</DialogTitle>
-                <DialogDescription>{description}</DialogDescription>
-              </DialogHeader>
+              <div className="min-w-0 flex-1">
+                <DialogHeader>
+                  <DialogTitle>{title}</DialogTitle>
+                  <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+              </div>
               <DialogClose
                 render={<Button variant="ghost" size="icon" />}
                 aria-label="Close account"
@@ -467,86 +616,20 @@ export function AccountMenu() {
             )}
 
             {!isFlowView && user && view === "home" && (
-              <div className="flex flex-col gap-5" aria-busy={busy}>
-                <div className="flex items-center gap-4 py-2">
-                  <AccountAvatar className="size-12" />
-                  <div className="min-w-0 flex-1">
-                    <InlineRename
-                      value={user.name}
-                      label="your name"
-                      busy={busy}
-                      onSave={renameWith(updateProfile)}
-                    >
-                      <p className="truncate font-medium">{user.name}</p>
-                      <p className="text-muted-foreground truncate text-sm">
-                        {user.email ?? "Passkey account"}
-                      </p>
-                    </InlineRename>
-                  </div>
-                </div>
-                {user.passkeys.length === 0 && passkeysSupported && (
-                  <div className="bg-primary/5 flex flex-col gap-3 rounded-2xl p-4">
-                    <div className="flex items-start gap-3">
-                      <Fingerprint
-                        aria-hidden="true"
-                        className="text-primary mt-0.5 size-5 shrink-0"
-                      />
-                      <div className="flex flex-col gap-1">
-                        <p className="text-sm font-medium">Create a passkey</p>
-                        <p className="text-muted-foreground text-xs leading-relaxed">
-                          Sign in faster with your fingerprint, face or screen
-                          lock — and without Google.
-                        </p>
-                      </div>
-                    </div>
-                    <ActionButton
-                      className="w-full"
-                      disabled={busy}
-                      onClick={() => go("add")}
-                    >
-                      Create a passkey
-                    </ActionButton>
-                  </div>
-                )}
-                <ActionButton
-                  variant="secondary"
-                  className="h-auto w-full justify-between py-2.5"
-                  onClick={() => go("security")}
-                >
-                  <ShieldCheck aria-hidden="true" className="size-4" />
-                  <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
-                    <span>Sign-in & security</span>
-                    <span className="text-muted-foreground text-xs font-normal">
-                      {[
-                        user.passkeys.length > 0 &&
-                          `${user.passkeys.length} ${user.passkeys.length === 1 ? "passkey" : "passkeys"}`,
-                        user.google && "Google",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                  <ArrowRight aria-hidden="true" className="size-4" />
-                </ActionButton>
-                <p className="text-muted-foreground text-xs leading-relaxed">
-                  Your transfer history stays with this browser. Signing in does
-                  not restore another device’s history.
-                </p>
-                <ActionButton
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive w-full"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async (current) => {
-                      await logout(current.csrf_token);
-                      return "Signed out. You can keep sharing as a guest.";
-                    })
-                  }
-                >
-                  <LogOut aria-hidden="true" className="size-4" />
-                  Sign out
-                </ActionButton>
-              </div>
+              <AccountHome
+                user={user}
+                busy={busy}
+                passkeysSupported={passkeysSupported}
+                onRename={renameWith(updateProfile)}
+                onAddPasskey={() => go("add")}
+                onOpenSecurity={() => go("security")}
+                onSignOut={() =>
+                  run(async (current) => {
+                    await logout(current.csrf_token);
+                    return "Signed out. You can keep sharing as a guest.";
+                  })
+                }
+              />
             )}
 
             {!isFlowView && !user && (
@@ -608,16 +691,7 @@ export function AccountMenu() {
               </Tabs>
             )}
 
-            {errorMessage && (
-              <p role="alert" className="text-destructive text-sm">
-                {errorMessage}
-              </p>
-            )}
-            {notice && (
-              <output className="text-muted-foreground text-sm">
-                {notice}
-              </output>
-            )}
+            <AccountMessages error={errorMessage} notice={notice} />
           </DialogPrimitive.Popup>
         </MorphingModal>
       </DialogPortal>

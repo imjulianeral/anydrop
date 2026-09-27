@@ -34,6 +34,7 @@ defmodule AnyshareWeb.MultipartUploadTest do
   alias Anyshare.Repo
   alias Anyshare.Sharing
   alias Anyshare.Sharing.Transfer
+  alias Anyshare.SignalsFixture
   alias Anyshare.Uploads
 
   @bytes 64 * 1024 * 1024 + 1
@@ -235,7 +236,10 @@ defmodule AnyshareWeb.MultipartUploadTest do
 
     response =
       conn
-      |> post("/api/v1/transfers/#{id}/complete", %{"parts" => parts()})
+      |> post("/api/v1/transfers/#{id}/complete", %{
+        "parts" => parts(),
+        "signals" => SignalsFixture.signals()
+      })
       |> json_response(200)
 
     assert response["transfer"]["status"] == "uploaded"
@@ -254,7 +258,7 @@ defmodule AnyshareWeb.MultipartUploadTest do
           {:post, "/multipart", %{}},
           {:post, "/multipart/parts", %{"part_number" => 1}},
           {:delete, "/multipart", %{}},
-          {:post, "/complete", %{"parts" => parts()}}
+          {:post, "/complete", %{"parts" => parts(), "signals" => SignalsFixture.signals()}}
         ] do
       response =
         conn

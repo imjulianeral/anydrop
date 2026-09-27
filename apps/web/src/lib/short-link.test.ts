@@ -6,7 +6,7 @@ import {
   shortLinkLoadErrorMessage,
 } from "./short-link.ts";
 
-describe("shortLinkLoadErrorMessage", () => {
+describe(shortLinkLoadErrorMessage, () => {
   it("treats missing and gone links as expired", () => {
     expect(shortLinkLoadErrorMessage(new ApiError("not found", 404))).toBe(
       "This link has expired or is unavailable."
@@ -29,19 +29,19 @@ describe("shortLinkLoadErrorMessage", () => {
   });
 });
 
-describe("isRouteModuleLoadError", () => {
+describe(isRouteModuleLoadError, () => {
   it("detects failed lazy route chunks", () => {
     expect(
       isRouteModuleLoadError(
         new TypeError("Failed to fetch dynamically imported module: /s.$code")
       )
-    ).toBe(true);
+    ).toBeTruthy();
     expect(
       isRouteModuleLoadError(new TypeError("Importing a module script failed."))
-    ).toBe(true);
+    ).toBeTruthy();
   });
 
   it("ignores ordinary errors", () => {
-    expect(isRouteModuleLoadError(new Error("not found"))).toBe(false);
+    expect(isRouteModuleLoadError(new Error("not found"))).toBeFalsy();
   });
 });

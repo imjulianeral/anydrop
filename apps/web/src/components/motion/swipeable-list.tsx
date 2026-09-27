@@ -6,25 +6,20 @@ import {
   motion,
   useMotionValue,
   useReducedMotion,
-  type PanInfo,
 } from "motion/react";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import type { PanInfo } from "motion/react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { TOUCH_GESTURE_CONTENT_CLASS } from "#/lib/touch.ts";
 import { cn } from "#/lib/utils.ts";
 
 export type SwipeSide = "left" | "right";
 
-export type SwipeableListValue = {
+export interface SwipeableListValue {
   id: string;
   side: SwipeSide;
-};
+}
 
 export type SwipeActionTone =
   | "neutral"
@@ -34,7 +29,7 @@ export type SwipeActionTone =
   | "warning"
   | "danger";
 
-export type SwipeAction = {
+export interface SwipeAction {
   id: string;
   label: ReactNode;
   icon?: ReactNode;
@@ -48,9 +43,9 @@ export type SwipeAction = {
     side: SwipeSide;
     onClick: () => void;
   }) => ReactNode;
-};
+}
 
-export type SwipeableListItem = {
+export interface SwipeableListItem {
   id: string;
   ariaLabel?: string;
   title?: ReactNode;
@@ -61,9 +56,9 @@ export type SwipeableListItem = {
   leftActions?: SwipeAction[];
   rightActions?: SwipeAction[];
   disabled?: boolean;
-};
+}
 
-export type SwipeableListClassNames = {
+export interface SwipeableListClassNames {
   root?: string;
   item?: string;
   rail?: string;
@@ -74,7 +69,7 @@ export type SwipeableListClassNames = {
   title?: string;
   description?: string;
   meta?: string;
-};
+}
 
 export interface SwipeableListProps {
   items: SwipeableListItem[];
@@ -151,6 +146,21 @@ function isActionableSide(value: number, sideWidth: number) {
   return sideWidth > 0 && Math.abs(value) > 0;
 }
 
+/** Row offset that reveals the actions on `side`, or 0 when closed. */
+function swipeOffset(
+  side: SwipeSide | null,
+  leftWidth: number,
+  rightWidth: number
+) {
+  if (side === "left") {
+    return leftWidth;
+  }
+  if (side === "right") {
+    return -rightWidth;
+  }
+  return 0;
+}
+
 function clampReleaseVelocity(velocity: number) {
   return Math.max(
     -RELEASE_VELOCITY_LIMIT,
@@ -194,9 +204,10 @@ function SwipeActionButton({
         "group flex h-full shrink-0 cursor-pointer items-center justify-center outline-none",
         "focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-50",
+        "w-(--action-width)",
         className
       )}
-      style={{ width: actionWidth }}
+      style={{ "--action-width": `${actionWidth}px` }}
     >
       <span
         className={cn(
@@ -242,8 +253,8 @@ function SwipeableListRow({
   const leftWidth = leftActions.length * actionWidth;
   const rightWidth = rightActions.length * actionWidth;
   const openSide = openValue?.id === item.id ? openValue.side : null;
-  const targetX =
-    openSide === "left" ? leftWidth : openSide === "right" ? -rightWidth : 0;
+  const actionHintId = useId();
+  const targetX = swipeOffset(openSide, leftWidth, rightWidth);
 
   const settleX = useCallback(
     (nextX: number, velocity = 0) => {
@@ -264,9 +275,7 @@ function SwipeableListRow({
     [reduce, x]
   );
 
-  useEffect(() => {
-    return () => animationRef.current?.stop();
-  }, []);
+  useEffect(() => () => animationRef.current?.stop(), []);
 
   useEffect(() => {
     if (commandedTargetRef.current === targetX) {
@@ -277,8 +286,7 @@ function SwipeableListRow({
   }, [settleX, targetX]);
 
   const getTargetX = useCallback(
-    (side: SwipeSide | null) =>
-      side === "left" ? leftWidth : side === "right" ? -rightWidth : 0,
+    (side: SwipeSide | null) => swipeOffset(side, leftWidth, rightWidth),
     [leftWidth, rightWidth]
   );
 
@@ -372,48 +380,6 @@ function SwipeableListRow({
     [closeOnAction, item, onAction, snapTo]
   );
 
-  const defaultContent = (
-    <div className="flex min-w-0 items-center gap-3">
-      {item.leading ? (
-        <div className={cn("shrink-0", classNames?.leading)}>
-          {item.leading}
-        </div>
-      ) : null}
-      <div className={cn("min-w-0 flex-1", classNames?.content)}>
-        {item.title ? (
-          <div
-            className={cn(
-              "text-foreground truncate text-sm font-medium",
-              classNames?.title
-            )}
-          >
-            {item.title}
-          </div>
-        ) : null}
-        {item.description ? (
-          <div
-            className={cn(
-              "text-muted-foreground mt-0.5 truncate text-xs",
-              classNames?.description
-            )}
-          >
-            {item.description}
-          </div>
-        ) : null}
-      </div>
-      {item.meta ? (
-        <div
-          className={cn(
-            "text-muted-foreground shrink-0 text-xs font-medium",
-            classNames?.meta
-          )}
-        >
-          {item.meta}
-        </div>
-      ) : null}
-    </div>
-  );
-
   return (
     <div
       className={cn(
@@ -422,6 +388,7 @@ function SwipeableListRow({
         classNames?.item
       )}
     >
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape from an action button bubbles here to close the row. */}
       <div
         aria-hidden={!openSide}
         inert={!openSide}
@@ -466,25 +433,27 @@ function SwipeableListRow({
         </div>
       </div>
 
+      <span id={actionHintId} hidden>
+        Press the right or left arrow key to reveal actions.
+      </span>
       <motion.div
         ref={surfaceRef}
         data-swipeable-row
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- <fieldset> brings form styling to a draggable row.
         role="group"
         aria-label={item.ariaLabel}
-        aria-description={
-          leftWidth || rightWidth
-            ? "Press the right or left arrow key to reveal actions."
-            : undefined
-        }
+        aria-describedby={leftWidth || rightWidth ? actionHintId : undefined}
         tabIndex={item.disabled || !(leftWidth || rightWidth) ? -1 : 0}
         onKeyDown={(event) => {
-          if (event.target !== event.currentTarget) return;
-          const side =
-            event.key === "ArrowRight" && leftWidth > 0
-              ? "left"
-              : event.key === "ArrowLeft" && rightWidth > 0
-                ? "right"
-                : null;
+          if (event.target !== event.currentTarget) {
+            return;
+          }
+          let side: SwipeSide | null = null;
+          if (event.key === "ArrowRight" && leftWidth > 0) {
+            side = "left";
+          } else if (event.key === "ArrowLeft" && rightWidth > 0) {
+            side = "right";
+          }
           if (side) {
             event.preventDefault();
             snapTo(side);
@@ -519,7 +488,11 @@ function SwipeableListRow({
           classNames?.surface
         )}
       >
-        {renderItem ? renderItem(item) : (item.content ?? defaultContent)}
+        {renderItem
+          ? renderItem(item)
+          : (item.content ?? (
+              <SwipeableRowContent item={item} classNames={classNames} />
+            ))}
       </motion.div>
     </div>
   );
@@ -562,6 +535,56 @@ export function SwipeableList({
           renderItem={renderItem}
         />
       ))}
+    </div>
+  );
+}
+
+function SwipeableRowContent({
+  item,
+  classNames,
+}: {
+  item: SwipeableListItem;
+  classNames?: SwipeableListClassNames;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      {item.leading ? (
+        <div className={cn("shrink-0", classNames?.leading)}>
+          {item.leading}
+        </div>
+      ) : null}
+      <div className={cn("min-w-0 flex-1", classNames?.content)}>
+        {item.title ? (
+          <div
+            className={cn(
+              "text-foreground truncate text-sm font-medium",
+              classNames?.title
+            )}
+          >
+            {item.title}
+          </div>
+        ) : null}
+        {item.description ? (
+          <div
+            className={cn(
+              "text-muted-foreground mt-0.5 truncate text-xs",
+              classNames?.description
+            )}
+          >
+            {item.description}
+          </div>
+        ) : null}
+      </div>
+      {item.meta ? (
+        <div
+          className={cn(
+            "text-muted-foreground shrink-0 text-xs font-medium",
+            classNames?.meta
+          )}
+        >
+          {item.meta}
+        </div>
+      ) : null}
     </div>
   );
 }

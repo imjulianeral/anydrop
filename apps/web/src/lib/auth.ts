@@ -22,7 +22,8 @@ export interface AccountUser {
   email: string | null;
   /** The base64url WebAuthn user handle, used for the Signal API. */
   webauthn_id: string;
-  google: { email: string | null } | null;
+  /** `picture` is the Google profile photo, when the account has one. */
+  google: { email: string | null; picture: string | null } | null;
   passkeys: AccountPasskey[];
   /** Sensitive changes work without a new verification until this time. */
   reauth_until: string;

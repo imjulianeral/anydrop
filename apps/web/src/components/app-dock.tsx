@@ -24,7 +24,9 @@ export interface DockAction {
   active: boolean;
 }
 
-export function AppDock({ actions = [] }: { actions?: DockAction[] }) {
+const NO_ACTIONS: DockAction[] = [];
+
+export function AppDock({ actions = NO_ACTIONS }: { actions?: DockAction[] }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -42,7 +44,7 @@ export function AppDock({ actions = [] }: { actions?: DockAction[] }) {
         size={actions.length > 0 ? 40 : 44}
         className={
           actions.length > 0
-            ? "pointer-events-auto max-w-[calc(100vw-1rem)] gap-0.5 overflow-x-auto overflow-y-hidden px-1 [scrollbar-width:none] sm:gap-1.5 sm:px-2 [&::-webkit-scrollbar]:hidden"
+            ? "pointer-events-auto max-w-[calc(100vw-1rem)] [scrollbar-width:none] gap-0.5 overflow-x-auto overflow-y-hidden px-1 sm:gap-1.5 sm:px-2 [&::-webkit-scrollbar]:hidden"
             : "pointer-events-auto"
         }
       >
@@ -79,7 +81,7 @@ export function AppDock({ actions = [] }: { actions?: DockAction[] }) {
                   action.active && "bg-primary/10"
                 )}
                 whileHover={{}}
-                onClick={action.onClick}
+                onClick={() => action.onClick()}
               >
                 <Icon className="size-5" />
               </Button>

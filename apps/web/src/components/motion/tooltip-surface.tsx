@@ -1,7 +1,9 @@
 "use client";
 
-import { motion, useReducedMotion, type Variants } from "motion/react";
-import { useMemo, type ComponentProps, type ReactNode, type Ref } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import type { Variants } from "motion/react";
+import { useMemo } from "react";
+import type { ComponentProps, ReactNode, Ref } from "react";
 
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";

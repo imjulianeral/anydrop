@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { itemExpired, remainingLabel, remainingRatio, remainingTone } from "./expiry.ts";
+import {
+  itemExpired,
+  remainingLabel,
+  remainingRatio,
+  remainingTone,
+} from "./expiry.ts";
 
-describe("remainingLabel", () => {
+describe(remainingLabel, () => {
   const now = Date.parse("2026-09-05T12:00:00.000Z");
 
   it("returns empty for invalid dates", () => {
@@ -58,7 +63,7 @@ describe("remainingLabel", () => {
   });
 });
 
-describe("remainingRatio", () => {
+describe(remainingRatio, () => {
   const createdAt = "2026-09-05T00:00:00.000Z";
   const expiresAt = "2026-09-06T00:00:00.000Z";
 
@@ -99,7 +104,7 @@ describe("remainingRatio", () => {
   });
 });
 
-describe("itemExpired", () => {
+describe(itemExpired, () => {
   const now = Date.parse("2026-09-05T12:00:00.000Z");
 
   it("keeps a fresh file available when it has not been downloaded", () => {
@@ -113,7 +118,7 @@ describe("itemExpired", () => {
         },
         now
       )
-    ).toBe(false);
+    ).toBeFalsy();
     expect(
       itemExpired(
         {
@@ -124,18 +129,18 @@ describe("itemExpired", () => {
         },
         now
       )
-    ).toBe(false);
+    ).toBeFalsy();
   });
 
   it("does not treat a missing deadline or a zero limit as expired", () => {
-    expect(itemExpired({ download_count: 0, max_downloads: 0 }, now)).toBe(
-      false
-    );
-    expect(itemExpired({ expires_at: "", download_count: 0 }, now)).toBe(false);
+    expect(
+      itemExpired({ download_count: 0, max_downloads: 0 }, now)
+    ).toBeFalsy();
+    expect(itemExpired({ expires_at: "", download_count: 0 }, now)).toBeFalsy();
   });
 });
 
-describe("remainingTone", () => {
+describe(remainingTone, () => {
   it("is green from 66% remaining", () => {
     expect(remainingTone(1)).toBe("green");
     expect(remainingTone(0.66)).toBe("green");

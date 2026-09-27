@@ -3,9 +3,9 @@ import * as Docker from "alchemy/Docker";
 import * as Planetscale from "alchemy/Planetscale";
 import * as Effect from "effect/Effect";
 
-export const DEV_DATABASE_PORT = 51_214;
+const DEV_DATABASE_PORT = 51_214;
 
-export const localDatabaseUrl = `postgresql://postgres:postgres@host.docker.internal:${DEV_DATABASE_PORT}/postgres?sslmode=disable`;
+const localDatabaseUrl = `postgresql://postgres:postgres@host.docker.internal:${DEV_DATABASE_PORT}/postgres?sslmode=disable`;
 
 export const LocalPostgres = Docker.Container("Postgres", {
   environment: {
@@ -27,10 +27,8 @@ export const LocalPostgres = Docker.Container("Postgres", {
 });
 
 export const DatabaseUrl = Effect.gen(function* () {
+  // alchemy.run.ts starts LocalPostgres in dev.
   if (yield* ALCHEMY_DEV) {
-    if (!globalThis.__ALCHEMY_RUNTIME__) {
-      yield* LocalPostgres;
-    }
     return localDatabaseUrl;
   }
 

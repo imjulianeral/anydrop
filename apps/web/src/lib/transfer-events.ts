@@ -74,7 +74,10 @@ export const belongsToHistory = (
       (transfer.sender_id === selfId || transfer.recipient_id === selfId)
     );
   }
-  if (!peerId || transfer.group_id != null) {
+  if (
+    !peerId ||
+    (transfer.group_id !== null && transfer.group_id !== undefined)
+  ) {
     return false;
   }
   return (
@@ -132,7 +135,7 @@ const readInstant = (value: unknown): string => {
   if (parseInstant(trimmed) === null) {
     return "";
   }
-  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed) || !trimmed.includes("T")
+  return /(?:Z|[+-]\d{2}:\d{2})$/iu.test(trimmed) || !trimmed.includes("T")
     ? trimmed
     : `${trimmed}Z`;
 };

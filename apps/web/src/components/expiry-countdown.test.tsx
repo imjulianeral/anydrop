@@ -14,7 +14,7 @@ describe("expired countdown", () => {
     );
     expect(markup).toContain("Expired");
     expect(markup).not.toContain("Deletes in");
-    expect(markup).toContain('<circle class="stroke-red-500"');
+    expect(markup).toContain('<circle class="stroke-destructive"');
     expect(markup).not.toContain("<time");
   });
 
@@ -26,6 +26,6 @@ describe("expired countdown", () => {
       />
     );
     expect(markup).toContain("Expired");
-    expect(markup).toContain('<circle class="stroke-red-500"');
+    expect(markup).toContain('<circle class="stroke-destructive"');
   });
 });

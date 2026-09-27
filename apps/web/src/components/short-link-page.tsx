@@ -1,7 +1,8 @@
 import { getRouteApi } from "@tanstack/react-router";
 import { useScroll } from "motion/react";
 import { useTheme } from "next-themes";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
 import {
@@ -30,6 +31,7 @@ import FolderComponent from "#/components/ui/folder-component.tsx";
 import { Separator } from "#/components/ui/separator.tsx";
 import { resolveAssetUrl, unlockShortLink } from "#/lib/api.ts";
 import type { ShortLink } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { noteBrowserDownload } from "#/lib/file-transfers.ts";
 import { displayFilename, formatBytes } from "#/lib/media.ts";
 import { toast } from "#/lib/toast.ts";
@@ -68,20 +70,26 @@ export function ShortLinkPage() {
   const openProtectedLink = async () => {
     setBusy(true);
     setFailure("");
-    try {
-      const response = await unlockShortLink(drop.code, password);
-      if (response.short_link.kind === "url" && !response.short_link.url) {
-        throw new Error("This link is unavailable.");
+    await attempt(
+      async () => {
+        const response = await unlockShortLink(drop.code, password);
+        if (response.short_link.kind === "url" && !response.short_link.url) {
+          throw new Error("This link is unavailable.");
+        }
+        setPassword("");
+        setUnlocked(response.short_link);
+      },
+      {
+        onError: (error) => {
+          setFailure(
+            error instanceof Error ? error.message : "Could not open this link."
+          );
+        },
+        onSettled: () => {
+          setBusy(false);
+        },
       }
-      setPassword("");
-      setUnlocked(response.short_link);
-    } catch (error) {
-      setFailure(
-        error instanceof Error ? error.message : "Could not open this link."
-      );
-    } finally {
-      setBusy(false);
-    }
+    );
   };
 
   if (drop.password_protected && !opened) {
@@ -143,12 +151,12 @@ export function ShortLinkPage() {
   if (drop.kind === "url") {
     return (
       <PageShell>
-        <div
+        <output
+          aria-live="polite"
           className="flex min-h-64 items-center justify-center"
-          role="status"
         >
           <Loader label="Opening link" variant="dots" />
-        </div>
+        </output>
       </PageShell>
     );
   }
@@ -203,16 +211,16 @@ export function ShortLinkPage() {
           <div className="short-link-folder mt-4 flex shrink-0 items-center justify-center md:min-h-0 md:flex-1">
             <FolderComponent className="h-auto" size="sm" />
           </div>
-          <div
+          <section
             aria-label="File name"
             className="short-link-scroll max-h-16 shrink-0 overflow-y-auto rounded-sm text-center focus-visible:outline-2 focus-visible:outline-offset-2"
-            role="region"
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Long names scroll, so keyboard users need to reach the region.
             tabIndex={0}
           >
             <h2 className="text-lg leading-snug font-medium [overflow-wrap:anywhere]">
               {displayFilename(drop.filename, "Shared file")}
             </h2>
-          </div>
+          </section>
           <Separator />
           <dl className="flex shrink-0 flex-col gap-2 text-sm">
             <div className="flex justify-between gap-6">
@@ -265,9 +273,12 @@ export function ShortLinkPage() {
               Download file
             </MagneticButtonLink>
           ) : (
-            <p className="text-muted-foreground text-sm" role="status">
+            <output
+              aria-live="polite"
+              className="text-muted-foreground block text-sm"
+            >
               This file is not available to download.
-            </p>
+            </output>
           )}
           <p className="short-link-description text-muted-foreground text-center text-xs leading-relaxed">
             This link is temporary. Save your file before it expires.
@@ -289,7 +300,7 @@ function SharedMessage({
   expiresAt: string;
   onCopy: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ container: scrollRef });
   const [overflows, setOverflows] = useState(false);
 
@@ -312,6 +323,7 @@ function SharedMessage({
     return () => {
       observer.disconnect();
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Re-measure when the message changes.
   }, [body]);
 
   return (
@@ -329,17 +341,17 @@ function SharedMessage({
         {overflows ? (
           <ScrollProgress fixed={false} progress={scrollYProgress} />
         ) : null}
-        <div
+        <section
           ref={scrollRef}
           aria-label="Shared message"
           className="short-link-scroll h-full overflow-y-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-          role="region"
+          // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Long messages scroll, so keyboard users need to reach the region.
           tabIndex={0}
         >
           <p className="text-base leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
             {body}
           </p>
-        </div>
+        </section>
       </div>
       <ExpiryCountdown createdAt={createdAt} expiresAt={expiresAt} />
       <MagneticButton
@@ -403,16 +415,16 @@ function PageShell({
           className="flex w-fit items-center gap-2.5 rounded-sm text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4"
           href="/"
         >
-          <Send aria-hidden="true" className="size-5 stroke-[1.5]" />
+          <Send aria-hidden="true" className="size-5" />
           AnyShare
         </a>
         <div
           className={cn(
-            "short-link-tagline flex flex-col gap-3 md:gap-5 md:pb-6",
+            "flex flex-col gap-3 md:gap-5 md:pb-6",
             isSplit ? "max-md:gap-2" : "max-md:hidden"
           )}
         >
-          <p className="max-w-sm text-2xl leading-[1.05] font-medium tracking-tight text-balance md:text-5xl lg:text-6xl">
+          <p className="leading-display max-w-sm text-2xl font-medium tracking-tight text-balance md:text-5xl lg:text-6xl">
             Made to be shared.
           </p>
           <p className="text-muted-foreground hidden max-w-xs text-sm leading-relaxed md:block">

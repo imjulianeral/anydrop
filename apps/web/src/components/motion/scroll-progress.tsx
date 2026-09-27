@@ -2,12 +2,12 @@
 // beui.dev/components/motion/scroll-progress
 
 import {
-  type MotionValue,
   motion,
   useReducedMotion,
   useSpring,
   useTransform,
 } from "motion/react";
+import type { MotionValue } from "motion/react";
 
 import { useSmoothScroll } from "#/components/motion/smooth-scroll.tsx";
 import { cn } from "#/lib/utils.ts";
@@ -16,13 +16,13 @@ import { cn } from "#/lib/utils.ts";
 // looser than the UI springs in lib/ease.ts on purpose.
 const PROGRESS_SPRING = { stiffness: 120, damping: 30, mass: 0.6 };
 
-type CommonProps = {
+interface CommonProps {
   /** Override the scroll source. Defaults to the page via useSmoothScroll. */
   progress?: MotionValue<number>;
   /** Spring-smooth the value. Disabled automatically under reduced motion. */
   spring?: boolean;
   className?: string;
-};
+}
 
 export interface ScrollProgressBarProps extends CommonProps {
   variant?: "bar";
@@ -75,9 +75,9 @@ function ScrollProgressBar({
   return (
     <motion.div
       aria-hidden
-      style={{ height, scaleX: value }}
+      style={{ "--bar-height": `${height}px`, scaleX: value }}
       className={cn(
-        "bg-foreground right-0 left-0 z-50 origin-left",
+        "bg-foreground right-0 left-0 z-50 h-(--bar-height) origin-left",
         fixed ? "fixed" : "absolute",
         position === "top" ? "top-0" : "bottom-0",
         className
@@ -125,6 +125,7 @@ function ScrollProgressCircle({
         strokeLinecap="round"
         className="stroke-current"
         strokeDasharray={circumference}
+        // oxlint-disable-next-line shadcn/no-inline-styles -- `offset` is a MotionValue that follows the scroll position.
         style={{ strokeDashoffset: offset }}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />

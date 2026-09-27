@@ -6,6 +6,7 @@ import { StatefulButton } from "#/components/motion/button/stateful.tsx";
 import { Input } from "#/components/motion/input.tsx";
 import { Field, FieldDescription, FieldGroup } from "#/components/ui/field.tsx";
 import { sendInvitation } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { invitationError } from "#/lib/invitations.ts";
 import { island } from "#/lib/island.ts";
 
@@ -32,20 +33,26 @@ export function RemoteDevicesPanel() {
     }
     sendingRef.current = true;
     setSending(true);
-    try {
-      const { invitation } = await sendInvitation(token, target.trim());
-      island.notice({
-        title: "Invitation sent",
-        description: `Waiting for ${invitation.recipient.display_name} to accept. Invitations expire in 10 minutes.`,
-        kind: "success",
-      });
-      setTarget("");
-    } catch (error) {
-      island.error("Invitation not sent", invitationError(error));
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
-    }
+    await attempt(
+      async () => {
+        const { invitation } = await sendInvitation(token, target.trim());
+        island.notice({
+          title: "Invitation sent",
+          description: `Waiting for ${invitation.recipient.display_name} to accept. Invitations expire in 10 minutes.`,
+          kind: "success",
+        });
+        setTarget("");
+      },
+      {
+        onError: (error) => {
+          island.error("Invitation not sent", invitationError(error));
+        },
+        onSettled: () => {
+          sendingRef.current = false;
+          setSending(false);
+        },
+      }
+    );
   };
 
   const disconnect = async (id: string) => {
@@ -54,19 +61,25 @@ export function RemoteDevicesPanel() {
     }
     busyRef.current = true;
     setBusyId(id);
-    try {
-      await respondToInvitation(id, "disconnect");
-      island.notice({
-        title: "Remote device disconnected",
-        description: "A new invitation is needed to reconnect remotely.",
-        kind: "success",
-      });
-    } catch (error) {
-      island.error("Could not disconnect", invitationError(error));
-    } finally {
-      busyRef.current = false;
-      setBusyId(null);
-    }
+    await attempt(
+      async () => {
+        await respondToInvitation(id, "disconnect");
+        island.notice({
+          title: "Remote device disconnected",
+          description: "A new invitation is needed to reconnect remotely.",
+          kind: "success",
+        });
+      },
+      {
+        onError: (error) => {
+          island.error("Could not disconnect", invitationError(error));
+        },
+        onSettled: () => {
+          busyRef.current = false;
+          setBusyId(null);
+        },
+      }
+    );
   };
 
   return (

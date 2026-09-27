@@ -10,6 +10,7 @@
     "dev": "sh infra/dev.sh",
     "check": "ultracite check --ignore-pattern=vendors/**",
     "fix": "ultracite fix --ignore-pattern=vendors/**",
+    "shadscan": "npx -y @shadscan/cli@0.17.0 apps/web",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "plan": "alchemy plan"
@@ -24,12 +25,13 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260814.1",
     "@nubjs/types": "0.9.0",
+    "@shadcn/lint": "^0.2.0",
     "@types/node": "^24",
     "oxfmt": "latest",
     "oxlint": "latest",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7",
-    "ultracite": "7.10.4"
+    "ultracite": "7.12.0"
   },
   "devEngines": {
     "packageManager": {

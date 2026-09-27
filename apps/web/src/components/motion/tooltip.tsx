@@ -4,10 +4,6 @@ import { AnimatePresence } from "motion/react";
 import {
   cloneElement,
   isValidElement,
-  type PointerEvent,
-  type ReactElement,
-  type ReactNode,
-  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -15,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { PointerEvent, ReactElement, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { TooltipSurface } from "#/components/motion/tooltip-surface.tsx";
@@ -48,17 +45,17 @@ const GAP = 8;
 
 // Centering transform for the fixed-positioned anchor point, per side.
 const anchorTransform: Record<Side, string> = {
-  top: "translate(-50%, -100%)",
-  bottom: "translate(-50%, 0)",
-  left: "translate(-100%, -50%)",
-  right: "translate(0, -50%)",
+  top: "-translate-x-1/2 -translate-y-full",
+  bottom: "-translate-x-1/2",
+  left: "-translate-x-full -translate-y-1/2",
+  right: "-translate-y-1/2",
 };
 
 const transformOrigin: Record<Side, string> = {
-  top: "center bottom",
-  bottom: "center top",
-  left: "right center",
-  right: "left center",
+  top: "origin-bottom",
+  bottom: "origin-top",
+  left: "origin-right",
+  right: "origin-left",
 };
 
 // Once any tooltip has just closed, neighbouring tooltips open without the
@@ -83,7 +80,9 @@ export function Tooltip({
   const open = controlledOpen ?? internalOpen;
   const setOpen = useCallback(
     (next: boolean) => {
-      if (controlledOpen === undefined) setInternalOpen(next);
+      if (controlledOpen === undefined) {
+        setInternalOpen(next);
+      }
       onOpenChange?.(next);
     },
     [controlledOpen, onOpenChange]
@@ -103,8 +102,10 @@ export function Tooltip({
   // Position:fixed means these viewport coords place the tooltip directly, so
   // it escapes every ancestor's stacking context and overflow.
   const place = useCallback(() => {
-    const el = anchorRef.current;
-    if (!el) return;
+    const el = (externalAnchorRef ?? wrapperRef).current;
+    if (!el) {
+      return;
+    }
     const r = el.getBoundingClientRect();
     const cx = r.left + r.width * (anchorPoint?.x ?? 0.5);
     const cy = r.top + r.height * (anchorPoint?.y ?? 0.5);
@@ -117,8 +118,13 @@ export function Tooltip({
     const next = point[side];
     const width = surfaceRef.current?.offsetWidth ?? 0;
     const height = surfaceRef.current?.offsetHeight ?? 0;
-    const dx = side === "left" ? width : side === "right" ? 0 : width / 2;
-    const dy = side === "top" ? height : side === "bottom" ? 0 : height / 2;
+    const offsets: Record<Side, { dx: number; dy: number }> = {
+      top: { dx: width / 2, dy: height },
+      bottom: { dx: width / 2, dy: 0 },
+      left: { dx: width, dy: height / 2 },
+      right: { dx: 0, dy: height / 2 },
+    };
+    const { dx, dy } = offsets[side];
     next.left = Math.max(
       GAP + dx,
       Math.min(next.left, window.innerWidth - GAP - width + dx)
@@ -132,20 +138,28 @@ export function Tooltip({
         ? previous
         : next
     );
-  }, [side, anchorRef, anchorPoint]);
+  }, [side, externalAnchorRef, anchorPoint]);
 
   const positioned = coords !== null;
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     place();
     const observer = new ResizeObserver(place);
-    if (anchorRef.current) observer.observe(anchorRef.current);
-    if (positioned && surfaceRef.current) observer.observe(surfaceRef.current);
+    if (anchorRef.current) {
+      observer.observe(anchorRef.current);
+    }
+    if (positioned && surfaceRef.current) {
+      observer.observe(surfaceRef.current);
+    }
     return () => observer.disconnect();
   }, [open, place, anchorRef, positioned]);
 
   const show = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
+    if (timer.current) {
+      clearTimeout(timer.current);
+    }
     const warm = Date.now() - lastHiddenAt < WARM_WINDOW_MS;
     timer.current = setTimeout(
       () => {
@@ -161,7 +175,9 @@ export function Tooltip({
       clearTimeout(timer.current);
       timer.current = null;
     }
-    if (open) lastHiddenAt = Date.now();
+    if (open) {
+      lastHiddenAt = Date.now();
+    }
     setOpen(false);
   }, [open, setOpen]);
 
@@ -174,12 +190,16 @@ export function Tooltip({
 
   const toggleOnTap = useCallback(() => {
     const gesture = tap.take();
-    if (!gesture || gesture.pointerType === "mouse") return;
+    if (!gesture || gesture.pointerType === "mouse") {
+      return;
+    }
     if (gesture.state) {
       hide();
       return;
     }
-    if (timer.current) clearTimeout(timer.current);
+    if (timer.current) {
+      clearTimeout(timer.current);
+    }
     place();
     setOpen(true);
   }, [hide, place, tap, setOpen]);
@@ -191,7 +211,9 @@ export function Tooltip({
   // Keep the tooltip pinned to the trigger while it's open and the page scrolls
   // or resizes (fixed coords are viewport-relative).
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const onMove = () => place();
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
@@ -203,12 +225,16 @@ export function Tooltip({
 
   useEffect(
     () => () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
     },
     []
   );
 
-  if (!externalAnchorRef && !isValidElement(children)) return children;
+  if (!externalAnchorRef && !isValidElement(children)) {
+    return children;
+  }
 
   // The label describes the trigger, so it has to name the trigger itself.
   // Everything else the tooltip needs is read off the anchor below instead of
@@ -219,15 +245,16 @@ export function Tooltip({
   // with `props.onClick` cannot save it either, because a component element's
   // props hold nothing the component does internally.
   const trigger = isValidElement(children)
-    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+    ? // oxlint-disable-next-line react/no-clone-element -- Only adds aria-describedby; see above.
+      cloneElement(children as ReactElement<Record<string, unknown>>, {
         "aria-describedby": id,
       })
     : null;
 
   return (
     <>
-      {!externalAnchorRef ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: This wrapper observes bubbling trigger events without replacing the control's handlers.
+      {externalAnchorRef ? null : (
+        // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- This wrapper observes bubbling trigger events without replacing the control's handlers.
         <span
           ref={wrapperRef}
           className={cn("relative inline-flex align-middle", wrapperClassName)}
@@ -235,10 +262,14 @@ export function Tooltip({
           // mouseenter/mouseleave that carry no pointerType, which raced the tap
           // path into opening and closing the same label.
           onPointerEnter={(event: PointerEvent) => {
-            if (hover.enter(event)) show();
+            if (hover.enter(event)) {
+              show();
+            }
           }}
           onPointerLeave={(event: PointerEvent) => {
-            if (hover.leave(event)) hide();
+            if (hover.leave(event)) {
+              hide();
+            }
           }}
           onFocus={show}
           onBlur={hide}
@@ -247,35 +278,37 @@ export function Tooltip({
           // starts an activation that never had a pointer behind it. Either way
           // the record has to go, or the next click reads a finger that has long
           // since lifted.
-          onPointerCancel={tap.drop}
-          onKeyDown={tap.drop}
+          onPointerCancel={() => tap.drop()}
+          onKeyDown={() => tap.drop()}
           onClick={toggleOnTap}
         >
           {trigger}
         </span>
-      ) : null}
-      {typeof document !== "undefined"
-        ? createPortal(
+      )}
+      {typeof document === "undefined"
+        ? null
+        : createPortal(
             <AnimatePresence>
               {open && coords ? (
                 <span
-                  className="pointer-events-none fixed z-[9999]"
+                  className={cn(
+                    "pointer-events-none fixed top-(--tooltip-top) left-(--tooltip-left) z-[9999]",
+                    anchorTransform[side]
+                  )}
                   style={{
-                    top: coords.top,
-                    left: coords.left,
-                    transform: anchorTransform[side],
+                    "--tooltip-top": `${coords.top}px`,
+                    "--tooltip-left": `${coords.left}px`,
                   }}
                 >
                   <TooltipSurface
                     ref={surfaceRef}
                     id={id}
                     side={side}
-                    style={{
-                      transformOrigin: transformOrigin[side],
-                      maxWidth: "calc(100vw - 16px)",
-                      whiteSpace: "normal",
-                    }}
-                    className={className}
+                    className={cn(
+                      transformOrigin[side],
+                      "max-w-[calc(100vw-16px)] whitespace-normal",
+                      className
+                    )}
                   >
                     {content}
                   </TooltipSurface>
@@ -283,8 +316,7 @@ export function Tooltip({
               ) : null}
             </AnimatePresence>,
             document.body
-          )
-        : null}
+          )}
     </>
   );
 }

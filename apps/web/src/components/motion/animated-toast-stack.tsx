@@ -1,21 +1,10 @@
 "use client";
 // beui.dev/components/motion/animated-toast-stack
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type Transition,
-} from "motion/react";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { Transition } from "motion/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -25,9 +14,10 @@ import {
   Info,
   LoaderCircle,
   X,
-  type RuneIcon,
 } from "#/components/rune-icons.tsx";
+import type { RuneIcon } from "#/components/rune-icons.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
+import { useHydrated } from "#/lib/hooks/use-hydrated.ts";
 import { cn } from "#/lib/utils.ts";
 
 export type ToastStatus = "neutral" | "info" | "loading" | "success" | "error";
@@ -39,12 +29,12 @@ export type ToastPosition =
   | "bottom-center"
   | "bottom-right";
 
-export type AnimatedToastAction = {
+export interface AnimatedToastAction {
   label: ReactNode;
   onClick: (toast: AnimatedToast) => void;
-};
+}
 
-export type AnimatedToast = {
+export interface AnimatedToast {
   id: string;
   title: ReactNode;
   description?: ReactNode;
@@ -54,13 +44,13 @@ export type AnimatedToast = {
   duration?: number;
   dismissible?: boolean;
   createdAt?: number;
-};
+}
 
 export type ToastInput = Omit<AnimatedToast, "id" | "createdAt"> & {
   id?: string;
 };
 
-export type ToastClassNames = {
+export interface ToastClassNames {
   root?: string;
   item?: string;
   surface?: string;
@@ -71,7 +61,7 @@ export type ToastClassNames = {
   action?: string;
   close?: string;
   progress?: string;
-};
+}
 
 export interface AnimatedToastStackProps {
   toasts: AnimatedToast[];
@@ -133,6 +123,12 @@ const POSITION_CLASS: Record<ToastPosition, string> = {
 
 let idSeed = 0;
 
+function nextToastId() {
+  const id = `toast-${Date.now()}-${idSeed}`;
+  idSeed += 1;
+  return id;
+}
+
 function createToast(
   input: ToastInput,
   defaultDuration: number
@@ -141,7 +137,7 @@ function createToast(
     duration: defaultDuration,
     dismissible: true,
     ...input,
-    id: input.id ?? `toast-${Date.now()}-${idSeed++}`,
+    id: input.id ?? nextToastId(),
     createdAt: Date.now(),
   };
 }
@@ -197,14 +193,14 @@ export function useAnimatedToastStack({
   useEffect(() => {
     const activeIds = new Set(toasts.map((toast) => toast.id));
 
-    toastTimers.current.forEach((entry, id) => {
+    for (const [id, entry] of toastTimers.current) {
       if (!activeIds.has(id)) {
         window.clearTimeout(entry.timer);
         toastTimers.current.delete(id);
       }
-    });
+    }
 
-    toasts.forEach((toast) => {
+    for (const toast of toasts) {
       const duration = toast.duration ?? defaultDuration;
       const existing = toastTimers.current.get(toast.id);
 
@@ -213,14 +209,14 @@ export function useAnimatedToastStack({
           window.clearTimeout(existing.timer);
           toastTimers.current.delete(toast.id);
         }
-        return;
+        continue;
       }
 
       const createdAt = toast.createdAt ?? Date.now();
       const signature = `${createdAt}:${duration}`;
 
       if (existing?.signature === signature) {
-        return;
+        continue;
       }
 
       if (existing) {
@@ -235,16 +231,16 @@ export function useAnimatedToastStack({
       }, remaining);
 
       toastTimers.current.set(toast.id, { timer, signature });
-    });
+    }
   }, [defaultDuration, dismissToast, toasts]);
 
   useEffect(() => {
     const timers = toastTimers.current;
 
     return () => {
-      timers.forEach((entry) => {
+      for (const entry of timers.values()) {
         window.clearTimeout(entry.timer);
-      });
+      }
       timers.clear();
     };
   }, []);
@@ -276,15 +272,14 @@ export function AnimatedToastStack({
   icons,
   renderToast,
 }: AnimatedToastStackProps) {
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const hydrated = useHydrated();
   const visibleToasts = toasts.slice(-maxVisible);
   const isBottom = position.startsWith("bottom");
   const resolvedPlacement = placement ?? (fixed ? "fixed" : "static");
   const shouldPortal = portal ?? resolvedPlacement === "fixed";
 
-  useEffect(() => {
-    setPortalTarget(shouldPortal ? (portalRoot ?? document.body) : null);
-  }, [portalRoot, shouldPortal]);
+  const portalTarget =
+    hydrated && shouldPortal ? (portalRoot ?? document.body) : null;
 
   const stack = (
     <ol
@@ -327,7 +322,7 @@ export function AnimatedToastStack({
   return stack;
 }
 
-const ToastItem = memo(function ToastItem({
+function ToastItem({
   toast,
   index,
   onDismiss,
@@ -379,16 +374,18 @@ const ToastItem = memo(function ToastItem({
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.18}
       onDragEnd={(_, info) => {
-        if (!canDismiss || !onDismiss) return;
+        if (!canDismiss || !onDismiss) {
+          return;
+        }
         if (Math.abs(info.offset.x) > 72 || Math.abs(info.velocity.x) > 520) {
           onDismiss(toast.id);
         }
       }}
       className={cn(
-        "pointer-events-auto relative will-change-transform",
+        "pointer-events-auto relative z-(--stack-layer) will-change-transform",
         classNames?.item
       )}
-      style={{ zIndex: 20 - index }}
+      style={{ "--stack-layer": 20 - index }}
     >
       <div
         className={cn(
@@ -399,117 +396,165 @@ const ToastItem = memo(function ToastItem({
         {renderToast ? (
           renderToast(toast)
         ) : (
-          <div className="flex items-start gap-3">
-            <motion.span
-              layout
-              className={cn(
-                "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                STATUS_CLASS[status],
-                classNames?.iconWrap
-              )}
-            >
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={status}
-                  initial={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: 8, scale: 0.8, filter: "blur(6px)" }
-                  }
-                  animate={
-                    reduce
-                      ? { opacity: 1 }
-                      : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
-                  }
-                  exit={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: -8, scale: 0.9, filter: "blur(6px)" }
-                  }
-                  transition={CONTENT_TRANSITION}
-                  className="inline-flex"
-                >
-                  {status === "loading" ? (
-                    <span className="inline-flex animate-spin">{iconNode}</span>
-                  ) : (
-                    iconNode
-                  )}
-                </motion.span>
-              </AnimatePresence>
-            </motion.span>
-
-            <div className={cn("min-w-0 flex-1", classNames?.content)}>
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.div
-                  key={`${toast.id}-${status}-${String(toast.title)}`}
-                  initial={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: 8, filter: "blur(6px)" }
-                  }
-                  animate={
-                    reduce
-                      ? { opacity: 1 }
-                      : { opacity: 1, y: 0, filter: "blur(0px)" }
-                  }
-                  exit={
-                    reduce
-                      ? { opacity: 0 }
-                      : { opacity: 0, y: -8, filter: "blur(6px)" }
-                  }
-                  transition={CONTENT_TRANSITION}
-                >
-                  <p
-                    className={cn(
-                      "text-foreground truncate text-sm leading-5 font-medium",
-                      classNames?.title
-                    )}
-                  >
-                    {toast.title}
-                  </p>
-                  {toast.description ? (
-                    <p
-                      className={cn(
-                        "text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-4",
-                        classNames?.description
-                      )}
-                    >
-                      {toast.description}
-                    </p>
-                  ) : null}
-                </motion.div>
-              </AnimatePresence>
-
-              {toast.action ? (
-                <button
-                  type="button"
-                  onClick={() => toast.action?.onClick(toast)}
-                  className={cn(
-                    "bg-primary/[0.06] text-foreground hover:bg-primary/[0.1] mt-2 inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition-colors",
-                    classNames?.action
-                  )}
-                >
-                  {toast.action.label}
-                </button>
-              ) : null}
-            </div>
-
-            {canDismiss ? (
-              <button
-                type="button"
-                onClick={() => onDismiss?.(toast.id)}
-                aria-label="Dismiss toast"
-                className={cn(
-                  "text-muted-foreground hover:bg-primary/[0.06] hover:text-foreground inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
-                  classNames?.close
-                )}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
-          </div>
+          <DefaultToastBody
+            toast={toast}
+            status={status}
+            iconNode={iconNode}
+            reduce={Boolean(reduce)}
+            classNames={classNames}
+            onDismiss={canDismiss ? onDismiss : undefined}
+          />
         )}
       </div>
     </motion.li>
   );
-});
+}
+
+function DefaultToastBody({
+  toast,
+  status,
+  iconNode,
+  reduce,
+  classNames,
+  onDismiss,
+}: {
+  toast: AnimatedToast;
+  status: ToastStatus;
+  iconNode: ReactNode;
+  reduce: boolean;
+  classNames?: ToastClassNames;
+  onDismiss?: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <ToastStatusIcon
+        status={status}
+        iconNode={iconNode}
+        reduce={reduce}
+        className={classNames?.iconWrap}
+      />
+
+      <div className={cn("min-w-0 flex-1", classNames?.content)}>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={`${toast.id}-${status}-${String(toast.title)}`}
+            initial={
+              reduce
+                ? { opacity: 0 }
+                : { opacity: 0, y: 8, filter: "blur(6px)" }
+            }
+            animate={
+              reduce
+                ? { opacity: 1 }
+                : { opacity: 1, y: 0, filter: "blur(0px)" }
+            }
+            exit={
+              reduce
+                ? { opacity: 0 }
+                : { opacity: 0, y: -8, filter: "blur(6px)" }
+            }
+            transition={CONTENT_TRANSITION}
+          >
+            <p
+              className={cn(
+                "text-foreground truncate text-sm leading-5 font-medium",
+                classNames?.title
+              )}
+            >
+              {toast.title}
+            </p>
+            {toast.description ? (
+              <p
+                className={cn(
+                  "text-muted-foreground mt-0.5 line-clamp-2 text-xs leading-4",
+                  classNames?.description
+                )}
+              >
+                {toast.description}
+              </p>
+            ) : null}
+          </motion.div>
+        </AnimatePresence>
+
+        {toast.action ? (
+          <button
+            type="button"
+            onClick={() => toast.action?.onClick(toast)}
+            className={cn(
+              "bg-primary/[0.06] text-foreground hover:bg-primary/[0.1] mt-2 inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition-colors",
+              classNames?.action
+            )}
+          >
+            {toast.action.label}
+          </button>
+        ) : null}
+      </div>
+
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={() => onDismiss(toast.id)}
+          aria-label="Dismiss toast"
+          className={cn(
+            "text-muted-foreground hover:bg-primary/[0.06] hover:text-foreground inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
+            classNames?.close
+          )}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ToastStatusIcon({
+  status,
+  iconNode,
+  reduce,
+  className,
+}: {
+  status: ToastStatus;
+  iconNode: ReactNode;
+  reduce: boolean;
+  className?: string;
+}) {
+  return (
+    <motion.span
+      layout
+      className={cn(
+        "mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+        STATUS_CLASS[status],
+        className
+      )}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={status}
+          initial={
+            reduce
+              ? { opacity: 0 }
+              : { opacity: 0, y: 8, scale: 0.8, filter: "blur(6px)" }
+          }
+          animate={
+            reduce
+              ? { opacity: 1 }
+              : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
+          }
+          exit={
+            reduce
+              ? { opacity: 0 }
+              : { opacity: 0, y: -8, scale: 0.9, filter: "blur(6px)" }
+          }
+          transition={CONTENT_TRANSITION}
+          className="inline-flex"
+        >
+          {status === "loading" ? (
+            <span className="inline-flex animate-spin">{iconNode}</span>
+          ) : (
+            iconNode
+          )}
+        </motion.span>
+      </AnimatePresence>
+    </motion.span>
+  );
+}

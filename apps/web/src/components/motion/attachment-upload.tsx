@@ -22,7 +22,14 @@ import {
   motion,
   useReducedMotion,
 } from "motion/react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { Tooltip } from "#/components/motion/tooltip.tsx";
@@ -38,7 +45,7 @@ export type AttachmentUploadStatus =
   | "complete"
   | "failed";
 
-export type AttachmentUploadItem = {
+export interface AttachmentUploadItem {
   id: string;
   name: string;
   kind: AttachmentUploadKind;
@@ -50,13 +57,13 @@ export type AttachmentUploadItem = {
   status?: AttachmentUploadStatus;
   error?: string;
   file?: File;
-};
+}
 
-export type AttachmentUploadClassNames = {
+export interface AttachmentUploadClassNames {
   dropzone?: string;
   list?: string;
   row?: string;
-};
+}
 
 export interface AttachmentUploadProps {
   value?: AttachmentUploadItem[];
@@ -106,7 +113,9 @@ function useControllableList<T>({
 
   const setItems = useCallback(
     (next: T[]) => {
-      if (!controlled) setInternalValue(next);
+      if (!controlled) {
+        setInternalValue(next);
+      }
       onValueChange?.(next);
     },
     [controlled, onValueChange]
@@ -142,24 +151,63 @@ function formatMaxSize(bytes: number) {
 }
 
 function inferKind(file: File): AttachmentUploadKind {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type.startsWith("image/")) {
+    return "image";
+  }
+  if (file.type.startsWith("audio/")) {
+    return "audio";
+  }
   return "file";
 }
 
 function AttachmentIcon({ kind }: { kind: AttachmentUploadKind }) {
-  if (kind === "link") return <LinkIcon className="size-4" />;
-  if (kind === "image") return <FileImage className="size-4" />;
-  if (kind === "audio") return <Mic className="size-4" />;
+  if (kind === "link") {
+    return <LinkIcon className="size-4" />;
+  }
+  if (kind === "image") {
+    return <FileImage className="size-4" />;
+  }
+  if (kind === "audio") {
+    return <Mic className="size-4" />;
+  }
   return <Paperclip className="size-4" />;
 }
 
 function imageSource(item: AttachmentUploadItem) {
-  if (item.kind !== "image") return undefined;
+  if (item.kind !== "image") {
+    return;
+  }
   return item.previewUrl ?? item.href;
 }
 
 type RowActionState = "idle" | "uploading" | "complete" | "failed" | "removing";
+
+function rowActionState(flags: {
+  removing: boolean;
+  uploading: boolean;
+  uploadComplete: boolean;
+  failed: boolean;
+}): RowActionState {
+  if (flags.removing) {
+    return "removing";
+  }
+  if (flags.uploading) {
+    return "uploading";
+  }
+  if (flags.uploadComplete) {
+    return "complete";
+  }
+  return flags.failed ? "failed" : "idle";
+}
+
+function rowInitial(reduce: boolean, arrivalIndex: number) {
+  if (reduce) {
+    return { opacity: 0 };
+  }
+  return arrivalIndex >= 0
+    ? { opacity: 0, y: -16, scale: 0.985 }
+    : { opacity: 0, y: 6 };
+}
 
 function RowAction({
   label,
@@ -181,16 +229,16 @@ function RowAction({
   if (state === "complete") {
     return (
       <Tooltip content="Upload complete" side="top" delay={100}>
-        <motion.span
-          role="status"
+        <motion.output
+          aria-live="polite"
           aria-label={`Upload complete for ${label}`}
           initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.75 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={ITEM_TRANSITION}
-          className="grid size-9 shrink-0 place-items-center rounded-xl text-emerald-600 dark:text-emerald-400"
+          className="text-success grid size-9 shrink-0 place-items-center rounded-xl"
         >
           <Check className="size-4" />
-        </motion.span>
+        </motion.output>
       </Tooltip>
     );
   }
@@ -198,8 +246,8 @@ function RowAction({
   if (state === "removing") {
     return (
       <Tooltip content="Removing attachment" side="top" delay={100}>
-        <span
-          role="status"
+        <output
+          aria-live="polite"
           aria-label={`Removing ${label}`}
           className="text-muted-foreground grid size-9 shrink-0 place-items-center rounded-xl"
         >
@@ -214,7 +262,7 @@ function RowAction({
           >
             <LoaderCircle className="size-4" />
           </motion.span>
-        </span>
+        </output>
       </Tooltip>
     );
   }
@@ -223,13 +271,13 @@ function RowAction({
     if (!retryable) {
       return (
         <Tooltip content="Upload failed" side="top" delay={100}>
-          <span
-            role="status"
+          <output
+            aria-live="polite"
             aria-label={`Upload failed for ${label}`}
             className="text-destructive grid size-9 shrink-0 place-items-center rounded-xl"
           >
             <AlertCircle className="size-4" />
-          </span>
+          </output>
         </Tooltip>
       );
     }
@@ -348,7 +396,9 @@ function ImagePreviewDialog({
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!item) return;
+    if (!item) {
+      return;
+    }
 
     const previousFocus =
       document.activeElement instanceof HTMLElement
@@ -359,7 +409,9 @@ function ImagePreviewDialog({
     closeRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+      }
       if (event.key === "Tab") {
         event.preventDefault();
         closeRef.current?.focus();
@@ -374,7 +426,9 @@ function ImagePreviewDialog({
     };
   }, [item, onClose]);
 
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") {
+    return null;
+  }
 
   const src = item ? imageSource(item) : undefined;
   const content =
@@ -405,6 +459,7 @@ function ImagePreviewDialog({
 
             <div className="fixed inset-4 flex items-center justify-center sm:inset-8">
               <motion.div
+                // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A native <dialog> stays hidden unless opened imperatively; Motion drives this preview.
                 role="dialog"
                 aria-modal="true"
                 aria-label={`Preview of ${item.name}`}
@@ -450,6 +505,138 @@ function ImagePreviewDialog({
   );
 }
 
+function playbackProgress(item: AttachmentUploadItem) {
+  if (!item.duration || item.duration <= 0) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, (item.currentTime ?? 0) / item.duration));
+}
+
+/** Rows that just arrived cascade in, one after another. */
+function rowTransition(reduce: boolean, arrivalIndex: number) {
+  if (reduce || arrivalIndex < 0) {
+    return ITEM_TRANSITION;
+  }
+  const delay = Math.min(arrivalIndex, 5) * 0.055;
+  return {
+    ...SPRING_LAYOUT,
+    delay,
+    opacity: { duration: 0.16, ease: EASE_OUT, delay },
+  };
+}
+
+function AudioControls({
+  item,
+  playing,
+  reduce,
+  onToggle,
+}: {
+  item: AttachmentUploadItem;
+  playing: boolean;
+  reduce: boolean;
+  onToggle: (item: AttachmentUploadItem) => void;
+}) {
+  const progress = playbackProgress(item);
+  return (
+    <>
+      <span className="text-muted-foreground w-9 shrink-0 text-xs tabular-nums">
+        {formatDuration(item.currentTime)}
+      </span>
+      <span
+        aria-hidden="true"
+        className="flex h-11 min-w-0 flex-1 items-center gap-[3px] overflow-hidden"
+      >
+        {WAVEFORM_BARS.map((bar, index) => (
+          <motion.span
+            key={bar.id}
+            className={cn(
+              "h-(--bar-height) w-[3px] shrink-0 rounded-full",
+              index / WAVEFORM_BARS.length <= progress
+                ? "bg-foreground"
+                : "bg-muted-foreground/35"
+            )}
+            style={{ "--bar-height": `${bar.height}px` }}
+            animate={
+              reduce || !playing ? undefined : { scaleY: [0.72, 1, 0.78] }
+            }
+            transition={{
+              duration: 0.55,
+              ease: EASE_OUT,
+              repeat: Infinity,
+              delay: index * 0.018,
+            }}
+          />
+        ))}
+      </span>
+      <span className="text-muted-foreground w-9 shrink-0 text-right text-xs tabular-nums">
+        {formatDuration(item.duration)}
+      </span>
+      <motion.button
+        type="button"
+        aria-label={`${playing ? "Pause" : "Play"} ${item.name}`}
+        onClick={() => onToggle(item)}
+        whileTap={{ scale: 0.94 }}
+        transition={SPRING_PRESS}
+        className="bg-foreground text-background focus-visible:ring-ring focus-visible:ring-offset-background grid size-9 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={playing ? "pause" : "play"}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+            transition={ITEM_TRANSITION}
+          >
+            {playing ? (
+              <Pause className="size-4 fill-current" />
+            ) : (
+              <Play className="size-4 translate-x-px fill-current" />
+            )}
+          </motion.span>
+        </AnimatePresence>
+      </motion.button>
+    </>
+  );
+}
+
+function FileDetails({
+  item,
+  failed,
+}: {
+  item: AttachmentUploadItem;
+  failed: boolean;
+}) {
+  const size = formatBytes(item.size);
+  return (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="text-foreground block truncate text-sm font-medium">
+          {item.name}
+        </span>
+        {failed ? (
+          <span className="text-destructive block truncate text-[11px]">
+            {item.error ?? "Upload failed"}
+          </span>
+        ) : null}
+      </span>
+      <span className="text-muted-foreground shrink-0 text-xs">
+        {item.kind === "link" ? "Web" : size}
+      </span>
+      {item.kind === "link" && item.href ? (
+        <a
+          href={item.href}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={`Open ${item.name}`}
+          className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring grid size-8 shrink-0 place-items-center rounded-lg transition-colors outline-none focus-visible:ring-2"
+        >
+          <ExternalLink className="size-4" />
+        </a>
+      ) : null}
+    </>
+  );
+}
+
 function AttachmentRow({
   item,
   playing,
@@ -481,39 +668,19 @@ function AttachmentRow({
   reduce: boolean;
   className?: string;
 }) {
-  const size = formatBytes(item.size);
-  const progress =
-    item.duration && item.duration > 0
-      ? Math.min(1, Math.max(0, (item.currentTime ?? 0) / item.duration))
-      : 0;
-  const actionState: RowActionState = removing
-    ? "removing"
-    : uploading
-      ? "uploading"
-      : uploadComplete
-        ? "complete"
-        : failed
-          ? "failed"
-          : "idle";
-  const arrivalDelay = Math.min(Math.max(arrivalIndex, 0), 5) * 0.055;
-  const rowTransition =
-    !reduce && arrivalIndex >= 0
-      ? {
-          ...SPRING_LAYOUT,
-          delay: arrivalDelay,
-          opacity: {
-            duration: 0.16,
-            ease: EASE_OUT,
-            delay: arrivalDelay,
-          },
-        }
-      : ITEM_TRANSITION;
+  const actionState = rowActionState({
+    removing,
+    uploading,
+    uploadComplete,
+    failed,
+  });
   const showUploadProgress = uploading || uploadComplete;
   const uploadProgress = (
     <motion.span
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- An animated fill behind the row; <progress> cannot render it.
       role="progressbar"
       aria-label={`Uploading ${item.name}`}
-      className="pointer-events-none absolute inset-0 -z-10 origin-left bg-emerald-400/25 dark:bg-emerald-500/20"
+      className="bg-success/20 pointer-events-none absolute inset-0 -z-10 origin-left"
       initial={{ opacity: 1, scaleX: 0 }}
       animate={{ opacity: 1, scaleX: 1 }}
       exit={reduce ? undefined : { opacity: 0 }}
@@ -523,20 +690,15 @@ function AttachmentRow({
       }}
     />
   );
+  const visibleUploadProgress = showUploadProgress ? uploadProgress : null;
 
   return (
     <motion.li
       layout={!reduce}
-      initial={
-        reduce
-          ? { opacity: 0 }
-          : arrivalIndex >= 0
-            ? { opacity: 0, y: -16, scale: 0.985 }
-            : { opacity: 0, y: 6 }
-      }
+      initial={rowInitial(reduce, arrivalIndex)}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={reduce ? undefined : { opacity: 0, y: -4 }}
-      transition={rowTransition}
+      transition={rowTransition(reduce, arrivalIndex)}
       className={cn(
         "bg-muted/70 flex min-h-14 max-w-full min-w-0 items-center gap-1 rounded-2xl p-1",
         className
@@ -567,101 +729,20 @@ function AttachmentRow({
         )}
 
         {item.kind === "audio" && onAudioToggle ? (
-          <>
-            <span className="text-muted-foreground w-9 shrink-0 text-xs tabular-nums">
-              {formatDuration(item.currentTime)}
-            </span>
-            <span
-              aria-hidden="true"
-              className="flex h-11 min-w-0 flex-1 items-center gap-[3px] overflow-hidden"
-            >
-              {WAVEFORM_BARS.map((bar, index) => (
-                <motion.span
-                  key={bar.id}
-                  className={cn(
-                    "w-[3px] shrink-0 rounded-full",
-                    index / WAVEFORM_BARS.length <= progress
-                      ? "bg-foreground"
-                      : "bg-muted-foreground/35"
-                  )}
-                  style={{ height: bar.height }}
-                  animate={
-                    reduce || !playing ? undefined : { scaleY: [0.72, 1, 0.78] }
-                  }
-                  transition={{
-                    duration: 0.55,
-                    ease: EASE_OUT,
-                    repeat: Infinity,
-                    delay: index * 0.018,
-                  }}
-                />
-              ))}
-            </span>
-            <span className="text-muted-foreground w-9 shrink-0 text-right text-xs tabular-nums">
-              {formatDuration(item.duration)}
-            </span>
-            <motion.button
-              type="button"
-              aria-label={`${playing ? "Pause" : "Play"} ${item.name}`}
-              onClick={() => onAudioToggle?.(item)}
-              whileTap={{ scale: 0.94 }}
-              transition={SPRING_PRESS}
-              className="bg-foreground text-background focus-visible:ring-ring focus-visible:ring-offset-background grid size-9 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={playing ? "pause" : "play"}
-                  initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-                  transition={ITEM_TRANSITION}
-                >
-                  {playing ? (
-                    <Pause className="size-4 fill-current" />
-                  ) : (
-                    <Play className="size-4 translate-x-px fill-current" />
-                  )}
-                </motion.span>
-              </AnimatePresence>
-            </motion.button>
-          </>
+          <AudioControls
+            item={item}
+            playing={playing}
+            reduce={reduce}
+            onToggle={onAudioToggle}
+          />
         ) : (
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="text-foreground block truncate text-sm font-medium">
-                {item.name}
-              </span>
-              {failed ? (
-                <span className="text-destructive block truncate text-[11px]">
-                  {item.error ?? "Upload failed"}
-                </span>
-              ) : null}
-            </span>
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {item.kind === "link" ? "Web" : size}
-            </span>
-            {item.kind === "link" && item.href ? (
-              <a
-                href={item.href}
-                target="_blank"
-                rel="noreferrer noopener"
-                aria-label={`Open ${item.name}`}
-                className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring grid size-8 shrink-0 place-items-center rounded-lg transition-colors outline-none focus-visible:ring-2"
-              >
-                <ExternalLink className="size-4" />
-              </a>
-            ) : null}
-          </>
+          <FileDetails item={item} failed={failed} />
         )}
 
         {reduce ? (
-          showUploadProgress ? (
-            uploadProgress
-          ) : null
+          visibleUploadProgress
         ) : (
-          <AnimatePresence>
-            {showUploadProgress ? uploadProgress : null}
-          </AnimatePresence>
+          <AnimatePresence>{visibleUploadProgress}</AnimatePresence>
         )}
       </div>
 
@@ -679,6 +760,71 @@ function AttachmentRow({
         reduce={reduce}
       />
     </motion.li>
+  );
+}
+
+function DropzoneIcon({
+  dragging,
+  reduce,
+}: {
+  dragging: boolean;
+  reduce: boolean;
+}) {
+  return (
+    <motion.span
+      aria-hidden="true"
+      animate={
+        reduce
+          ? undefined
+          : {
+              y: dragging ? -4 : 0,
+              scale: dragging ? 1.08 : 1,
+            }
+      }
+      transition={ITEM_TRANSITION}
+      className="bg-muted text-foreground group-hover:bg-muted/80 group-data-[dragging=true]:bg-foreground group-data-[dragging=true]:text-background mb-3 grid size-11 place-items-center rounded-2xl transition-colors duration-200"
+    >
+      <Upload className="size-[18px]" />
+    </motion.span>
+  );
+}
+
+function DropzoneText({
+  maxReached,
+  title,
+  description,
+  count,
+  maxFiles,
+  maxFileSize,
+}: {
+  maxReached: boolean;
+  title: string;
+  description: string | undefined;
+  count: number;
+  maxFiles: number;
+  maxFileSize: number;
+}) {
+  if (maxReached) {
+    return (
+      <>
+        <span className="text-foreground text-sm font-semibold tracking-[-0.01em]">
+          Attachment limit reached
+        </span>
+        <span className="text-muted-foreground mt-1 text-xs leading-5">
+          {`${count} of ${maxFiles} attachments added`}
+        </span>
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="text-foreground text-sm font-semibold tracking-[-0.01em]">
+        {title}
+      </span>
+      <span className="text-muted-foreground mt-1 text-xs leading-5">
+        {description ?? `Maximum ${formatMaxSize(maxFileSize)} file size`}
+      </span>
+    </>
   );
 }
 
@@ -726,7 +872,9 @@ export function AttachmentUpload({
     onValueChange,
   });
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  useLayoutEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     const activeUrls = new Set(
@@ -742,7 +890,9 @@ export function AttachmentUpload({
 
   useEffect(
     () => () => {
-      for (const url of ownedUrlsRef.current) URL.revokeObjectURL(url);
+      for (const url of ownedUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
       ownedUrlsRef.current.clear();
       for (const timer of lifecycleTimersRef.current) {
         clearTimeout(timer);
@@ -753,20 +903,20 @@ export function AttachmentUpload({
   );
 
   const maxReached = items.length >= maxFiles;
-  const scheduleLifecycle = useCallback(
-    (callback: () => void, delay: number) => {
-      const timer = setTimeout(() => {
-        lifecycleTimersRef.current.delete(timer);
-        callback();
-      }, delay);
-      lifecycleTimersRef.current.add(timer);
-    },
-    []
-  );
+  const blocked = disabled || maxReached;
+  const scheduleLifecycle = useCallback((task: () => void, delay: number) => {
+    const timer = setTimeout(() => {
+      lifecycleTimersRef.current.delete(timer);
+      task();
+    }, delay);
+    lifecycleTimersRef.current.add(timer);
+  }, []);
 
   const addFiles = useCallback(
     (incomingFiles: File[]) => {
-      if (disabled || incomingFiles.length === 0) return;
+      if (disabled || incomingFiles.length === 0) {
+        return;
+      }
 
       const availableSlots = Math.max(0, maxFiles - items.length);
       if (availableSlots === 0) {
@@ -781,7 +931,9 @@ export function AttachmentUpload({
       const oversized = selectedFiles.filter((file) => file.size > maxFileSize);
       const accepted = selectedFiles.filter((file) => file.size <= maxFileSize);
 
-      if (oversized.length > 0) onFilesRejected?.(oversized, "too-large");
+      if (oversized.length > 0) {
+        onFilesRejected?.(oversized, "too-large");
+      }
       if (incomingFiles.length > selectedFiles.length) {
         onFilesRejected?.(
           incomingFiles.slice(selectedFiles.length),
@@ -807,7 +959,9 @@ export function AttachmentUpload({
         };
       });
 
-      if (added.length === 0) return;
+      if (added.length === 0) {
+        return;
+      }
       setItems([...items, ...added]);
       if (value === undefined) {
         const addedIds = added.map((item) => item.id);
@@ -816,7 +970,9 @@ export function AttachmentUpload({
           () => {
             setUploadingIds((current) => {
               const next = new Set(current);
-              for (const id of addedIds) next.delete(id);
+              for (const id of addedIds) {
+                next.delete(id);
+              }
               return next;
             });
             setUploadCompleteIds(
@@ -825,7 +981,9 @@ export function AttachmentUpload({
             scheduleLifecycle(() => {
               setUploadCompleteIds((current) => {
                 const next = new Set(current);
-                for (const id of addedIds) next.delete(id);
+                for (const id of addedIds) {
+                  next.delete(id);
+                }
                 return next;
               });
             }, UPLOAD_COMPLETE_HOLD_MS);
@@ -879,7 +1037,9 @@ export function AttachmentUpload({
 
   const requestRemove = useCallback(
     (item: AttachmentUploadItem) => {
-      if (removingIds.has(item.id)) return;
+      if (removingIds.has(item.id)) {
+        return;
+      }
 
       setRemovingIds((current) => new Set(current).add(item.id));
       scheduleLifecycle(
@@ -903,13 +1063,12 @@ export function AttachmentUpload({
   }, []);
   const closePreview = useCallback(() => setPreviewItem(null), []);
 
-  useEffect(() => {
-    if (previewItem && !items.some((item) => item.id === previewItem.id)) {
-      setPreviewItem(null);
-    }
-  }, [items, previewItem]);
+  // Close the preview in the same render when its item goes away.
+  if (previewItem && !items.some((item) => item.id === previewItem.id)) {
+    setPreviewItem(null);
+  }
 
-  const uploadOrder = Array.from(uploadingIds);
+  const uploadOrder = [...uploadingIds];
   const previewLayoutId = previewItem
     ? `attachment-image-${previewItem.id}`
     : undefined;
@@ -924,46 +1083,56 @@ export function AttachmentUpload({
           aria-label="Upload attachments"
           accept={accept}
           multiple={multiple}
-          disabled={disabled || maxReached}
+          disabled={blocked}
           tabIndex={-1}
           className="sr-only"
           onChange={(event) => {
-            addFiles(Array.from(event.currentTarget.files ?? []));
+            addFiles([...(event.currentTarget.files ?? [])]);
             event.currentTarget.value = "";
           }}
         />
 
         <motion.button
           type="button"
-          disabled={disabled || maxReached}
+          disabled={blocked}
           data-dragging={dragging}
           animate={reduce ? undefined : { scale: dragging ? 1.006 : 1 }}
           whileTap={reduce ? undefined : { scale: 0.995 }}
           transition={SPRING_PRESS}
           onClick={() => inputRef.current?.click()}
           onDragEnter={(event) => {
-            if (disabled || maxReached) return;
+            if (blocked) {
+              return;
+            }
             event.preventDefault();
             dragDepthRef.current += 1;
             setDragging(true);
           }}
           onDragOver={(event) => {
-            if (disabled || maxReached) return;
+            if (blocked) {
+              return;
+            }
             event.preventDefault();
             event.dataTransfer.dropEffect = "copy";
             setDragging(true);
           }}
           onDragLeave={(event) => {
-            if (disabled || maxReached) return;
+            if (blocked) {
+              return;
+            }
             event.preventDefault();
             dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-            if (dragDepthRef.current === 0) setDragging(false);
+            if (dragDepthRef.current === 0) {
+              setDragging(false);
+            }
           }}
           onDrop={(event) => {
-            if (disabled || maxReached) return;
+            if (blocked) {
+              return;
+            }
             event.preventDefault();
             resetDrag();
-            addFiles(Array.from(event.dataTransfer.files));
+            addFiles([...event.dataTransfer.files]);
           }}
           className={cn(
             "group relative isolate flex min-h-52 w-full max-w-full min-w-0 flex-col items-center justify-center overflow-hidden rounded-[2rem] p-2 text-center outline-none",
@@ -976,30 +1145,15 @@ export function AttachmentUpload({
             aria-hidden="true"
             className="border-muted-foreground/25 group-hover:border-muted-foreground/45 group-data-[dragging=true]:border-foreground/65 group-data-[dragging=true]:bg-muted/20 absolute inset-2 -z-10 rounded-[1.5rem] border border-dashed transition-[border-color,background-color] duration-200"
           />
-          <motion.span
-            aria-hidden="true"
-            animate={
-              reduce
-                ? undefined
-                : {
-                    y: dragging ? -4 : 0,
-                    scale: dragging ? 1.08 : 1,
-                  }
-            }
-            transition={ITEM_TRANSITION}
-            className="bg-muted text-foreground group-hover:bg-muted/80 group-data-[dragging=true]:bg-foreground group-data-[dragging=true]:text-background mb-3 grid size-11 place-items-center rounded-2xl transition-colors duration-200"
-          >
-            <Upload className="size-[18px]" />
-          </motion.span>
-          <span className="text-foreground text-sm font-semibold tracking-[-0.01em]">
-            {maxReached ? "Attachment limit reached" : title}
-          </span>
-          <span className="text-muted-foreground mt-1 text-xs leading-5">
-            {maxReached
-              ? `${items.length} of ${maxFiles} attachments added`
-              : (description ??
-                `Maximum ${formatMaxSize(maxFileSize)} file size`)}
-          </span>
+          <DropzoneIcon dragging={dragging} reduce={reduce} />
+          <DropzoneText
+            maxReached={maxReached}
+            title={title}
+            description={description}
+            count={items.length}
+            maxFiles={maxFiles}
+            maxFileSize={maxFileSize}
+          />
         </motion.button>
 
         {items.length > 0 ? (
@@ -1014,43 +1168,41 @@ export function AttachmentUpload({
               {attachmentsLabel}
             </h3>
 
-            {items.length > 0 ? (
-              <ul
-                className={cn(
-                  "mt-3 max-w-full min-w-0 space-y-2",
-                  classNames?.list
-                )}
-              >
-                <AnimatePresence initial={uploadOrder.length > 0}>
-                  {items.map((item) => (
-                    <AttachmentRow
-                      key={item.id}
-                      item={item}
-                      playing={playingId === item.id}
-                      uploading={
-                        uploadingIds.has(item.id) || item.status === "uploading"
-                      }
-                      uploadComplete={
-                        uploadCompleteIds.has(item.id) ||
-                        item.status === "complete"
-                      }
-                      failed={item.status === "failed"}
-                      removing={removingIds.has(item.id)}
-                      arrivalIndex={uploadOrder.indexOf(item.id)}
-                      imageLayoutId={
-                        reduce ? undefined : `attachment-image-${item.id}`
-                      }
-                      onAudioToggle={onAudioToggle}
-                      onImagePreview={setPreviewItem}
-                      onRemove={requestRemove}
-                      onRetry={onRetry}
-                      reduce={reduce}
-                      className={classNames?.row}
-                    />
-                  ))}
-                </AnimatePresence>
-              </ul>
-            ) : null}
+            <ul
+              className={cn(
+                "mt-3 max-w-full min-w-0 space-y-2",
+                classNames?.list
+              )}
+            >
+              <AnimatePresence initial={uploadOrder.length > 0}>
+                {items.map((item) => (
+                  <AttachmentRow
+                    key={item.id}
+                    item={item}
+                    playing={playingId === item.id}
+                    uploading={
+                      uploadingIds.has(item.id) || item.status === "uploading"
+                    }
+                    uploadComplete={
+                      uploadCompleteIds.has(item.id) ||
+                      item.status === "complete"
+                    }
+                    failed={item.status === "failed"}
+                    removing={removingIds.has(item.id)}
+                    arrivalIndex={uploadOrder.indexOf(item.id)}
+                    imageLayoutId={
+                      reduce ? undefined : `attachment-image-${item.id}`
+                    }
+                    onAudioToggle={onAudioToggle}
+                    onImagePreview={setPreviewItem}
+                    onRemove={requestRemove}
+                    onRetry={onRetry}
+                    reduce={reduce}
+                    className={classNames?.row}
+                  />
+                ))}
+              </AnimatePresence>
+            </ul>
           </section>
         ) : null}
 

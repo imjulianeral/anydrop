@@ -1,14 +1,10 @@
 "use client";
 
-import { forwardRef } from "react";
+import type { Ref } from "react";
 
 import { Magnetic } from "../magnetic";
-import {
-  Button,
-  ButtonLink,
-  type ButtonLinkProps,
-  type ButtonProps,
-} from "./base";
+import { Button, ButtonLink } from "./base";
+import type { ButtonLinkProps, ButtonProps } from "./base";
 
 export interface MagneticButtonProps extends ButtonProps {
   /** Magnetic pull strength. Default 0.25. */
@@ -17,13 +13,13 @@ export interface MagneticButtonProps extends ButtonProps {
   magneticClassName?: string;
 }
 
-export const MagneticButton = forwardRef<
-  HTMLButtonElement,
-  MagneticButtonProps
->(function MagneticButton(
-  { strength = 0.25, magneticClassName, children, ...rest },
-  ref
-) {
+export function MagneticButton({
+  strength = 0.25,
+  magneticClassName,
+  children,
+  ref,
+  ...rest
+}: MagneticButtonProps & { ref?: Ref<HTMLButtonElement> }) {
   return (
     <Magnetic strength={strength} className={magneticClassName}>
       <Button ref={ref} {...rest}>
@@ -31,7 +27,7 @@ export const MagneticButton = forwardRef<
       </Button>
     </Magnetic>
   );
-});
+}
 
 export interface MagneticButtonLinkProps extends ButtonLinkProps {
   /** Magnetic pull strength. Default 0.25. */
@@ -40,13 +36,13 @@ export interface MagneticButtonLinkProps extends ButtonLinkProps {
   magneticClassName?: string;
 }
 
-export const MagneticButtonLink = forwardRef<
-  HTMLAnchorElement,
-  MagneticButtonLinkProps
->(function MagneticButtonLink(
-  { strength = 0.25, magneticClassName, children, ...rest },
-  ref
-) {
+export function MagneticButtonLink({
+  strength = 0.25,
+  magneticClassName,
+  children,
+  ref,
+  ...rest
+}: MagneticButtonLinkProps & { ref?: Ref<HTMLAnchorElement> }) {
   return (
     <Magnetic strength={strength} className={magneticClassName}>
       <ButtonLink ref={ref} {...rest}>
@@ -54,4 +50,4 @@ export const MagneticButtonLink = forwardRef<
       </ButtonLink>
     </Magnetic>
   );
-});
+}

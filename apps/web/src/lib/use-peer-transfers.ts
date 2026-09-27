@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppSession } from "#/components/app-session.tsx";
 import type { Transfer } from "#/lib/api.ts";
 import { listGroupTransfers, listTransfers } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { toast } from "#/lib/toast.ts";
 import {
   applyTransferUsage,
@@ -64,42 +65,47 @@ export function usePeerTransfers(peerId: string | null, groupId?: string) {
       }));
     });
     const load = async () => {
-      try {
-        const payload = groupId
-          ? await listGroupTransfers(token, groupId)
-          : await listTransfers(token, peerId ?? "");
-        if (!cancelled) {
-          const visible = payload.transfers.filter((transfer) =>
-            belongsToHistory(transfer, self.id, peerId, groupId)
-          );
-          setHistory((current) => ({
-            peerId: historyId,
-            transfers: mergeTransfers(
-              visible,
-              current.peerId === historyId
-                ? current.transfers.filter((transfer) =>
-                    belongsToHistory(transfer, self.id, peerId, groupId)
-                  )
-                : []
-            ),
-            loaded: true,
-          }));
+      await attempt(
+        async () => {
+          const payload = groupId
+            ? await listGroupTransfers(token, groupId)
+            : await listTransfers(token, peerId ?? "");
+          if (!cancelled) {
+            const visible = payload.transfers.filter((transfer) =>
+              belongsToHistory(transfer, self.id, peerId, groupId)
+            );
+            setHistory((current) => ({
+              peerId: historyId,
+              transfers: mergeTransfers(
+                visible,
+                current.peerId === historyId
+                  ? current.transfers.filter((transfer) =>
+                      belongsToHistory(transfer, self.id, peerId, groupId)
+                    )
+                  : []
+              ),
+              loaded: true,
+            }));
+          }
+        },
+        {
+          onError: (error) => {
+            if (cancelled) {
+              return;
+            }
+            toast.add({
+              title: "Could not load shared items",
+              description: error instanceof Error ? error.message : undefined,
+              type: "error",
+            });
+            setHistory((current) => ({
+              peerId: historyId,
+              transfers: current.peerId === historyId ? current.transfers : [],
+              loaded: true,
+            }));
+          },
         }
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        toast.add({
-          title: "Could not load shared items",
-          description: error instanceof Error ? error.message : undefined,
-          type: "error",
-        });
-        setHistory((current) => ({
-          peerId: historyId,
-          transfers: current.peerId === historyId ? current.transfers : [],
-          loaded: true,
-        }));
-      }
+      );
     };
     void load();
     return () => {

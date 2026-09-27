@@ -36,6 +36,11 @@ interface StreamOptions {
   onProgress: (ratio: number) => void;
 }
 
+interface SealStreamOptions extends StreamOptions {
+  /** Sees each plaintext record before it is encrypted and wiped. */
+  onPlaintext?: (bytes: Uint8Array) => void;
+}
+
 export interface SecretFileInfo extends SecretFileMetadata {
   prefix: string;
 }
@@ -69,7 +74,7 @@ export const sealStreamV3 = async (
   file: File,
   masterKey: Uint8Array,
   sink: WritableStream<Uint8Array>,
-  options: StreamOptions & SealOptions
+  options: SealStreamOptions & SealOptions
 ): Promise<StreamV3Secret> => {
   const secret: StreamV3Secret = {
     ...(await createV3Profile(masterKey, options)),
@@ -90,7 +95,7 @@ const sealStreamWithKey = async <T extends StreamSecret | StreamV3Secret>(
   secret: T,
   derive: () => Promise<Uint8Array>,
   sink: WritableStream<Uint8Array>,
-  options: StreamOptions
+  options: SealStreamOptions
 ): Promise<T> => {
   const metadata = encodeFileMetadata(file);
   const writer = sink.getWriter();
@@ -134,6 +139,7 @@ const sealStreamWithKey = async <T extends StreamSecret | StreamV3Secret>(
       if (bytes.length !== Math.min(secretRecordBytes, file.size - offset)) {
         throw new Error("The source file changed during encryption.");
       }
+      options.onPlaintext?.(bytes);
       try {
         // oxlint-disable-next-line no-await-in-loop
         await writer.write(push(bytes));

@@ -71,11 +71,10 @@ export const statsFromEvents = (
       continue;
     }
     const row = rows[rowIndex];
-    if (event.kind === "view") {
-      rows[rowIndex] = { ...row, views: row.views + 1 };
-    } else {
-      rows[rowIndex] = { ...row, downloads: row.downloads + 1 };
-    }
+    rows[rowIndex] =
+      event.kind === "view"
+        ? { ...row, views: row.views + 1 }
+        : { ...row, downloads: row.downloads + 1 };
   }
 
   return rows;

@@ -83,11 +83,13 @@ export function DockItem({
   const hoverId = dock?.hoveredId ?? null;
   const hovered = hoverId === id;
   const onHover = () => {
-    if (dock?.canHover) dock.setHoveredId(id);
+    if (dock?.canHover) {
+      dock.setHoveredId(id);
+    }
   };
   const hover = (
     <AnimatePresence initial={false}>
-      {hoverId !== null ? (
+      {hoverId === null ? null : (
         <motion.span
           key="hover"
           initial={
@@ -110,7 +112,7 @@ export function DockItem({
             />
           ) : null}
         </motion.span>
-      ) : null}
+      )}
     </AnimatePresence>
   );
 
@@ -121,9 +123,8 @@ export function DockItem({
       className="bg-primary/5 pointer-events-none absolute inset-0.5 -z-10 rounded-xl"
     />
   ) : null;
-  const sharedStyle = { width: size, height: size };
   const sharedClass = cn(
-    "text-foreground relative isolate flex shrink-0 items-center justify-center rounded-full",
+    "text-foreground relative isolate flex size-(--dock-item-size) shrink-0 items-center justify-center rounded-full",
     className
   );
 
@@ -135,7 +136,7 @@ export function DockItem({
         onClick={onClick}
         aria-label={rest["aria-label"]}
         aria-pressed={active}
-        style={sharedStyle}
+        style={{ "--dock-item-size": `${size}px` }}
         className={cn(
           sharedClass,
           "cursor-pointer border-0 bg-transparent p-0 outline-none",
@@ -151,7 +152,11 @@ export function DockItem({
 
   // Children carry their own link or button (and its accessible name).
   return (
-    <div style={sharedStyle} className={sharedClass} onMouseEnter={onHover}>
+    <div
+      style={{ "--dock-item-size": `${size}px` }}
+      className={sharedClass}
+      onMouseEnter={onHover}
+    >
       {pill}
       {hover}
       {children}

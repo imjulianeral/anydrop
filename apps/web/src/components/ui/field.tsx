@@ -36,12 +36,17 @@ function FieldLegend({
   );
 }
 
-function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
+function FieldGroup({
+  className,
+  density = "default",
+  ...props
+}: React.ComponentProps<"div"> & { density?: "default" | "compact" }) {
   return (
     <div
       data-slot="field-group"
       className={cn(
         "group/field-group @container/field-group flex w-full flex-col gap-6 data-[slot=checkbox-group]:gap-3 *:data-[slot=field-group]:gap-4",
+        density === "compact" && "gap-2",
         className
       )}
       {...props}
@@ -70,14 +75,21 @@ const fieldVariants = cva(
 function Field({
   className,
   orientation = "vertical",
+  density = "default",
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
+}: React.ComponentProps<"div"> &
+  VariantProps<typeof fieldVariants> & { density?: "default" | "compact" }) {
   return (
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- <fieldset> brings form styling to a layout wrapper.
       role="group"
       data-slot="field"
       data-orientation={orientation}
-      className={cn(fieldVariants({ orientation }), className)}
+      className={cn(
+        fieldVariants({ orientation }),
+        density === "compact" && "gap-1.5",
+        className
+      )}
       {...props}
     />
   );
@@ -126,7 +138,11 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
+function FieldDescription({
+  className,
+  size = "default",
+  ...props
+}: React.ComponentProps<"p"> & { size?: "default" | "sm" }) {
   return (
     <p
       data-slot="field-description"
@@ -134,6 +150,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
         "text-muted-foreground text-left text-sm leading-normal font-normal group-has-data-horizontal/field:text-balance [[data-variant=legend]+&]:-mt-1.5",
         "last:mt-0 nth-last-2:-mt-1",
         "[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
+        size === "sm" && "text-xs",
         className
       )}
       {...props}
@@ -192,7 +209,7 @@ function FieldError({
       ...new Map(errors.map((error) => [error?.message, error])).values(),
     ];
 
-    if (uniqueErrors?.length == 1) {
+    if (uniqueErrors.length === 1) {
       return uniqueErrors[0]?.message;
     }
 

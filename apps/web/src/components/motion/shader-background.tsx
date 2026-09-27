@@ -3,54 +3,56 @@
 
 import {
   ColorPanels,
-  type ColorPanelsProps,
   Dithering,
-  type DitheringProps,
   DotGrid,
-  type DotGridProps,
   DotOrbit,
-  type DotOrbitProps,
   GodRays,
-  type GodRaysProps,
   GrainGradient,
-  type GrainGradientProps,
   Metaballs,
-  type MetaballsProps,
   MeshGradient,
-  type MeshGradientProps,
   NeuroNoise,
-  type NeuroNoiseProps,
   PerlinNoise,
-  type PerlinNoiseProps,
   PulsingBorder,
-  type PulsingBorderProps,
   SimplexNoise,
-  type SimplexNoiseProps,
   SmokeRing,
-  type SmokeRingProps,
   Spiral,
-  type SpiralProps,
   StaticMeshGradient,
-  type StaticMeshGradientProps,
   StaticRadialGradient,
-  type StaticRadialGradientProps,
   Swirl,
-  type SwirlProps,
   Voronoi,
-  type VoronoiProps,
   Warp,
-  type WarpProps,
   Water,
-  type WaterProps,
   Waves,
-  type WavesProps,
+} from "@paper-design/shaders-react";
+import type {
+  ColorPanelsProps,
+  DitheringProps,
+  DotGridProps,
+  DotOrbitProps,
+  GodRaysProps,
+  GrainGradientProps,
+  MetaballsProps,
+  MeshGradientProps,
+  NeuroNoiseProps,
+  PerlinNoiseProps,
+  PulsingBorderProps,
+  SimplexNoiseProps,
+  SmokeRingProps,
+  SpiralProps,
+  StaticMeshGradientProps,
+  StaticRadialGradientProps,
+  SwirlProps,
+  VoronoiProps,
+  WarpProps,
+  WaterProps,
+  WavesProps,
 } from "@paper-design/shaders-react";
 import { useReducedMotion } from "motion/react";
 import type { ComponentType } from "react";
 
 import { cn } from "#/lib/utils.ts";
 
-type ShaderVariantProps = {
+interface ShaderVariantProps {
   "mesh-gradient": MeshGradientProps;
   "grain-gradient": GrainGradientProps;
   "dot-grid": DotGridProps;
@@ -72,7 +74,7 @@ type ShaderVariantProps = {
   "static-mesh-gradient": StaticMeshGradientProps;
   "simplex-noise": SimplexNoiseProps;
   "perlin-noise": PerlinNoiseProps;
-};
+}
 
 export type ShaderBackgroundVariant = keyof ShaderVariantProps;
 

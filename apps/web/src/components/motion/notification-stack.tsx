@@ -320,13 +320,12 @@ export function NotificationStack({
                 }}
                 transition={cardTransition}
                 className={cn(
-                  "border-border/60 bg-background block rounded-2xl border px-4",
+                  "border-border/60 bg-background z-(--card-layer) col-start-1 row-start-(--card-row) block rounded-2xl border px-4",
                   classNames?.card
                 )}
                 style={{
-                  zIndex: visibleItems.length - index,
-                  gridColumn: 1,
-                  gridRow: isExpanded ? index + 1 : 1,
+                  "--card-layer": visibleItems.length - index,
+                  "--card-row": isExpanded ? index + 1 : 1,
                 }}
               >
                 <span
@@ -355,7 +354,7 @@ export function NotificationStack({
         >
           <span
             className={cn(
-              "grid size-7 shrink-0 place-items-center rounded-full bg-orange-600 text-xs font-medium text-white shadow-[inset_0_1px_2px_rgb(0_0_0/0.2),inset_0_-1px_0_rgb(255_255_255/0.16)] dark:bg-orange-500",
+              "bg-notification grid size-7 shrink-0 place-items-center rounded-full text-xs font-medium text-white shadow-[inset_0_1px_2px_rgb(0_0_0/0.2),inset_0_-1px_0_rgb(255_255_255/0.16)]",
               classNames?.count
             )}
           >

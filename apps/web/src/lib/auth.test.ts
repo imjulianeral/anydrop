@@ -113,16 +113,18 @@ describe("authentication", () => {
           )
         )
     );
-    const error = await authRequest("account", "csrf", undefined, "DELETE")
+    const failure = await authRequest("account", "csrf", undefined, "DELETE")
       .then(() => null)
-      .catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(AuthError);
-    expect(isReauthRequired(error)).toBe(true);
-    expect(isReauthRequired(new Error("other"))).toBe(false);
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(AuthError);
+    expect(isReauthRequired(failure)).toBeTruthy();
+    expect(isReauthRequired(new Error("other"))).toBeFalsy();
   });
 
   test("tells the password manager to forget passkeys this site no longer knows", async () => {
-    const signalUnknownCredential = vi.fn(() => Promise.resolve());
+    const signalUnknownCredential = vi.fn<() => Promise<void>>(() =>
+      Promise.resolve()
+    );
     vi.stubGlobal("PublicKeyCredential", { signalUnknownCredential });
     vi.mocked(startAuthentication).mockResolvedValue({
       id: "stale",
@@ -167,8 +169,10 @@ describe("authentication", () => {
       ],
       reauth_until: "2026-09-26T00:10:00Z",
     };
-    const signalAllAcceptedCredentials = vi.fn(() => Promise.resolve());
-    const signalCurrentUserDetails = vi.fn(() =>
+    const signalAllAcceptedCredentials = vi.fn<() => Promise<void>>(() =>
+      Promise.resolve()
+    );
+    const signalCurrentUserDetails = vi.fn<() => Promise<void>>(() =>
       Promise.reject(new Error("Not allowed"))
     );
     vi.stubGlobal("PublicKeyCredential", {

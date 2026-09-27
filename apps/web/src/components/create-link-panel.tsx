@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
 import { ExpirationOptions } from "#/components/expiration-options.tsx";
@@ -22,8 +23,10 @@ import {
   createTextTransfer,
 } from "#/lib/api.ts";
 import type { ShortLink } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
+import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
 import { beginFileTransfer } from "#/lib/file-transfers.ts";
 import { withPreparedFile } from "#/lib/large-secrets.ts";
 import { linkPageUrl, rememberLinkKey } from "#/lib/link-keys.ts";
@@ -82,6 +85,244 @@ const reportError = (error: unknown, title: string) => {
   });
 };
 
+interface LinkFormProps {
+  busy: boolean;
+  expiration: ExpirationSettings;
+  onExpirationChange: (value: ExpirationSettings) => void;
+  password: string | null;
+  onPasswordChange: (password: string | null) => void;
+  passwordTooShort: boolean;
+  value: string;
+  onValueChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+/** The copy button waits until a started file link is either sent or dropped. */
+function showCopyLink(
+  kind: LinkKind | null,
+  draft: { file: File | null; password: string | null; busy: boolean }
+) {
+  if (kind !== "file") {
+    return true;
+  }
+  return draft.file === null && draft.password === null && !draft.busy;
+}
+
+function PanelHeader({
+  selected,
+  busy,
+  backButton,
+  onBack,
+  onClose,
+}: {
+  selected: (typeof choices)[number] | undefined;
+  busy: boolean;
+  backButton: RefObject<HTMLButtonElement | null>;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  if (!selected) {
+    return (
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-foreground text-base font-semibold">
+          Create a link
+        </h2>
+        <button
+          type="button"
+          className={closeButtonClass}
+          aria-label="Close create link modal"
+          onClick={onClose}
+        >
+          <X aria-hidden="true" className="size-4" />
+        </button>
+      </div>
+    );
+  }
+  const DetailIcon = selected.icon;
+  return (
+    <>
+      <div className="mb-3 flex items-start justify-between">
+        <DetailIcon aria-hidden="true" className="text-foreground size-5" />
+        <button
+          ref={backButton}
+          type="button"
+          className={closeButtonClass}
+          aria-label="Back to link options"
+          disabled={busy}
+          onClick={onBack}
+        >
+          <X aria-hidden="true" className="size-4" />
+        </button>
+      </div>
+      <h2 className="text-foreground text-xl font-semibold tracking-tight">
+        {selected.label}
+      </h2>
+      <p className="text-muted-foreground mt-2 text-sm">
+        {selected.description}
+      </p>
+      <hr className="border-border my-4" />
+    </>
+  );
+}
+
+function UrlLinkForm({
+  busy,
+  expiration,
+  onExpirationChange,
+  password,
+  onPasswordChange,
+  passwordTooShort,
+  value,
+  onValueChange,
+  onCancel,
+  onSubmit,
+}: LinkFormProps) {
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <Input
+        label="Destination URL"
+        type="url"
+        placeholder="https://"
+        value={value}
+        onChange={onValueChange}
+        disabled={busy}
+        required
+      />
+      <ExpirationOptions
+        value={expiration}
+        onChange={onExpirationChange}
+        disabled={busy}
+        kind="url"
+      />
+      <PasswordOptions
+        password={password}
+        onChange={onPasswordChange}
+        disabled={busy}
+      />
+      <div className="mt-1 flex gap-2">
+        <button
+          type="button"
+          className={cancelButtonClass}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className={actionButtonClass}
+          disabled={busy || value.trim() === "" || passwordTooShort}
+          aria-busy={busy}
+        >
+          {busy ? "Shortening…" : "Shorten URL"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function MessageLinkForm({
+  id,
+  busy,
+  expiration,
+  onExpirationChange,
+  password,
+  onPasswordChange,
+  passwordTooShort,
+  value,
+  onValueChange,
+  onCancel,
+  onSubmit,
+}: LinkFormProps & { id: string }) {
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <label htmlFor={id} className="text-sm font-medium">
+        Message
+      </label>
+      <textarea
+        id={id}
+        className="border-border bg-background min-h-28 w-full resize-y rounded-2xl border p-3 text-sm outline-none focus-visible:ring-2"
+        placeholder="Write a message"
+        value={value}
+        maxLength={maxTextBytes}
+        disabled={busy}
+        required
+        onChange={(event) => onValueChange(event.target.value)}
+      />
+      <ExpirationOptions
+        value={expiration}
+        onChange={onExpirationChange}
+        disabled={busy}
+        kind="text"
+      />
+      <PasswordOptions
+        password={password}
+        onChange={onPasswordChange}
+        disabled={busy}
+      />
+      <div className="mt-1 flex gap-2">
+        <button
+          type="button"
+          className={cancelButtonClass}
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className={actionButtonClass}
+          disabled={busy || value.trim() === "" || passwordTooShort}
+          aria-busy={busy}
+        >
+          {busy ? "Creating…" : "Create message link"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function UploadProgress({
+  phase,
+  progress,
+  onCancel,
+}: {
+  phase: string;
+  progress: number | null;
+  onCancel: () => void;
+}) {
+  const ratio = progress ?? 0;
+  return (
+    <div className="flex flex-col gap-2">
+      <progress
+        className="h-1 w-full"
+        max={1}
+        value={ratio}
+        aria-label={`${phase} file`}
+      />
+      <output aria-live="polite" className="text-muted-foreground text-xs">
+        {phase} · {Math.round(ratio * 100)}%
+      </output>
+      <button type="button" className={cancelButtonClass} onClick={onCancel}>
+        Cancel upload
+      </button>
+    </div>
+  );
+}
+
 export function CreateLinkPanel({
   created,
   onCreated,
@@ -122,7 +363,6 @@ export function CreateLinkPanel({
   const [phase, setPhase] = useState("Encrypting");
   const passwordTooShort = password !== null && password.trim().length < 12;
   const selected = choices.find((choice) => choice.kind === kind);
-  const DetailIcon = selected?.icon;
 
   useEffect(() => () => upload.current?.abort(), []);
   useEffect(() => () => clearTimeout(copyResetTimer.current), []);
@@ -185,20 +425,22 @@ export function CreateLinkPanel({
     if (!start()) {
       return;
     }
-    try {
-      const { short_link: link } = await createShortLink(
-        token,
-        destination,
-        expiration,
-        password ?? undefined
-      );
-      finish(link, "Short link created");
-      setUrl("");
-    } catch (error) {
-      reportError(error, "Could not shorten URL");
-    } finally {
-      stop();
-    }
+    await attempt(
+      async () => {
+        const { short_link: link } = await createShortLink(
+          token,
+          destination,
+          expiration,
+          password ?? undefined
+        );
+        finish(link, "Short link created");
+        setUrl("");
+      },
+      {
+        onError: (error) => reportError(error, "Could not shorten URL"),
+        onSettled: stop,
+      }
+    );
   };
 
   const createMessage = async () => {
@@ -220,27 +462,31 @@ export function CreateLinkPanel({
       return;
     }
     let masterKey: Uint8Array | undefined;
-    try {
-      const prepared = await prepareText(body);
-      masterKey = prepared.masterKey;
-      const { short_link: link } = await createTextTransfer(token, {
-        body: prepared.body,
-        secret: prepared.secret,
-        expiration,
-        password: password ?? undefined,
-      });
-      if (!link) {
-        throw new Error("Could not create link");
+    await attempt(
+      async () => {
+        const prepared = await prepareText(body);
+        ({ masterKey } = prepared);
+        const { short_link: link } = await createTextTransfer(token, {
+          body: prepared.body,
+          secret: prepared.secret,
+          expiration,
+          password: password ?? undefined,
+        });
+        if (!link) {
+          throw new Error("Could not create link");
+        }
+        rememberLinkKey(link.code, masterKey);
+        finish(link, "Message link created");
+        setMessage("");
+      },
+      {
+        onError: (error) => reportError(error, "Could not create message link"),
+        onSettled: () => {
+          masterKey?.fill(0);
+          stop();
+        },
       }
-      rememberLinkKey(link.code, masterKey);
-      finish(link, "Message link created");
-      setMessage("");
-    } catch (error) {
-      reportError(error, "Could not create message link");
-    } finally {
-      masterKey?.fill(0);
-      stop();
-    }
+    );
   };
 
   const createFile = async () => {
@@ -258,59 +504,66 @@ export function CreateLinkPanel({
     });
     setPhase("Encrypting");
     setProgress(0);
-    try {
-      await withPreparedFile(
-        file,
-        {},
-        async (prepared) => {
-          setPhase("Uploading");
-          setProgress(0);
-          progressTransfer.update("Uploading", 0, prepared.file.size);
-          const transfer = await createFileTransfer(token, {
-            filename: prepared.file.name,
-            byteSize: prepared.file.size,
-            contentType: prepared.file.type || "application/octet-stream",
-            secret: prepared.secret,
-            expiration,
-          });
-          const completed = await uploadFile(
-            token,
-            transfer.transfer.id,
-            transfer.upload,
-            prepared.file,
-            (ratio) => {
-              setProgress(ratio);
-              progressTransfer.update("Uploading", ratio, prepared.file.size);
-            },
-            controller.signal,
-            password ?? undefined
-          );
-          if (!completed.short_link) {
-            throw new Error("Could not create link");
+    await attempt(
+      async () => {
+        await withPreparedFile(
+          file,
+          {},
+          async (prepared) => {
+            setPhase("Uploading");
+            setProgress(0);
+            progressTransfer.update("Uploading", 0, prepared.file.size);
+            const transfer = await createFileTransfer(token, {
+              filename: prepared.file.name,
+              byteSize: prepared.file.size,
+              contentType: prepared.file.type || "application/octet-stream",
+              secret: prepared.secret,
+              expiration,
+            });
+            const completed = await uploadFile(
+              token,
+              transfer.transfer.id,
+              transfer.upload,
+              prepared.file,
+              (ratio) => {
+                setProgress(ratio);
+                progressTransfer.update("Uploading", ratio, prepared.file.size);
+              },
+              controller.signal,
+              password ?? undefined,
+              prepared.signals
+            );
+            if (!completed.short_link) {
+              throw new Error("Could not create link");
+            }
+            rememberLinkKey(completed.short_link.code, prepared.masterKey);
+            finish(completed.short_link, "File link created");
+            setAttachment(null);
+          },
+          controller.signal,
+          (ratio) => {
+            setProgress(ratio);
+            progressTransfer.update("Encrypting", ratio, file.size);
           }
-          rememberLinkKey(completed.short_link.code, prepared.masterKey);
-          finish(completed.short_link, "File link created");
-          setAttachment(null);
+        );
+        progressTransfer.done();
+      },
+      {
+        onError: (error) => {
+          if (controller.signal.aborted) {
+            progressTransfer.cancel();
+          } else {
+            progressTransfer.fail();
+            reportError(error, "Could not create file link");
+          }
         },
-        controller.signal,
-        (ratio) => {
-          setProgress(ratio);
-          progressTransfer.update("Encrypting", ratio, file.size);
-        }
-      );
-      progressTransfer.done();
-    } catch (error) {
-      if (controller.signal.aborted) {
-        progressTransfer.cancel();
-      } else {
-        progressTransfer.fail();
-        reportError(error, "Could not create file link");
+        onSettled: () => {
+          upload.current = null;
+          setProgress(null);
+          stop();
+        },
       }
-    } finally {
-      upload.current = null;
-      setProgress(null);
-      stop();
-    }
+    );
   };
 
   const copy = async () => {
@@ -329,51 +582,25 @@ export function CreateLinkPanel({
     }
   };
 
+  const formProps = {
+    busy,
+    expiration,
+    onExpirationChange: setExpiration,
+    password,
+    onPasswordChange: setPassword,
+    passwordTooShort,
+    onCancel: () => setKind(null),
+  };
+
   return (
     <section className="flex min-w-0 flex-col" aria-label="Create a link">
-      {selected ? (
-        <>
-          <div className="mb-3 flex items-start justify-between">
-            {DetailIcon ? (
-              <DetailIcon
-                aria-hidden="true"
-                className="text-foreground size-5"
-              />
-            ) : null}
-            <button
-              ref={backButton}
-              type="button"
-              className={closeButtonClass}
-              aria-label="Back to link options"
-              disabled={busy}
-              onClick={() => setKind(null)}
-            >
-              <X aria-hidden="true" className="size-4" />
-            </button>
-          </div>
-          <h2 className="text-foreground text-xl font-semibold tracking-tight">
-            {selected.label}
-          </h2>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {selected.description}
-          </p>
-          <hr className="border-border my-4" />
-        </>
-      ) : (
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-foreground text-base font-semibold">
-            Create a link
-          </h2>
-          <button
-            type="button"
-            className={closeButtonClass}
-            aria-label="Close create link modal"
-            onClick={onClose}
-          >
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-      )}
+      <PanelHeader
+        selected={selected}
+        busy={busy}
+        backButton={backButton}
+        onBack={() => setKind(null)}
+        onClose={onClose}
+      />
       {kind === null ? (
         <fieldset className="flex min-w-0 flex-col gap-2">
           <legend className="sr-only">Link type</legend>
@@ -386,7 +613,7 @@ export function CreateLinkPanel({
                 }}
                 key={choice.kind}
                 type="button"
-                className="bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08] flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition-[background-color,transform] focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
+                className="bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08] flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
                 onClick={() => setKind(choice.kind)}
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0" />
@@ -397,104 +624,21 @@ export function CreateLinkPanel({
         </fieldset>
       ) : null}
       {kind === "url" ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void shorten();
-          }}
-        >
-          <Input
-            label="Destination URL"
-            type="url"
-            placeholder="https://"
-            value={url}
-            onChange={setUrl}
-            disabled={busy}
-            required
-          />
-          <ExpirationOptions
-            value={expiration}
-            onChange={setExpiration}
-            disabled={busy}
-            kind="url"
-          />
-          <PasswordOptions
-            password={password}
-            onChange={setPassword}
-            disabled={busy}
-          />
-          <div className="mt-1 flex gap-2">
-            <button
-              type="button"
-              className={cancelButtonClass}
-              disabled={busy}
-              onClick={() => setKind(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={actionButtonClass}
-              disabled={busy || url.trim() === "" || passwordTooShort}
-              aria-busy={busy}
-            >
-              {busy ? "Shortening…" : "Shorten URL"}
-            </button>
-          </div>
-        </form>
+        <UrlLinkForm
+          {...formProps}
+          value={url}
+          onValueChange={setUrl}
+          onSubmit={() => void shorten()}
+        />
       ) : null}
       {kind === "text" ? (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void createMessage();
-          }}
-        >
-          <label htmlFor={messageId} className="text-sm font-medium">
-            Message
-          </label>
-          <textarea
-            id={messageId}
-            className="border-border bg-background min-h-28 w-full resize-y rounded-2xl border p-3 text-sm outline-none focus-visible:ring-2"
-            placeholder="Write a message"
-            value={message}
-            maxLength={maxTextBytes}
-            disabled={busy}
-            required
-            onChange={(event) => setMessage(event.target.value)}
-          />
-          <ExpirationOptions
-            value={expiration}
-            onChange={setExpiration}
-            disabled={busy}
-            kind="text"
-          />
-          <PasswordOptions
-            password={password}
-            onChange={setPassword}
-            disabled={busy}
-          />
-          <div className="mt-1 flex gap-2">
-            <button
-              type="button"
-              className={cancelButtonClass}
-              disabled={busy}
-              onClick={() => setKind(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={actionButtonClass}
-              disabled={busy || message.trim() === "" || passwordTooShort}
-              aria-busy={busy}
-            >
-              {busy ? "Creating…" : "Create message link"}
-            </button>
-          </div>
-        </form>
+        <MessageLinkForm
+          {...formProps}
+          id={messageId}
+          value={message}
+          onValueChange={setMessage}
+          onSubmit={() => void createMessage()}
+        />
       ) : null}
       {kind === "file" ? (
         <div className="flex flex-col gap-4">
@@ -525,24 +669,11 @@ export function CreateLinkPanel({
             </p>
           ) : null}
           {busy ? (
-            <div className="flex flex-col gap-2">
-              <progress
-                className="h-1 w-full"
-                max={1}
-                value={progress ?? 0}
-                aria-label={`${phase} file`}
-              />
-              <output className="text-muted-foreground text-xs">
-                {phase} · {Math.round((progress ?? 0) * 100)}%
-              </output>
-              <button
-                type="button"
-                className={cancelButtonClass}
-                onClick={() => upload.current?.abort()}
-              >
-                Cancel upload
-              </button>
-            </div>
+            <UploadProgress
+              phase={phase}
+              progress={progress}
+              onCancel={() => upload.current?.abort()}
+            />
           ) : (
             <>
               <ExpirationOptions
@@ -579,8 +710,7 @@ export function CreateLinkPanel({
           )}
         </div>
       ) : null}
-      {created &&
-      (kind !== "file" || (file === null && password === null && !busy)) ? (
+      {created && showCopyLink(kind, { file, password, busy }) ? (
         <ActionSwapCascadeButton
           aria-live="polite"
           className="mt-5 w-full"

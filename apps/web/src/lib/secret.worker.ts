@@ -1,3 +1,5 @@
+import { hashFile } from "./content-signals.ts";
+import type { ContentSignals } from "./content-signals.ts";
 import {
   openSecret,
   openSecretV3,
@@ -30,7 +32,12 @@ export type SecretTask =
     };
 
 export type SecretResult =
-  | { ok: true; action: "seal"; value: SealedV3Secret }
+  | {
+      ok: true;
+      action: "seal";
+      value: SealedV3Secret;
+      signals?: ContentSignals;
+    }
   | { ok: true; action: "open"; value: OpenSecret }
   | { ok: false; error: string };
 
@@ -54,12 +61,13 @@ globalThis.addEventListener(
           { transfer: value.kind === "file" ? [value.bytes] : [] }
         );
       } else {
-        const value =
-          task.action === "seal-text-v3"
-            ? await sealTextV3(task.body, task)
-            : await sealFileV3(task.file, task);
+        const isFile = task.action === "seal-file-v3";
+        const signals = isFile ? await hashFile(task.file) : undefined;
+        const value = isFile
+          ? await sealFileV3(task.file, task)
+          : await sealTextV3(task.body, task);
         globalThis.postMessage(
-          { ok: true, action: "seal", value } satisfies SecretResult,
+          { ok: true, action: "seal", value, signals } satisfies SecretResult,
           { transfer: [value.ciphertext, value.masterKey.buffer] }
         );
       }

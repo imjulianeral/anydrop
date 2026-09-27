@@ -1,13 +1,8 @@
 "use client";
 // beui.dev/components/motion/animated-badge
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type HTMLMotionProps,
-  type Variants,
-} from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { HTMLMotionProps, Variants } from "motion/react";
 import type { ReactNode } from "react";
 
 import {
@@ -17,8 +12,8 @@ import {
   Info,
   LoaderCircle,
   X,
-  type RuneIcon,
 } from "#/components/rune-icons.tsx";
+import type { RuneIcon } from "#/components/rune-icons.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
@@ -133,18 +128,14 @@ export function AnimatedBadge({
   children,
   icon,
   showIcon = true,
-  pulse = status === "loading",
+  pulse: pulseProp,
   contentKey,
   className,
   ...rest
 }: AnimatedBadgeProps) {
+  const pulse = pulseProp ?? status === "loading";
   const reduce = useReducedMotion();
-  const Icon = ICONS[status];
-  const resolvedContentKey =
-    contentKey ??
-    (typeof children === "string" || typeof children === "number"
-      ? children
-      : status);
+  const resolvedContentKey = badgeContentKey(contentKey, children, status);
 
   return (
     <motion.span
@@ -168,34 +159,9 @@ export function AnimatedBadge({
         />
       ) : null}
       {showIcon ? (
-        <span className="relative z-10 inline-flex items-center justify-center overflow-hidden">
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span
-              key={status}
-              aria-hidden
-              data-badge-icon
-              variants={ICON_ROLL_VARIANTS}
-              initial={reduce ? false : "initial"}
-              animate={reduce ? { opacity: 1 } : "animate"}
-              exit={reduce ? undefined : "exit"}
-              className="inline-flex will-change-transform"
-            >
-              {status === "loading" && !reduce && !icon ? (
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="inline-flex"
-                >
-                  <Icon className={ICON_CLASS[size]} />
-                </motion.span>
-              ) : (
-                (icon ?? <Icon className={ICON_CLASS[size]} />)
-              )}
-            </motion.span>
-          </AnimatePresence>
-        </span>
+        <BadgeIcon status={status} size={size} icon={icon} reduce={reduce} />
       ) : null}
-      {children != null ? (
+      {children === null || children === undefined ? null : (
         <span className="relative z-10 inline-flex overflow-hidden">
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.span
@@ -211,7 +177,63 @@ export function AnimatedBadge({
             </motion.span>
           </AnimatePresence>
         </span>
-      ) : null}
+      )}
     </motion.span>
+  );
+}
+
+function badgeContentKey(
+  contentKey: AnimatedBadgeProps["contentKey"],
+  children: ReactNode,
+  status: AnimatedBadgeStatus
+) {
+  if (contentKey !== undefined) {
+    return contentKey;
+  }
+  return typeof children === "string" || typeof children === "number"
+    ? children
+    : status;
+}
+
+function BadgeIcon({
+  status,
+  size,
+  icon,
+  reduce,
+}: {
+  status: AnimatedBadgeStatus;
+  size: AnimatedBadgeSize;
+  icon: ReactNode;
+  reduce: boolean | null;
+}) {
+  const Icon = ICONS[status];
+  const spin = status === "loading" && !reduce && !icon;
+  return (
+    <span className="relative z-10 inline-flex items-center justify-center overflow-hidden">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={status}
+          aria-hidden
+          data-badge-icon
+          variants={ICON_ROLL_VARIANTS}
+          initial={reduce ? false : "initial"}
+          animate={reduce ? { opacity: 1 } : "animate"}
+          exit={reduce ? undefined : "exit"}
+          className="inline-flex will-change-transform"
+        >
+          {spin ? (
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="inline-flex"
+            >
+              <Icon className={ICON_CLASS[size]} />
+            </motion.span>
+          ) : (
+            (icon ?? <Icon className={ICON_CLASS[size]} />)
+          )}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }

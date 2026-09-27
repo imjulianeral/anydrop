@@ -7,6 +7,7 @@ import {
   startMultipartUpload,
 } from "#/lib/api.ts";
 import type { PartTarget, UploadedPart, UploadTarget } from "#/lib/api.ts";
+import type { ContentSignals } from "#/lib/content-signals.ts";
 
 const concurrency = 3;
 const attempts = 3;
@@ -19,7 +20,8 @@ export const uploadFile = async (
   file: File,
   onProgress: (ratio: number) => void,
   signal?: AbortSignal,
-  password?: string
+  password?: string,
+  signals?: ContentSignals
 ) => {
   const controller = new AbortController();
   const uploadSignal = signal
@@ -54,7 +56,15 @@ export const uploadFile = async (
     uploadSignal.throwIfAborted();
     completing = true;
     const completed = await retry(
-      () => completeTransfer(token, transferId, parts, uploadSignal, password),
+      () =>
+        completeTransfer(
+          token,
+          transferId,
+          parts,
+          uploadSignal,
+          password,
+          signals
+        ),
       uploadSignal
     );
     onProgress(1);
@@ -97,24 +107,26 @@ const uploadParts = async (
     throw new Error("Invalid multipart upload configuration");
   }
 
-  const parts = new Array<UploadedPart>(partCount);
-  const loaded = new Array<number>(partCount).fill(0);
+  const parts = Array.from<UploadedPart>({ length: partCount });
+  const loaded = Array.from({ length: partCount }, () => 0);
   let nextPart = 0;
   let totalLoaded = 0;
+  const reportProgress = (index: number, bytes: number) => {
+    totalLoaded += bytes - (loaded[index] ?? 0);
+    loaded[index] = bytes;
+    onProgress(Math.min(totalLoaded / file.size, 0.99));
+  };
 
   const worker = async () => {
     while (nextPart < partCount) {
       signal.throwIfAborted();
-      const index = nextPart++;
+      const index = nextPart;
+      nextPart += 1;
       const chunk = file.slice(
         index * partSize,
         Math.min((index + 1) * partSize, file.size)
       );
-      const progress = (bytes: number) => {
-        totalLoaded += bytes - (loaded[index] ?? 0);
-        loaded[index] = bytes;
-        onProgress(Math.min(totalLoaded / file.size, 0.99));
-      };
+      const progress = (bytes: number) => reportProgress(index, bytes);
 
       // Each attempt signs just this part, so long uploads never depend on old URLs.
       // oxlint-disable-next-line no-await-in-loop
@@ -161,7 +173,7 @@ const retry = async <T>(
   operation: () => Promise<T>,
   signal: AbortSignal
 ): Promise<T> => {
-  for (let attempt = 0; ; attempt++) {
+  for (let attempt = 0; ; attempt += 1) {
     signal.throwIfAborted();
     try {
       // oxlint-disable-next-line no-await-in-loop
@@ -223,7 +235,7 @@ const putBlob = async (
     return response.headers.get("ETag");
   } catch (error) {
     if (timeoutSignal.aborted && !signal.aborted) {
-      throw new Error("Upload timed out");
+      throw new Error("Upload timed out", { cause: error });
     }
     throw error;
   }

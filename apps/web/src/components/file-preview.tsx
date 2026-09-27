@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import {
-  ActionSwapCascadeButton,
-  type ActionSwapItem,
-} from "#/components/motion/action-swap-cascade.tsx";
+import { ActionSwapCascadeButton } from "#/components/motion/action-swap-cascade.tsx";
+import type { ActionSwapItem } from "#/components/motion/action-swap-cascade.tsx";
 import {
   Check,
   Download,
@@ -131,11 +129,12 @@ function DownloadFileButton({
   const [busy, setBusy] = useState(false);
   const timeoutRef = useRef(0);
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       clearTimeout(timeoutRef.current);
-    };
-  }, []);
+    },
+    []
+  );
 
   return (
     <ActionSwapCascadeButton

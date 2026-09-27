@@ -26,6 +26,10 @@ if (!rootElement?.innerHTML && rootElement instanceof HTMLElement) {
       defaultTheme="system"
       enableSystem
       storageKey="anyshare.theme"
+      // Client-only render: next-themes' inline script never executes, and
+      // public/theme-init.js already prevents the theme flash. A data-block
+      // type keeps React from warning about the script tag.
+      scriptProps={{ type: "application/json" }}
     >
       <RouterProvider router={router} />
     </ThemeProvider>

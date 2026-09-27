@@ -2,9 +2,10 @@ import {
   createFileRoute,
   lazyRouteComponent,
   notFound,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { Suspense, type ReactNode } from "react";
+import type { ErrorComponentProps } from "@tanstack/react-router";
+import { Suspense } from "react";
+import type { ReactNode } from "react";
 
 import { ApiError, getShortLink } from "#/lib/api.ts";
 import {
@@ -48,9 +49,12 @@ function ShortLinkGate() {
 function ShortLinkPending() {
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
-      <p className="text-muted-foreground text-sm" role="status">
+      <output
+        aria-live="polite"
+        className="text-muted-foreground block text-sm"
+      >
         Opening link
-      </p>
+      </output>
     </main>
   );
 }

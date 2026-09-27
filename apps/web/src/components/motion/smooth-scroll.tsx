@@ -3,20 +3,18 @@
 
 import type Lenis from "lenis";
 import { ReactLenis, useLenis } from "lenis/react";
-import {
-  type MotionValue,
-  useMotionValue,
-  useReducedMotion,
-} from "motion/react";
+import { useMotionValue, useReducedMotion } from "motion/react";
+import type { MotionValue } from "motion/react";
 import {
   createContext,
-  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
+import type { ReactNode } from "react";
 
 // Lenis' own expo-out curve — the canonical smooth-scroll easing. Kept as a
 // named local fn (not a lib/ease token) because tokens are bezier control
@@ -25,13 +23,13 @@ const EASE_SCROLL = (t: number) => Math.min(1, 1.001 - 2 ** (-10 * t));
 
 export type ScrollTarget = number | string | HTMLElement;
 
-export type ScrollToOptions = {
+export interface ScrollToOptions {
   offset?: number;
   immediate?: boolean;
   duration?: number;
-};
+}
 
-export type SmoothScrollApi = {
+export interface SmoothScrollApi {
   /** Underlying Lenis instance, or null on the reduced-motion / native path. */
   lenis: Lenis | null;
   /** Current scroll offset in px. */
@@ -42,7 +40,7 @@ export type SmoothScrollApi = {
   velocity: MotionValue<number>;
   /** Programmatic smooth scroll. Respects reduced motion (jumps instantly). */
   scrollTo: (target: ScrollTarget, options?: ScrollToOptions) => void;
-};
+}
 
 const SmoothScrollContext = createContext<SmoothScrollApi | null>(null);
 
@@ -106,12 +104,12 @@ function LenisBridge({
   scrollY,
   progress,
   velocity,
-  lenisRef,
+  onLenisChange,
 }: {
   scrollY: MotionValue<number>;
   progress: MotionValue<number>;
   velocity: MotionValue<number>;
-  lenisRef: { current: Lenis | null };
+  onLenisChange: (lenis: Lenis | null) => void;
 }) {
   const lenis = useLenis((instance) => {
     scrollY.set(instance.scroll);
@@ -119,11 +117,9 @@ function LenisBridge({
     velocity.set(instance.velocity);
   });
   useEffect(() => {
-    lenisRef.current = lenis ?? null;
-    return () => {
-      lenisRef.current = null;
-    };
-  }, [lenis, lenisRef]);
+    onLenisChange(lenis ?? null);
+    return () => onLenisChange(null);
+  }, [lenis, onLenisChange]);
   return null;
 }
 
@@ -175,7 +171,7 @@ export function SmoothScroll({
   const scrollY = useMotionValue(0);
   const progress = useMotionValue(0);
   const velocity = useMotionValue(0);
-  const lenisRef = useRef<Lenis | null>(null);
+  const [lenis, setLenis] = useState<Lenis | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const nativeSource = useCallback(
@@ -185,7 +181,6 @@ export function SmoothScroll({
 
   const scrollTo = useCallback(
     (target: ScrollTarget, options?: ScrollToOptions) => {
-      const lenis = lenisRef.current;
       if (lenis && !reduce) {
         lenis.scrollTo(target, {
           offset: options?.offset,
@@ -199,7 +194,7 @@ export function SmoothScroll({
       const top = resolveTop(target, source ?? window, options?.offset);
       (source ?? window).scrollTo({ top, behavior });
     },
-    [reduce, nativeSource]
+    [lenis, reduce, nativeSource]
   );
 
   // Reduced motion drives the native listener; the Lenis path leaves it
@@ -213,8 +208,8 @@ export function SmoothScroll({
   );
 
   const api = useMemo<SmoothScrollApi>(
-    () => ({ lenis: lenisRef.current, scrollY, progress, velocity, scrollTo }),
-    [scrollY, progress, velocity, scrollTo]
+    () => ({ lenis, scrollY, progress, velocity, scrollTo }),
+    [lenis, scrollY, progress, velocity, scrollTo]
   );
 
   if (reduce) {
@@ -246,7 +241,7 @@ export function SmoothScroll({
           scrollY={scrollY}
           progress={progress}
           velocity={velocity}
-          lenisRef={lenisRef}
+          onLenisChange={setLenis}
         />
         {children}
       </ReactLenis>

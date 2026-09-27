@@ -1,7 +1,7 @@
 export type MediaKind = "image" | "video" | "pdf" | "file";
 
-const imageName = /\.(avif|gif|jpe?g|png|svg|webp)$/iu;
-const videoName = /\.(m4v|mov|mp4|ogv|webm)$/iu;
+const imageName = /\.(?:avif|gif|jpe?g|png|svg|webp)$/iu;
+const videoName = /\.(?:m4v|mov|mp4|ogv|webm)$/iu;
 
 export const mediaKind = (
   contentType: string | null | undefined,

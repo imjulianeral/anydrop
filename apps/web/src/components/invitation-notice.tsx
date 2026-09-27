@@ -9,6 +9,7 @@ import {
 } from "#/components/motion/dynamic-island.tsx";
 import { Check, Link2, X } from "#/components/rune-icons.tsx";
 import type { DeviceInvitation } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { invitationError } from "#/lib/invitations.ts";
 import { island } from "#/lib/island.ts";
 import type { IslandNotice } from "#/lib/island.ts";
@@ -32,23 +33,29 @@ export function InvitationNotice({
     }
     busyRef.current = true;
     setBusy(action);
-    try {
-      await respondToInvitation(invitation.id, action);
-      island.notice({
-        title:
-          action === "accept" ? "You are connected" : "Invitation declined",
-        description:
-          action === "accept"
-            ? `Select ${invitation.sender.display_name} to share a file or message.`
-            : "This device has not been added to your remote connections.",
-        kind: "success",
-      });
-    } catch (error) {
-      island.error("Could not answer invitation", invitationError(error));
-    } finally {
-      busyRef.current = false;
-      setBusy(null);
-    }
+    await attempt(
+      async () => {
+        await respondToInvitation(invitation.id, action);
+        island.notice({
+          title:
+            action === "accept" ? "You are connected" : "Invitation declined",
+          description:
+            action === "accept"
+              ? `Select ${invitation.sender.display_name} to share a file or message.`
+              : "This device has not been added to your remote connections.",
+          kind: "success",
+        });
+      },
+      {
+        onError: (error) => {
+          island.error("Could not answer invitation", invitationError(error));
+        },
+        onSettled: () => {
+          busyRef.current = false;
+          setBusy(null);
+        },
+      }
+    );
   };
 
   const id = notice ? "invite-notice" : (invitation?.id ?? "invitation");
@@ -78,7 +85,7 @@ export function InvitationNotice({
                   `${invitation?.sender.display_name} wants to share files and messages with this device, even on another network.`}
               </p>
               {!notice && invitation && (
-                <p className="font-mono text-[10px] break-all opacity-60">
+                <p className="text-3xs font-mono break-all opacity-60">
                   User ID: {invitation.sender.id}
                 </p>
               )}

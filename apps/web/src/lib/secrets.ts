@@ -1,3 +1,4 @@
+import type { ContentSignals } from "./content-signals.ts";
 import { beginFileTransfer } from "./file-transfers.ts";
 import type { SealOptions, OpenSecret } from "./secret-crypto.ts";
 import {
@@ -25,13 +26,18 @@ export const prepareText = async (body: string, options: SealOptions = {}) => {
 export const prepareFile = async (
   file: File,
   options: SealOptions & { signal?: AbortSignal } = {}
-): Promise<{ file: File; secret: Secret; masterKey: Uint8Array }> => {
+): Promise<{
+  file: File;
+  secret: Secret;
+  masterKey: Uint8Array;
+  signals: ContentSignals;
+}> => {
   const { signal, ...sealOptions } = options;
   const result = await runTask(
     { action: "seal-file-v3", file, ...sealOptions },
     signal
   );
-  if (result.action !== "seal") {
+  if (result.action !== "seal" || !result.signals) {
     throw new Error("Could not encrypt the file.");
   }
   return {
@@ -40,6 +46,7 @@ export const prepareFile = async (
     }),
     secret: result.value.secret,
     masterKey: result.value.masterKey,
+    signals: result.signals,
   };
 };
 

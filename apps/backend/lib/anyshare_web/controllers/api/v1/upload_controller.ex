@@ -37,6 +37,18 @@ defmodule AnyshareWeb.Api.V1.UploadController do
   def error(conn, :invalid_parts),
     do: ControllerHelpers.error(conn, :unprocessable_entity, "invalid upload parts")
 
+  def error(conn, :invalid_signals),
+    do:
+      ControllerHelpers.error(conn, :unprocessable_entity, "file signals are missing or invalid")
+
+  def error(conn, :blocked),
+    do:
+      ControllerHelpers.error(
+        conn,
+        :unavailable_for_legal_reasons,
+        "This file can't be shared on AnyShare."
+      )
+
   def error(conn, %Ecto.Changeset{} = changeset),
     do: ControllerHelpers.changeset_error(conn, changeset)
 

@@ -6,7 +6,8 @@ import {
   useReducedMotion,
   useSpring,
 } from "motion/react";
-import { useRef, type ReactNode } from "react";
+import { useRef } from "react";
+import type { ReactNode } from "react";
 
 import { SPRING_MOUSE } from "#/lib/ease.ts";
 import { useHoverCapable } from "#/lib/hooks/use-hover-capable.ts";

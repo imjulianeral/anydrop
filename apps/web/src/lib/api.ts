@@ -1,6 +1,7 @@
 import { apiBase } from "#/lib/config.ts";
 import type { DeviceKind } from "#/lib/device.ts";
 
+import type { ContentSignals } from "./content-signals.ts";
 import type { ExpirationOptions } from "./expiration-options.ts";
 import { toBase64Url } from "./secret-format.ts";
 import type { Secret } from "./secret-format.ts";
@@ -318,14 +319,16 @@ export const completeTransfer = (
   id: string,
   parts?: UploadedPart[],
   signal?: AbortSignal,
-  password?: string
+  password?: string,
+  signals?: ContentSignals
 ) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>(
     `/api/v1/transfers/${id}/complete`,
     {
       method: "POST",
       token,
-      body: parts || password ? { parts, password } : undefined,
+      body:
+        parts || password || signals ? { parts, password, signals } : undefined,
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(150_000)])
         : AbortSignal.timeout(150_000),
@@ -410,7 +413,7 @@ export const listShortLinks = (token: string) =>
   );
 
 export const deleteShortLink = (token: string, code: string) =>
-  request<void>(`/api/v1/short_links/${encodeURIComponent(code)}`, {
+  request<undefined>(`/api/v1/short_links/${encodeURIComponent(code)}`, {
     method: "DELETE",
     token,
   });

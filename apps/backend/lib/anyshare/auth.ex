@@ -8,6 +8,7 @@ defmodule Anyshare.Auth do
   @challenge_seconds 300
   @reauth_seconds 10 * 60
   @max_name_bytes 80
+  @max_picture_bytes 2048
   @transports ~w(ble cable hybrid internal nfc smart-card usb)
 
   def origin, do: Application.fetch_env!(:anyshare, :auth)[:origin]
@@ -84,7 +85,10 @@ defmodule Anyshare.Auth do
   end
 
   defp refresh_identity!(identity, claims) do
-    identity |> Ecto.Changeset.change(email: claims.email) |> Repo.update!()
+    identity
+    |> Ecto.Changeset.change(email: claims.email, picture: claims.picture)
+    |> Repo.update!()
+
     Repo.get!(User, identity.user_id)
   end
 
@@ -148,10 +152,24 @@ defmodule Anyshare.Auth do
         {:error, _} -> email |> String.split("@") |> hd() |> String.slice(0, @max_name_bytes)
       end
 
-    {:ok, %{subject: sub, email: email, name: name}}
+    {:ok, %{subject: sub, email: email, name: name, picture: google_picture(claims["picture"])}}
   end
 
   defp verified_google(_claims), do: {:error, :unverified_email}
+
+  # Only keeps HTTPS photos served by Google, so the client never loads an
+  # arbitrary URL from the claims.
+  defp google_picture(url) when is_binary(url) and byte_size(url) <= @max_picture_bytes do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host} when is_binary(host) ->
+        if String.ends_with?(host, ".googleusercontent.com"), do: url
+
+      _ ->
+        nil
+    end
+  end
+
+  defp google_picture(_url), do: nil
 
   defp insert_identity!(user, claims),
     do:
@@ -159,7 +177,8 @@ defmodule Anyshare.Auth do
         user_id: user.id,
         provider: "google",
         subject: claims.subject,
-        email: claims.email
+        email: claims.email,
+        picture: claims.picture
       })
 
   # Profile

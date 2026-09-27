@@ -329,6 +329,7 @@ export function MorphSelectTrigger({
             aria-controls={ctx.listId}
             onClick={() => ctx.setOpen(true)}
             transition={ctx.reduce ? { duration: 0 } : MORPH}
+            // oxlint-disable-next-line shadcn/no-inline-styles -- Motion corrects border radius during layout morphs only when it is set in style.
             style={{ borderRadius: 12 }}
             className={cn(
               ROW,
@@ -376,6 +377,7 @@ export function MorphSelectContent({
             key="panel"
             layoutId={ctx.layoutId}
             transition={ctx.reduce ? { duration: 0 } : MORPH}
+            // oxlint-disable-next-line shadcn/no-inline-styles -- Motion corrects border radius during layout morphs only when it is set in style.
             style={{ borderRadius: 12 }}
             className={cn(
               "border-border bg-background absolute inset-x-0 top-0 z-30 overflow-hidden border shadow-lg",

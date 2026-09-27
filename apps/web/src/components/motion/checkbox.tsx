@@ -38,7 +38,6 @@ export function Checkbox({
   const id = idProp ?? autoId;
   const reduce = useReducedMotion();
   const showMark = checked || indeterminate;
-  const path = indeterminate ? INDETERMINATE_PATH : CHECK_PATH;
 
   return (
     <label
@@ -52,6 +51,7 @@ export function Checkbox({
       <motion.button
         id={id}
         type="button"
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A custom animated checkbox built on a button.
         role="checkbox"
         aria-checked={indeterminate ? "mixed" : checked}
         aria-label={ariaLabel}
@@ -60,9 +60,7 @@ export function Checkbox({
         onClick={() => !disabled && onCheckedChange(!checked)}
         whileTap={reduce || disabled ? undefined : { scale: 0.92 }}
         transition={SPRING_PRESS}
-        data-state={
-          checked ? "checked" : indeterminate ? "indeterminate" : "unchecked"
-        }
+        data-state={checkState(checked, indeterminate)}
         className={cn(
           "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors duration-200 outline-none",
           "focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2",
@@ -74,44 +72,11 @@ export function Checkbox({
       >
         <AnimatePresence initial={false}>
           {showMark ? (
-            <motion.svg
+            <CheckMark
               key={indeterminate ? "indeterminate" : "checked"}
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              initial={reduce ? { opacity: 1 } : { opacity: 0, scale: 0.5 }}
-              animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-              exit={
-                reduce
-                  ? { opacity: 0 }
-                  : { opacity: 0, scale: 0.5, filter: "blur(4px)" }
-              }
-              transition={
-                reduce ? { duration: 0 } : { duration: 0.16, ease: EASE_OUT }
-              }
-              aria-hidden
-            >
-              <title>{indeterminate ? "Partially selected" : "Selected"}</title>
-              <motion.path
-                d={path}
-                initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={
-                  reduce
-                    ? { duration: 0 }
-                    : {
-                        duration: indeterminate ? 0.2 : 0.3,
-                        ease: EASE_OUT,
-                        delay: 0.04,
-                      }
-                }
-              />
-            </motion.svg>
+              indeterminate={Boolean(indeterminate)}
+              reduce={Boolean(reduce)}
+            />
           ) : null}
         </AnimatePresence>
       </motion.button>
@@ -126,5 +91,58 @@ export function Checkbox({
         </span>
       ) : null}
     </label>
+  );
+}
+
+function checkState(checked: boolean, indeterminate?: boolean) {
+  if (checked) {
+    return "checked";
+  }
+  return indeterminate ? "indeterminate" : "unchecked";
+}
+
+function CheckMark({
+  indeterminate,
+  reduce,
+}: {
+  indeterminate: boolean;
+  reduce: boolean;
+}) {
+  return (
+    <motion.svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      initial={reduce ? { opacity: 1 } : { opacity: 0, scale: 0.5 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+      exit={
+        reduce
+          ? { opacity: 0 }
+          : { opacity: 0, scale: 0.5, filter: "blur(4px)" }
+      }
+      transition={reduce ? { duration: 0 } : { duration: 0.16, ease: EASE_OUT }}
+      aria-hidden
+    >
+      <title>{indeterminate ? "Partially selected" : "Selected"}</title>
+      <motion.path
+        d={indeterminate ? INDETERMINATE_PATH : CHECK_PATH}
+        initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={
+          reduce
+            ? { duration: 0 }
+            : {
+                duration: indeterminate ? 0.2 : 0.3,
+                ease: EASE_OUT,
+                delay: 0.04,
+              }
+        }
+      />
+    </motion.svg>
   );
 }

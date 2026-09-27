@@ -1,12 +1,14 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { forwardRef, useState } from "react";
+import { useState } from "react";
+import type { Ref } from "react";
 
 import { EASE_IN_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
-import { Button, type ButtonProps } from "./base";
+import { Button } from "./base";
+import type { ButtonProps } from "./base";
 
 export interface MetallicButtonProps extends Omit<
   ButtonProps,
@@ -28,21 +30,16 @@ const CHROME_SHIMMER = {
   ease: EASE_IN_OUT,
 };
 
-export const MetallicButton = forwardRef<
-  HTMLButtonElement,
-  MetallicButtonProps
->(function MetallicButton(
-  {
-    size = "md",
-    paused = false,
-    className,
-    children,
-    onHoverStart,
-    onHoverEnd,
-    ...rest
-  },
-  ref
-) {
+export function MetallicButton({
+  size = "md",
+  paused = false,
+  className,
+  children,
+  onHoverStart,
+  onHoverEnd,
+  ref,
+  ...rest
+}: MetallicButtonProps & { ref?: Ref<HTMLButtonElement> }) {
   const reduce = useReducedMotion();
   const still = paused || Boolean(reduce);
   const [hovered, setHovered] = useState(false);
@@ -99,4 +96,4 @@ export const MetallicButton = forwardRef<
       </span>
     </Button>
   );
-});
+}

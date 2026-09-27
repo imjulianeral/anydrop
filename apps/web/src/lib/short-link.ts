@@ -17,7 +17,7 @@ export const isRouteModuleLoadError = (caught: unknown): boolean => {
   if (!(caught instanceof Error)) {
     return false;
   }
-  return /dynamically imported module|Importing a module script failed/i.test(
+  return /dynamically imported module|Importing a module script failed/iu.test(
     caught.message
   );
 };

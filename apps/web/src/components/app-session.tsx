@@ -104,16 +104,18 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
 
     const boot = async () => {
       try {
-        bootSession.current ??= (async () => {
-          const keys = await loadDeviceKeyPair();
-          return createSession({
-            sessionToken: local.sessionToken,
-            public_key: keys.publicSpki,
-            id: local.id,
-            displayName: local.displayName,
-            deviceKind: local.deviceKind,
-          });
-        })();
+        if (bootSession.current === null) {
+          bootSession.current = (async () => {
+            const keys = await loadDeviceKeyPair();
+            return createSession({
+              sessionToken: local.sessionToken,
+              public_key: keys.publicSpki,
+              id: local.id,
+              displayName: local.displayName,
+              deviceKind: local.deviceKind,
+            });
+          })();
+        }
         const session = await bootSession.current;
         if (cancelled) {
           return;

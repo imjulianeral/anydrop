@@ -2,7 +2,8 @@
 // beui.dev/components/motion/scroll-animation
 
 import { motion, useInView, useReducedMotion } from "motion/react";
-import { type ReactNode, type RefObject, useRef } from "react";
+import { useRef } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";

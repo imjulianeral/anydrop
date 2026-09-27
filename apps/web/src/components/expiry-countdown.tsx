@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 
-import {
-  remainingLabel,
-  remainingRatio,
-  remainingTone,
-  type RemainingLabelOptions,
-} from "#/lib/expiry.ts";
+import { remainingLabel, remainingRatio, remainingTone } from "#/lib/expiry.ts";
+import type { RemainingLabelOptions } from "#/lib/expiry.ts";
 import { cn } from "#/lib/utils.ts";
 
 interface ExpiryCountdownProps extends RemainingLabelOptions {
@@ -67,9 +63,9 @@ const CIRCLE_RADIUS = (CIRCLE_SIZE - CIRCLE_STROKE) / 2;
 const CIRCLE_LENGTH = 2 * Math.PI * CIRCLE_RADIUS;
 
 const TONE_STROKE = {
-  green: "stroke-green-500",
-  yellow: "stroke-yellow-500",
-  red: "stroke-red-500",
+  green: "stroke-success",
+  yellow: "stroke-warning",
+  red: "stroke-destructive",
 } as const;
 
 function RemainingCircle({ ratio }: { ratio: number }) {

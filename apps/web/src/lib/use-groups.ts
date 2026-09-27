@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppSession } from "#/components/app-session.tsx";
 import { listGroups } from "#/lib/api.ts";
 import type { DeviceGroup } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 
 export function useGroups() {
   const { token, connected, subscribeToEvents } = useAppSession();
@@ -14,25 +15,31 @@ export function useGroups() {
   const refresh = useCallback(async () => {
     version.current += 1;
     const request = version.current;
-    try {
-      const result = await listGroups(token);
-      if (request === version.current) {
-        setGroups(result.groups);
-        setError(null);
+    await attempt(
+      async () => {
+        const result = await listGroups(token);
+        if (request === version.current) {
+          setGroups(result.groups);
+          setError(null);
+        }
+      },
+      {
+        onError: (caughtError) => {
+          if (request === version.current) {
+            setError(
+              caughtError instanceof Error
+                ? caughtError.message
+                : "Could not load groups"
+            );
+          }
+        },
+        onSettled: () => {
+          if (request === version.current) {
+            setLoading(false);
+          }
+        },
       }
-    } catch (caughtError) {
-      if (request === version.current) {
-        setError(
-          caughtError instanceof Error
-            ? caughtError.message
-            : "Could not load groups"
-        );
-      }
-    } finally {
-      if (request === version.current) {
-        setLoading(false);
-      }
-    }
+    );
   }, [token]);
 
   useEffect(() => {
@@ -50,6 +57,7 @@ export function useGroups() {
       globalThis.clearInterval(timer);
       unsubscribe();
     };
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Reload after reconnecting.
   }, [connected, refresh, subscribeToEvents]);
 
   return { groups, loading, error, refresh };

@@ -25,6 +25,8 @@ const task: StreamTask = {
   },
 };
 
+const signals = { md5: "0".repeat(32), sha256: "0".repeat(64) };
+
 const opened: StreamResult = {
   action: "opened",
   downloadUrl: "https://example.test/granted-download",
@@ -51,6 +53,7 @@ class TestWorker extends EventTarget {
 
 describe("large Secret operation lifecycle", () => {
   beforeEach(() => {
+    // oxlint-disable-next-line unicorn/no-useless-undefined -- Removes Temporal for this test.
     vi.stubGlobal("Temporal", undefined);
     vi.useFakeTimers();
     vi.stubGlobal("Worker", TestWorker);
@@ -154,11 +157,6 @@ describe("large Secret operation lifecycle", () => {
   });
 
   it("finishes the send when staging cleanup never completes", async () => {
-    class FileSystemFileHandle {
-      createWritable() {
-        return Promise.resolve({});
-      }
-    }
     const source = new File(["x"], "video.bin", {
       type: "application/octet-stream",
     });
@@ -169,35 +167,44 @@ describe("large Secret operation lifecycle", () => {
     Object.defineProperty(encrypted, "size", {
       value: streamCipherSize(source.size, encodeFileMetadata(source).length),
     });
-    vi.stubGlobal("FileSystemFileHandle", FileSystemFileHandle);
+    vi.stubGlobal("FileSystemFileHandle", {
+      prototype: { createWritable: () => Promise.resolve({}) },
+    });
     vi.stubGlobal("isSecureContext", true);
     vi.stubGlobal("navigator", {
       locks: {
-        request: async (
+        request: (
           _name: string,
           _options: unknown,
-          callback: (lock: object) => Promise<unknown>
-        ) => callback({}),
+          whileLocked: (lock: object) => Promise<unknown>
+        ) => whileLocked({}),
       },
       storage: {
-        estimate: async () => ({
-          quota: Number.MAX_SAFE_INTEGER,
-          usage: 0,
-        }),
-        getDirectory: async () => ({
-          getDirectoryHandle: async () => ({
-            getFileHandle: async () => ({
-              getFile: async () => encrypted,
-            }),
+        estimate: () =>
+          Promise.resolve({ quota: Number.MAX_SAFE_INTEGER, usage: 0 }),
+        getDirectory: () =>
+          Promise.resolve({
+            getDirectoryHandle: () =>
+              Promise.resolve({
+                getFileHandle: () =>
+                  Promise.resolve({
+                    getFile: () => Promise.resolve(encrypted),
+                  }),
+              }),
+            removeEntry: () =>
+              new Promise<void>(() => {
+                // Never settles, like a cleanup the browser leaves hanging.
+              }),
           }),
-          removeEntry: () => new Promise<void>(() => {}),
-        }),
       },
     });
     const send = withPreparedFile(
       source,
       {},
-      async () => "uploaded",
+      (prepared) => {
+        expect(prepared.signals).toStrictEqual(signals);
+        return Promise.resolve("uploaded");
+      },
       new AbortController().signal,
       () => null
     );
@@ -218,6 +225,7 @@ describe("large Secret operation lifecycle", () => {
         password: false,
         cipher: "secretstream-xchacha20poly1305",
       },
+      signals,
     });
     await expect(send).resolves.toBe("uploaded");
   });

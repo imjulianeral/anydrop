@@ -5,6 +5,7 @@ defmodule Anyshare.Sharing do
 
   alias Anyshare.Accounts
   alias Anyshare.Accounts.Device
+  alias Anyshare.Moderation
   alias Anyshare.ObjectStore
   alias Anyshare.ObjectStore.Multipart
   alias Anyshare.Repo
@@ -19,6 +20,7 @@ defmodule Anyshare.Sharing do
   @short_code_attempts 8
   @download_token_salt "short-link-download"
   @download_token_max_age 604_800
+  @hidden_statuses ~w(expired failed blocked)
 
   @spec list_transfers(Device.t(), String.t()) :: [Transfer.t()]
   def list_transfers(device, peer_id) do
@@ -26,7 +28,7 @@ defmodule Anyshare.Sharing do
 
     from(transfer in Transfer,
       where: is_nil(transfer.group_id),
-      where: transfer.status not in ["expired", "failed"],
+      where: transfer.status not in @hidden_statuses,
       where: transfer.expires_at > ^now,
       where: is_nil(transfer.max_downloads) or transfer.download_count < transfer.max_downloads,
       where:
@@ -44,7 +46,7 @@ defmodule Anyshare.Sharing do
       from t in Transfer,
         where: t.group_id == ^group_id,
         where: t.sender_id == ^device.id or t.recipient_id == ^device.id,
-        where: t.status not in ["expired", "failed"] and t.expires_at > ^now,
+        where: t.status not in @hidden_statuses and t.expires_at > ^now,
         where: is_nil(t.max_downloads) or t.download_count < t.max_downloads,
         order_by: [asc: t.created_at]
     )
@@ -128,7 +130,7 @@ defmodule Anyshare.Sharing do
 
     from(transfer in Transfer,
       where: transfer.expires_at > ^now,
-      where: transfer.status not in ["expired", "failed"],
+      where: transfer.status not in @hidden_statuses,
       where: is_nil(transfer.max_downloads) or transfer.download_count < transfer.max_downloads,
       where: transfer.id == ^id,
       where: transfer.sender_id == ^device.id or transfer.recipient_id == ^device.id
@@ -136,8 +138,8 @@ defmodule Anyshare.Sharing do
     |> Repo.one()
   end
 
-  def complete_transfer(sender, id, parts \\ nil),
-    do: Anyshare.Uploads.complete(sender, id, parts)
+  def complete_transfer(sender, id, parts \\ nil, signals \\ nil),
+    do: Anyshare.Uploads.complete(sender, id, parts, signals)
 
   def open_transfer(device, id) do
     Repo.transaction(fn ->
@@ -257,7 +259,17 @@ defmodule Anyshare.Sharing do
       }
       |> maybe_put_password(Map.get(params, "password"))
 
-    insert_short_link(attrs, @short_code_attempts)
+    case Moderation.screen_url(device, attrs.target_url) do
+      :ok -> insert_short_link(attrs, @short_code_attempts)
+      {:blocked, _threats} -> {:error, unsafe_url_changeset(attrs)}
+    end
+  end
+
+  defp unsafe_url_changeset(attrs) do
+    %ShortLink{}
+    |> Ecto.Changeset.change(Map.take(attrs, [:device_id, :target_url]))
+    |> Ecto.Changeset.add_error(:target_url, "is flagged as unsafe")
+    |> Map.put(:action, :insert)
   end
 
   @spec unlock_short_link(String.t(), term()) ::
@@ -425,7 +437,7 @@ defmodule Anyshare.Sharing do
   end
 
   defp live_transfer?(transfer),
-    do: Expiration.live?(transfer) and transfer.status not in ["expired", "failed"]
+    do: Expiration.live?(transfer) and transfer.status not in @hidden_statuses
 
   @spec expire_stale() :: :ok
   def expire_stale do

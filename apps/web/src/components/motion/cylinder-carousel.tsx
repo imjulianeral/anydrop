@@ -169,17 +169,15 @@ function CarouselBall({
 
   return (
     <motion.div
-      className="absolute top-1/2 left-1/2"
+      className="absolute top-1/2 left-1/2 -mt-[calc(var(--item-size)/2)] -ml-[calc(var(--item-size)/2)] size-(--item-size)"
       style={
         {
           x,
           y,
           scale,
+          // oxlint-disable-next-line shadcn/no-inline-styles -- A MotionValue: Motion hides balls as they leave the stage.
           visibility,
-          width: itemSize,
-          height: itemSize,
-          marginLeft: -itemSize / 2,
-          marginTop: -itemSize / 2,
+          "--item-size": `${itemSize}px`,
           "--item-scale": scale,
         } as MotionStyle & { "--item-scale": MotionValue<number> }
       }
@@ -484,7 +482,7 @@ export function CylinderCarousel({
       }}
       className={cn(
         // clip-path, not overflow: it also clips the GPU-composited balls
-        "relative w-full touch-none outline-none [clip-path:inset(0)]",
+        "relative h-(--stage-height) w-full touch-none outline-none [clip-path:inset(0)]",
         // The stage drives the roll from the press itself, so iOS must not
         // claim the same touch for its callout or a slide drag.
         TOUCH_GESTURE_CLASS,
@@ -492,7 +490,7 @@ export function CylinderCarousel({
         "focus-visible:ring-foreground/20 focus-visible:ring-2",
         className
       )}
-      style={{ height: stageHeight }}
+      style={{ "--stage-height": `${stageHeight}px` }}
     >
       {items.map((item, i) => (
         <CarouselBall

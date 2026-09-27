@@ -1,22 +1,27 @@
 "use client";
 
-import { type HTMLMotionProps, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
+import type { HTMLMotionProps } from "motion/react";
 import {
   cloneElement,
-  type ComponentPropsWithRef,
   createContext,
-  type ReactElement,
-  type ReactNode,
-  type Ref,
   useCallback,
   useContext,
   useId,
+  useMemo,
   useState,
+} from "react";
+import type {
+  ComponentPropsWithRef,
+  ReactElement,
+  ReactNode,
+  Ref,
 } from "react";
 
 import { MessageSideContext } from "#/components/agents/message-context.tsx";
 import { ChevronDown } from "#/components/rune-icons.tsx";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_SWAP } from "#/lib/ease.ts";
+import { useComposedRef } from "#/lib/refs.ts";
 import { cn } from "#/lib/utils.ts";
 
 export type MessageBubbleVariant =
@@ -38,7 +43,11 @@ const MessageBubbleContext = createContext<MessageBubbleContextValue>({
   animateIn: true,
   variant: "soft",
 });
-const MessageBubbleLayoutContext = createContext<() => void>(() => {});
+const ignoreLayoutChange = () => {
+  // Content outside a bubble has no layout to update.
+};
+const MessageBubbleLayoutContext =
+  createContext<() => void>(ignoreLayoutChange);
 
 export interface MessageBubbleProps extends Omit<
   HTMLMotionProps<"div">,
@@ -73,15 +82,6 @@ export interface MessageBubbleCollapsibleProps extends ComponentPropsWithRef<"di
   children?: ReactNode;
 }
 
-function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
-  return (node: T | null) => {
-    for (const ref of refs) {
-      if (typeof ref === "function") ref(node);
-      else if (ref) ref.current = node;
-    }
-  };
-}
-
 const BUBBLE_CONTENT_REVEAL = {
   duration: 0.12,
   ease: EASE_OUT,
@@ -112,11 +112,13 @@ export function MessageBubble({
   const reduce = useReducedMotion() ?? false;
   const messageSide = useContext(MessageSideContext);
   const resolvedAlign = align ?? messageSide ?? "start";
+  const bubbleContext = useMemo(
+    () => ({ align: resolvedAlign, animateIn, variant }),
+    [resolvedAlign, animateIn, variant]
+  );
 
   return (
-    <MessageBubbleContext.Provider
-      value={{ align: resolvedAlign, animateIn, variant }}
-    >
+    <MessageBubbleContext.Provider value={bubbleContext}>
       <motion.div
         data-slot="message-bubble"
         data-align={resolvedAlign}
@@ -189,11 +191,18 @@ export function MessageBubbleContent({
     () => setLayoutVersion((version) => version + 1),
     []
   );
+  const renderRef = (
+    render as ReactElement<{ ref?: Ref<HTMLElement> }> | undefined
+  )?.props.ref;
+  const attachNode = useComposedRef(
+    renderRef,
+    ref as Ref<HTMLElement> | undefined
+  );
   const interactive = render?.type === "button" || render?.type === "a";
   const classes = cn(bubbleContentClass(variant, interactive), className);
   const composedChildren = (
     <>
-      {variant !== "ghost" ? (
+      {variant === "ghost" ? null : (
         <motion.span
           aria-hidden="true"
           layout={reduce ? false : "size"}
@@ -218,12 +227,10 @@ export function MessageBubbleContent({
           }
           className={bubbleSurfaceClass(variant, align)}
         />
-      ) : null}
+      )}
       <MessageBubbleLayoutContext.Provider value={notifyLayout}>
         <motion.div
-          initial={
-            animateIn ? (reduce ? { opacity: 0 } : { opacity: 0 }) : false
-          }
+          initial={animateIn ? { opacity: 0 } : false}
           animate={{ opacity: 1 }}
           transition={
             reduce ? { duration: 0.12, ease: EASE_OUT } : BUBBLE_CONTENT_REVEAL
@@ -241,9 +248,10 @@ export function MessageBubbleContent({
       Record<string, unknown> & { className?: string; ref?: Ref<HTMLElement> }
     >;
 
+    // oxlint-disable-next-line react/no-clone-element -- `render` swaps the bubble's element, like Base UI's render prop.
     return cloneElement(child, {
       ...props,
-      ref: mergeRefs(child.props.ref, ref as Ref<HTMLElement> | undefined),
+      ref: attachNode,
       className: cn(classes, child.props.className),
       children: composedChildren,
       "data-slot": "message-bubble-content",
@@ -310,7 +318,9 @@ export function MessageBubbleCollapsible({
   const setOpen = useCallback(
     (next: boolean) => {
       notifyLayout();
-      if (open === undefined) setInternalOpen(next);
+      if (open === undefined) {
+        setInternalOpen(next);
+      }
       onOpenChange?.(next);
     },
     [notifyLayout, onOpenChange, open]

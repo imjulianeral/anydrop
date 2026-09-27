@@ -23,9 +23,9 @@ export type ChartConfig = Record<
   )
 >;
 
-type ChartContextProps = {
+interface ChartContextProps {
   config: ChartConfig;
-};
+}
 
 const ChartContext = React.createContext<ChartContextProps | null>(null);
 
@@ -57,10 +57,11 @@ function ChartContainer({
   };
 }) {
   const uniqueId = React.useId();
-  const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`;
+  const chartId = `chart-${id ?? uniqueId.replaceAll(":", "")}`;
+  const chartContext = React.useMemo(() => ({ config }), [config]);
 
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext.Provider value={chartContext}>
       <div
         data-slot="chart"
         data-chart={chartId}
@@ -83,19 +84,16 @@ function ChartContainer({
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
-    ([, config]) => config.theme ?? config.color
+    ([, itemConfig]) => itemConfig.theme ?? itemConfig.color
   );
 
   if (!colorConfig.length) {
     return null;
   }
 
-  return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(
-            ([theme, prefix]) => `
+  const css = Object.entries(THEMES)
+    .map(
+      ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
@@ -107,11 +105,11 @@ ${colorConfig
   .join("\n")}
 }
 `
-          )
-          .join("\n"),
-      }}
-    />
-  );
+    )
+    .join("\n");
+
+  // oxlint-disable-next-line shadcn/no-inline-styles -- Series can set separate light and dark colors, which need one scoped rule per theme.
+  return <style>{css}</style>;
 };
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
@@ -195,7 +193,7 @@ function ChartTooltipContent({
         className
       )}
     >
-      {!nestLabel ? tooltipLabel : null}
+      {nestLabel ? null : tooltipLabel}
       <div className="grid gap-1.5">
         {payload
           .filter((item) => item.type !== "none")
@@ -216,30 +214,13 @@ function ChartTooltipContent({
                   formatter(item.value, item.name, item, index, item.payload)
                 ) : (
                   <>
-                    {itemConfig?.icon ? (
-                      <itemConfig.icon />
-                    ) : (
-                      !hideIndicator && (
-                        <div
-                          className={cn(
-                            "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
-                            {
-                              "h-2.5 w-2.5": indicator === "dot",
-                              "w-1": indicator === "line",
-                              "w-0 border-[1.5px] border-dashed bg-transparent":
-                                indicator === "dashed",
-                              "my-0.5": nestLabel && indicator === "dashed",
-                            }
-                          )}
-                          style={
-                            {
-                              "--color-bg": indicatorColor,
-                              "--color-border": indicatorColor,
-                            } as React.CSSProperties
-                          }
-                        />
-                      )
-                    )}
+                    <TooltipIndicator
+                      icon={itemConfig?.icon}
+                      hidden={hideIndicator}
+                      indicator={indicator}
+                      nested={nestLabel}
+                      color={indicatorColor}
+                    />
                     <div
                       className={cn(
                         "flex flex-1 justify-between leading-none",
@@ -252,11 +233,10 @@ function ChartTooltipContent({
                           {itemConfig?.label ?? item.name}
                         </span>
                       </div>
-                      {item.value != null && (
+                      {item.value === null ||
+                      item.value === undefined ? null : (
                         <span className="text-foreground font-mono font-medium tabular-nums">
-                          {typeof item.value === "number"
-                            ? item.value.toLocaleString()
-                            : String(item.value)}
+                          {formatTooltipValue(item.value)}
                         </span>
                       )}
                     </div>
@@ -267,6 +247,51 @@ function ChartTooltipContent({
           })}
       </div>
     </div>
+  );
+}
+
+function formatTooltipValue(value: unknown) {
+  return typeof value === "number" ? value.toLocaleString() : String(value);
+}
+
+function TooltipIndicator({
+  icon: Icon,
+  hidden,
+  indicator,
+  nested,
+  color,
+}: {
+  icon?: React.ComponentType;
+  hidden: boolean;
+  indicator: "line" | "dot" | "dashed";
+  nested: boolean;
+  color: string | undefined;
+}) {
+  if (Icon) {
+    return <Icon />;
+  }
+  if (hidden) {
+    return null;
+  }
+  return (
+    <div
+      className={cn(
+        "shrink-0 rounded-[2px] border-(--color-border) bg-(--color-bg)",
+        {
+          "h-2.5 w-2.5": indicator === "dot",
+          "w-1": indicator === "line",
+          "w-0 border-[1.5px] border-dashed bg-transparent":
+            indicator === "dashed",
+          "my-0.5": nested && indicator === "dashed",
+        }
+      )}
+      style={
+        {
+          "--color-bg": color,
+          "--color-border": color,
+        } as React.CSSProperties
+      }
+    />
   );
 }
 
@@ -313,10 +338,8 @@ function ChartLegendContent({
                 <itemConfig.icon />
               ) : (
                 <div
-                  className="h-2 w-2 shrink-0 rounded-[2px]"
-                  style={{
-                    backgroundColor: item.color,
-                  }}
+                  className="h-2 w-2 shrink-0 rounded-[2px] bg-(--swatch)"
+                  style={{ "--swatch": item.color }}
                 />
               )}
               {itemConfig?.label}
@@ -333,7 +356,7 @@ function getPayloadConfigFromPayload(
   key: string
 ) {
   if (typeof payload !== "object" || payload === null) {
-    return undefined;
+    return;
   }
 
   const payloadPayload =

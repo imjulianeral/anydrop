@@ -12,6 +12,7 @@ import {
   FieldLabel,
 } from "#/components/ui/field.tsx";
 import { resolveAssetUrl, savingDownloadUrl } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { loadDeviceKeyPair, unwrapMasterKey } from "#/lib/device-crypto.ts";
 import { loadLinkKey } from "#/lib/link-keys.ts";
 import type { OpenSecret } from "#/lib/secret-crypto.ts";
@@ -78,7 +79,7 @@ export function SecretContent({
   }
   if (item.kind === "file" && !item.download?.url) {
     return (
-      <output className="text-muted-foreground text-sm">
+      <output aria-live="polite" className="text-muted-foreground text-sm">
         {item.status === "pending"
           ? "Uploading…"
           : "This file is no longer available."}
@@ -87,7 +88,9 @@ export function SecretContent({
   }
   if (secret?.version === 3 && !masterKey) {
     return (
-      <output className="text-muted-foreground text-sm">Preparing…</output>
+      <output aria-live="polite" className="text-muted-foreground text-sm">
+        Preparing…
+      </output>
     );
   }
   if (
@@ -120,42 +123,47 @@ function useSecretKey(
     let cancelled = false;
     let key: Uint8Array | null = null;
     const load = async () => {
-      try {
-        if (item.recipient_id) {
-          if (!secret.wrap) {
-            throw new Error("Could not unlock this transfer.");
-          }
-          const device = await loadDeviceKeyPair();
-          key = await unwrapMasterKey(secret.wrap, device.privateKey);
-        } else {
-          key = parseFragmentKey(globalThis.location.hash);
-          if (!key && allowStoredKey && item.code) {
-            key = loadLinkKey(item.code);
-          }
-          if (!key) {
-            throw new Error(missingKeyError);
-          }
-        }
-        if (cancelled) {
-          key.fill(0);
-        } else {
-          setLoadedKey({ secret, bytes: key });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Could not unlock this transfer.";
-          setFailure(message);
+      await attempt(
+        async () => {
           if (item.recipient_id) {
-            toast.add({
-              title: "Could not unlock this transfer.",
-              type: "error",
-            });
+            if (!secret.wrap) {
+              throw new Error("Could not unlock this transfer.");
+            }
+            const device = await loadDeviceKeyPair();
+            key = await unwrapMasterKey(secret.wrap, device.privateKey);
+          } else {
+            key = parseFragmentKey(globalThis.location.hash);
+            if (!key && allowStoredKey && item.code) {
+              key = loadLinkKey(item.code);
+            }
+            if (!key) {
+              throw new Error(missingKeyError);
+            }
           }
+          if (cancelled) {
+            key.fill(0);
+          } else {
+            setLoadedKey({ secret, bytes: key });
+          }
+        },
+        {
+          onError: (error) => {
+            if (!cancelled) {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "Could not unlock this transfer.";
+              setFailure(message);
+              if (item.recipient_id) {
+                toast.add({
+                  title: "Could not unlock this transfer.",
+                  type: "error",
+                });
+              }
+            }
+          },
         }
-      }
+      );
     };
     void load();
     return () => {
@@ -200,53 +208,62 @@ function BufferedSecretContent({ item, masterKey }: SecretContentProps) {
   const unlock = useCallback(async (): Promise<
     (OpenSecret & { url?: string }) | null
   > => {
-    if (busyRef.current || item.kind === "url") {
+    const { kind } = item;
+    if (busyRef.current || kind === "url") {
       return null;
     }
     busyRef.current = true;
     setBusy(true);
     setUnlockError("");
-    try {
-      if (Date.parse(item.expires_at) <= Date.now()) {
-        throw new Error("This Secret has expired.");
-      }
-      const result = await unlockSecret(
-        {
-          ...item,
-          secret: item.secret,
-          kind: item.kind,
-          downloadUrl: item.download?.url
-            ? savingDownloadUrl(resolveAssetUrl(item.download.url))
-            : undefined,
-          filename: item.filename,
-          byteSize: item.byte_size,
+    return await attempt(
+      async () => {
+        if (Date.parse(item.expires_at) <= Date.now()) {
+          throw new Error("This Secret has expired.");
+        }
+        const result = await unlockSecret(
+          {
+            ...item,
+            secret: item.secret,
+            kind,
+            downloadUrl: item.download?.url
+              ? savingDownloadUrl(resolveAssetUrl(item.download.url))
+              : undefined,
+            filename: item.filename,
+            byteSize: item.byte_size,
+          },
+          needsPassword ? password : undefined,
+          masterKey
+        );
+        if (!mounted.current) {
+          return null;
+        }
+        // Download as binary so decrypted HTML and SVG cannot execute in this origin.
+        const url =
+          result.kind === "file"
+            ? URL.createObjectURL(
+                new Blob([result.bytes], { type: "application/octet-stream" })
+              )
+            : undefined;
+        const value = { ...result, url };
+        setOpened(value);
+        setPassword("");
+        return value;
+      },
+      {
+        onError: (error) => {
+          setUnlockError(
+            error instanceof Error
+              ? error.message
+              : "Could not unlock this Secret."
+          );
+          return null;
         },
-        needsPassword ? password : undefined,
-        masterKey
-      );
-      if (!mounted.current) {
-        return null;
+        onSettled: () => {
+          busyRef.current = false;
+          setBusy(false);
+        },
       }
-      // Download as binary so decrypted HTML and SVG cannot execute in this origin.
-      const url =
-        result.kind === "file"
-          ? URL.createObjectURL(
-              new Blob([result.bytes], { type: "application/octet-stream" })
-            )
-          : undefined;
-      const value = { ...result, url };
-      setOpened(value);
-      setPassword("");
-      return value;
-    } catch (error) {
-      setUnlockError(
-        error instanceof Error ? error.message : "Could not unlock this Secret."
-      );
-      return null;
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-    }
+    );
   }, [item, masterKey, needsPassword, password]);
 
   useEffect(() => {
@@ -286,89 +303,154 @@ function BufferedSecretContent({ item, masterKey }: SecretContentProps) {
 
   if (opened) {
     return (
-      <div className="flex min-h-0 flex-col gap-3">
-        {needsPassword ? (
-          <p className="text-muted-foreground text-sm">Secret unlocked</p>
-        ) : null}
-        {opened.kind === "text" ? (
-          <>
-            <p className="max-h-[50dvh] overflow-y-auto text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
-              {opened.body}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(opened.body);
-                  toast.add({ title: "Message copied", type: "success" });
-                } catch {
-                  toast.add({
-                    title: "Could not copy the message",
-                    type: "error",
-                  });
-                }
-              }}
-            >
-              Copy message
-            </Button>
-          </>
-        ) : (
-          <FilePreview
-            filename={opened.filename}
-            contentType={opened.contentType}
-            byteSize={opened.bytes.byteLength}
-            downloadUrl={opened.url}
-          />
-        )}
-        {needsPassword ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => {
-              setOpened(null);
-            }}
-          >
-            Lock again
-          </Button>
-        ) : null}
-      </div>
+      <OpenedSecret
+        opened={opened}
+        needsPassword={Boolean(needsPassword)}
+        onLock={() => setOpened(null)}
+      />
     );
   }
 
   if (!needsPassword) {
     return (
-      <div className="flex flex-col gap-3">
-        {unlockError ? (
-          <>
-            <FieldError role="alert">{unlockError}</FieldError>
-            <Button type="button" disabled={busy} onClick={() => void unlock()}>
-              {busy ? "Preparing…" : "Try again"}
-            </Button>
-          </>
-        ) : (
-          <output className="text-muted-foreground text-sm">Preparing…</output>
-        )}
-      </div>
+      <PreparingSecret
+        error={unlockError}
+        busy={busy}
+        onRetry={() => void unlock()}
+      />
     );
   }
 
+  return (
+    <SecretPasswordForm
+      id={id}
+      kind={item.kind}
+      password={password}
+      busy={busy}
+      error={unlockError}
+      onPasswordChange={(value) => {
+        setPassword(value);
+        setUnlockError("");
+      }}
+      onSubmit={() => void unlock()}
+    />
+  );
+}
+
+function OpenedSecret({
+  opened,
+  needsPassword,
+  onLock,
+}: {
+  opened: OpenSecret & { url?: string };
+  needsPassword: boolean;
+  onLock: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-col gap-3">
+      {needsPassword ? (
+        <p className="text-muted-foreground text-sm">Secret unlocked</p>
+      ) : null}
+      {opened.kind === "text" ? (
+        <>
+          <p className="max-h-[50dvh] overflow-y-auto text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
+            {opened.body}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(opened.body);
+                toast.add({ title: "Message copied", type: "success" });
+              } catch {
+                toast.add({
+                  title: "Could not copy the message",
+                  type: "error",
+                });
+              }
+            }}
+          >
+            Copy message
+          </Button>
+        </>
+      ) : (
+        <FilePreview
+          filename={opened.filename}
+          contentType={opened.contentType}
+          byteSize={opened.bytes.byteLength}
+          downloadUrl={opened.url}
+        />
+      )}
+      {needsPassword ? (
+        <Button type="button" variant="ghost" onClick={onLock}>
+          Lock again
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function PreparingSecret({
+  error,
+  busy,
+  onRetry,
+}: {
+  error: string;
+  busy: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {error ? (
+        <>
+          <FieldError role="alert">{error}</FieldError>
+          <Button type="button" disabled={busy} onClick={onRetry}>
+            {busy ? "Preparing…" : "Try again"}
+          </Button>
+        </>
+      ) : (
+        <output aria-live="polite" className="text-muted-foreground text-sm">
+          Preparing…
+        </output>
+      )}
+    </div>
+  );
+}
+
+function SecretPasswordForm({
+  id,
+  kind,
+  password,
+  busy,
+  error,
+  onPasswordChange,
+  onSubmit,
+}: {
+  id: string;
+  kind: SecretContentProps["item"]["kind"];
+  password: string;
+  busy: boolean;
+  error: string;
+  onPasswordChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        void unlock();
+        onSubmit();
       }}
     >
       <p className="text-sm font-medium">
-        {item.kind === "file" ? "Secret file" : "Secret message"}
+        {kind === "file" ? "Secret file" : "Secret message"}
       </p>
       <p className="text-muted-foreground text-sm">
         Enter the password from the sender to unlock this Secret on your device.
       </p>
       <FieldGroup>
-        <Field data-invalid={Boolean(unlockError)} data-disabled={busy}>
+        <Field data-invalid={Boolean(error)} data-disabled={busy}>
           <FieldLabel htmlFor={id}>Password</FieldLabel>
           <Input
             id={id}
@@ -378,17 +460,12 @@ function BufferedSecretContent({ item, masterKey }: SecretContentProps) {
             maxLength={1024}
             disabled={busy}
             value={password}
-            error={Boolean(unlockError)}
-            aria-invalid={Boolean(unlockError)}
-            aria-describedby={unlockError ? `${id}-error` : undefined}
-            onChange={(value) => {
-              setPassword(value);
-              setUnlockError("");
-            }}
+            error={Boolean(error)}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? `${id}-error` : undefined}
+            onChange={onPasswordChange}
           />
-          {unlockError ? (
-            <FieldError id={`${id}-error`}>{unlockError}</FieldError>
-          ) : null}
+          {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : null}
         </Field>
       </FieldGroup>
       <Button type="submit" disabled={busy || password.trim().length < 12}>

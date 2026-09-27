@@ -27,6 +27,7 @@ import {
 } from "#/components/ui/dialog.tsx";
 import { ApiError, getTransfer } from "#/lib/api.ts";
 import type { Peer, Transfer } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { itemExpired } from "#/lib/expiry.ts";
 import { toast } from "#/lib/toast.ts";
 import { transferPreview } from "#/lib/transfer-preview.ts";
@@ -69,9 +70,10 @@ export function TransferHistory({
       return;
     }
     let cancelled = false;
-    for (const id of fileKey.split("\n")) {
-      void getTransfer(token, id)
-        .then((result) => {
+    const load = (id: string) =>
+      attempt(
+        async () => {
+          const result = await getTransfer(token, id);
           if (cancelled) {
             return;
           }
@@ -95,17 +97,22 @@ export function TransferHistory({
             next.delete(id);
             return next;
           });
-        })
-        .catch((error: unknown) => {
-          if (
-            cancelled ||
-            !(error instanceof ApiError) ||
-            error.status !== 404
-          ) {
-            return;
-          }
-          setGoneIds((current) => new Set(current).add(id));
-        });
+        },
+        {
+          onError: (error) => {
+            if (
+              cancelled ||
+              !(error instanceof ApiError) ||
+              error.status !== 404
+            ) {
+              return;
+            }
+            setGoneIds((current) => new Set(current).add(id));
+          },
+        }
+      );
+    for (const id of fileKey.split("\n")) {
+      void load(id);
     }
     return () => {
       cancelled = true;
@@ -236,7 +243,10 @@ export function TransferHistory({
           }
         }}
       >
-        <DialogContent className="bg-background max-h-[85dvh] sm:max-w-lg">
+        <DialogContent
+          surface="background"
+          className="max-h-[85dvh] sm:max-w-lg"
+        >
           <DialogHeader>
             <DialogTitle>Shared with {peerName}</DialogTitle>
             <DialogDescription>
@@ -329,10 +339,10 @@ function TransferUsage({ transfer }: { transfer: Transfer }) {
   const Icon = isFile ? Download : Eye;
   const noun = isFile ? "download" : "view";
   const limit = transfer.max_downloads;
-  const label =
-    limit == null
-      ? `${count} ${noun}${count === 1 ? "" : "s"}, no limit`
-      : `${count} of ${limit} ${noun}s`;
+  const unlimited = limit === null || limit === undefined;
+  const label = unlimited
+    ? `${count} ${noun}${count === 1 ? "" : "s"}, no limit`
+    : `${count} of ${limit} ${noun}s`;
 
   return (
     <span
@@ -343,10 +353,10 @@ function TransferUsage({ transfer }: { transfer: Transfer }) {
         aria-hidden="true"
         className="inline-flex items-center gap-1 text-sm font-bold"
       >
-        <Icon className="size-4.5 [&_path]:stroke-[2.5]" />
+        <Icon className="icon-bold size-4.5" />
         <span className="inline-flex items-center gap-0.5">
           {count}/
-          {limit == null ? (
+          {unlimited ? (
             <InfinityIcon className="size-5 shrink-0" strokeWidth={2.5} />
           ) : (
             limit
@@ -398,19 +408,26 @@ function TransferContent({
             }
             opening.current = true;
             setBusy(true);
-            try {
-              const result = await getTransfer(token, item.id);
-              setOpened(result.transfer);
-            } catch (error) {
-              toast.add({
-                title: "Could not open message",
-                description: error instanceof Error ? error.message : undefined,
-                type: "error",
-              });
-            } finally {
-              opening.current = false;
-              setBusy(false);
-            }
+            await attempt(
+              async () => {
+                const result = await getTransfer(token, item.id);
+                setOpened(result.transfer);
+              },
+              {
+                onError: (error) => {
+                  toast.add({
+                    title: "Could not open message",
+                    description:
+                      error instanceof Error ? error.message : undefined,
+                    type: "error",
+                  });
+                },
+                onSettled: () => {
+                  opening.current = false;
+                  setBusy(false);
+                },
+              }
+            );
           }}
         >
           {busy ? "Opening…" : "Open message"}

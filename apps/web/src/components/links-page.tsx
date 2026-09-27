@@ -39,6 +39,7 @@ import {
   listShortLinks,
 } from "#/lib/api.ts";
 import type { LinkStat, ShortLink } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import { limitReached } from "#/lib/expiry.ts";
@@ -117,21 +118,27 @@ export function LinksPage() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      try {
-        const payload = await listShortLinks(token);
-        if (!cancelled) {
-          setLinks(payload.short_links);
-          setStats(statsFromEvents(payload.events ?? []));
+      await attempt(
+        async () => {
+          const payload = await listShortLinks(token);
+          if (!cancelled) {
+            setLinks(payload.short_links);
+            setStats(statsFromEvents(payload.events ?? []));
+          }
+        },
+        {
+          onError: (error) => {
+            if (!cancelled) {
+              reportError(error, "Could not load links");
+            }
+          },
+          onSettled: () => {
+            if (!cancelled) {
+              setLoading(false);
+            }
+          },
         }
-      } catch (error) {
-        if (!cancelled) {
-          reportError(error, "Could not load links");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+      );
     };
     void load();
     return () => {
@@ -231,27 +238,33 @@ export function LinksPage() {
     sendingRef.current = true;
     setSending(true);
     let masterKey: Uint8Array | undefined;
-    try {
-      const prepared = await prepareText(body);
-      ({ masterKey } = prepared);
-      const created = await createTextTransfer(token, {
-        body: prepared.body,
-        secret: prepared.secret,
-        expiration,
-        password: password ?? undefined,
-      });
-      if (!created.short_link) {
-        throw new Error("Could not create link");
+    await attempt(
+      async () => {
+        const prepared = await prepareText(body);
+        ({ masterKey } = prepared);
+        const created = await createTextTransfer(token, {
+          body: prepared.body,
+          secret: prepared.secret,
+          expiration,
+          password: password ?? undefined,
+        });
+        if (!created.short_link) {
+          throw new Error("Could not create link");
+        }
+        rememberLinkKey(created.short_link.code, masterKey);
+        rememberLink(created.short_link);
+      },
+      {
+        onError: (error) => {
+          reportError(error, "Could not send");
+        },
+        onSettled: () => {
+          masterKey?.fill(0);
+          sendingRef.current = false;
+          setSending(false);
+        },
       }
-      rememberLinkKey(created.short_link.code, masterKey);
-      rememberLink(created.short_link);
-    } catch (error) {
-      reportError(error, "Could not send");
-    } finally {
-      masterKey?.fill(0);
-      sendingRef.current = false;
-      setSending(false);
-    }
+    );
   };
 
   const sendFiles = async (files: File[]) => {
@@ -270,75 +283,86 @@ export function LinksPage() {
     const controller = new AbortController();
     upload.current = controller;
     let currentTransfer: FileTransferHandle | null = null;
-    try {
-      /* Sequential so the progress bar tracks one file at a time. */
-      /* oxlint-disable eslint/no-await-in-loop */
-      for (const file of allowed) {
-        currentTransfer = beginFileTransfer({
-          direction: "upload",
-          name: file.name,
-          totalBytes: file.size,
-          phase: "Encrypting",
-          onCancel: () => controller.abort(),
-        });
-        const transferProgress = currentTransfer;
-        setProgress(0);
-        setPhase("Encrypting");
-        await withPreparedFile(
-          file,
-          {},
-          async (prepared) => {
-            setPhase("Uploading");
-            setProgress(0);
-            transferProgress.update("Uploading", 0, prepared.file.size);
-            const created = await createFileTransfer(token, {
-              filename: prepared.file.name,
-              byteSize: prepared.file.size,
-              contentType: prepared.file.type || "application/octet-stream",
-              secret: prepared.secret,
-              expiration,
-            });
-            const completed = await uploadFile(
-              token,
-              created.transfer.id,
-              created.upload,
-              prepared.file,
-              (ratio) => {
-                setProgress(ratio);
-                transferProgress.update("Uploading", ratio, prepared.file.size);
-              },
-              controller.signal,
-              password ?? undefined
-            );
-            if (!completed.short_link) {
-              throw new Error("Could not create link");
+    await attempt(
+      async () => {
+        /* Sequential so the progress bar tracks one file at a time. */
+        /* oxlint-disable eslint/no-await-in-loop */
+        for (const file of allowed) {
+          currentTransfer = beginFileTransfer({
+            direction: "upload",
+            name: file.name,
+            totalBytes: file.size,
+            phase: "Encrypting",
+            onCancel: () => controller.abort(),
+          });
+          const transferProgress = currentTransfer;
+          setProgress(0);
+          setPhase("Encrypting");
+          await withPreparedFile(
+            file,
+            {},
+            async (prepared) => {
+              setPhase("Uploading");
+              setProgress(0);
+              transferProgress.update("Uploading", 0, prepared.file.size);
+              const created = await createFileTransfer(token, {
+                filename: prepared.file.name,
+                byteSize: prepared.file.size,
+                contentType: prepared.file.type || "application/octet-stream",
+                secret: prepared.secret,
+                expiration,
+              });
+              const completed = await uploadFile(
+                token,
+                created.transfer.id,
+                created.upload,
+                prepared.file,
+                (ratio) => {
+                  setProgress(ratio);
+                  transferProgress.update(
+                    "Uploading",
+                    ratio,
+                    prepared.file.size
+                  );
+                },
+                controller.signal,
+                password ?? undefined,
+                prepared.signals
+              );
+              if (!completed.short_link) {
+                throw new Error("Could not create link");
+              }
+              rememberLinkKey(completed.short_link.code, prepared.masterKey);
+              rememberLink(completed.short_link);
+            },
+            controller.signal,
+            (ratio) => {
+              setProgress(ratio);
+              transferProgress.update("Encrypting", ratio, file.size);
             }
-            rememberLinkKey(completed.short_link.code, prepared.masterKey);
-            rememberLink(completed.short_link);
-          },
-          controller.signal,
-          (ratio) => {
-            setProgress(ratio);
-            transferProgress.update("Encrypting", ratio, file.size);
+          );
+          transferProgress.done();
+          currentTransfer = null;
+        }
+        /* oxlint-enable eslint/no-await-in-loop */
+      },
+      {
+        onError: (error) => {
+          if (controller.signal.aborted) {
+            currentTransfer?.cancel();
+          } else {
+            currentTransfer?.fail();
+            reportError(error, "Upload failed");
           }
-        );
-        transferProgress.done();
-        currentTransfer = null;
+        },
+        onSettled: () => {
+          upload.current = null;
+          sendingRef.current = false;
+          setSending(false);
+          setProgress(null);
+        },
       }
-      /* oxlint-enable eslint/no-await-in-loop */
-    } catch (error) {
-      if (controller.signal.aborted) {
-        currentTransfer?.cancel();
-      } else {
-        currentTransfer?.fail();
-        reportError(error, "Upload failed");
-      }
-    } finally {
-      upload.current = null;
-      sendingRef.current = false;
-      setSending(false);
-      setProgress(null);
-    }
+    );
   };
 
   const shortenUrl = async () => {
@@ -350,19 +374,25 @@ export function LinksPage() {
       return;
     }
     setShortening(true);
-    try {
-      const created = await createShortLink(
-        token,
-        url,
-        expiration,
-        password ?? undefined
-      );
-      rememberLink(created.short_link);
-    } catch (error) {
-      reportError(error, "Could not shorten");
-    } finally {
-      setShortening(false);
-    }
+    await attempt(
+      async () => {
+        const created = await createShortLink(
+          token,
+          url,
+          expiration,
+          password ?? undefined
+        );
+        rememberLink(created.short_link);
+      },
+      {
+        onError: (error) => {
+          reportError(error, "Could not shorten");
+        },
+        onSettled: () => {
+          setShortening(false);
+        },
+      }
+    );
   };
 
   return (
@@ -395,14 +425,16 @@ export function LinksPage() {
           <div className="flex flex-1 items-center justify-center p-6">
             <Loader label="Loading links" variant="dots" />
           </div>
-        ) : links.length === 0 ? (
+        ) : null}
+        {!loading && links.length === 0 ? (
           <EmptyState
             className="flex-1"
             description="Create a message, link, or file drop and it will show up here."
             icon={<Link2 />}
             title="No live links yet"
           />
-        ) : (
+        ) : null}
+        {!loading && links.length > 0 ? (
           <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
             {links.map((item) => (
               <LinkListItem
@@ -413,7 +445,7 @@ export function LinksPage() {
               />
             ))}
           </ul>
-        )}
+        ) : null}
       </section>
 
       <MorphingModal
@@ -589,14 +621,17 @@ export function LinksPage() {
               {progress === null ? null : (
                 <div className="bg-muted h-1 overflow-hidden rounded-full">
                   <div
-                    className="bg-primary h-full origin-left transition-transform"
-                    style={{ transform: `scaleX(${progress})` }}
+                    className="bg-primary h-full origin-left scale-x-(--progress) transition-transform"
+                    style={{ "--progress": progress }}
                   />
                 </div>
               )}
               {sending ? (
                 <div className="flex items-center justify-between gap-3">
-                  <output className="text-muted-foreground text-sm">
+                  <output
+                    aria-live="polite"
+                    className="text-muted-foreground text-sm"
+                  >
                     {phase} · {Math.round((progress ?? 0) * 100)}%
                   </output>
                   <Button
@@ -633,8 +668,13 @@ function LinkListItem({
     <li className="border-border/70 bg-card/80 relative rounded-3xl border">
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger
-          aria-label={`View activity for ${label}`}
-          className="hover:bg-muted/50 focus-visible:ring-ring/50 absolute inset-0 cursor-pointer rounded-3xl transition-colors focus-visible:ring-3 focus-visible:outline-none"
+          render={
+            <button
+              type="button"
+              aria-label={`View activity for ${label}`}
+              className="hover:bg-muted/50 focus-visible:ring-ring/50 absolute inset-0 cursor-pointer rounded-3xl transition-colors focus-visible:ring-3 focus-visible:outline-none"
+            />
+          }
         />
         <div className="pointer-events-none relative flex items-start justify-between gap-4 p-4">
           <div className="flex min-w-0 flex-1 flex-col gap-1">

@@ -22,7 +22,7 @@ export function PasswordOptions({
 }) {
   const id = useId();
   return (
-    <FieldGroup className={compact ? "gap-2" : undefined}>
+    <FieldGroup density={compact ? "compact" : "default"}>
       <Field>
         <Button
           type="button"
@@ -37,7 +37,7 @@ export function PasswordOptions({
       {password === null ? null : (
         <Field
           data-disabled={disabled}
-          className={compact ? "gap-1.5" : undefined}
+          density={compact ? "compact" : "default"}
         >
           <FieldLabel htmlFor={id}>Link password</FieldLabel>
           <Input
@@ -52,10 +52,7 @@ export function PasswordOptions({
             aria-describedby={`${id}-hint`}
             onChange={onChange}
           />
-          <FieldDescription
-            id={`${id}-hint`}
-            className={compact ? "text-xs" : undefined}
-          >
+          <FieldDescription id={`${id}-hint`} size={compact ? "sm" : "default"}>
             {compact ? (
               "Use at least 12 characters. Share the password separately; it cannot be recovered."
             ) : (

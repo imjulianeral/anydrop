@@ -7,6 +7,7 @@ defmodule Anyshare.Auth.Identity do
     field :provider, :string
     field :subject, :string
     field :email, :string
+    field :picture, :string
     timestamps(type: :utc_datetime_usec)
   end
 end

@@ -1,6 +1,7 @@
 defmodule AnyshareWeb.Api.V1.TransferController do
   use AnyshareWeb, :controller
 
+  alias Anyshare.Moderation.Signals
   alias Anyshare.ObjectStore
   alias Anyshare.Sharing
   alias Anyshare.Sharing.LinkPassword
@@ -99,17 +100,26 @@ defmodule AnyshareWeb.Api.V1.TransferController do
   end
 
   def complete(conn, %{"id" => id} = params) do
-    if invalid_link_password?(params) do
-      ControllerHelpers.error(conn, :unprocessable_entity, "password must be 12–1024 characters")
+    with false <- invalid_link_password?(params),
+         {:ok, signals} <- Signals.parse(params["signals"]) do
+      complete_transfer(conn, id, params, signals)
     else
-      complete_transfer(conn, id, params)
+      true ->
+        ControllerHelpers.error(
+          conn,
+          :unprocessable_entity,
+          "password must be 12–1024 characters"
+        )
+
+      {:error, reason} ->
+        AnyshareWeb.Api.V1.UploadController.error(conn, reason)
     end
   end
 
-  defp complete_transfer(conn, id, params) do
+  defp complete_transfer(conn, id, params, signals) do
     current_device = conn.assigns.current_device
 
-    case Sharing.complete_transfer(current_device, id, Map.get(params, "parts")) do
+    case Sharing.complete_transfer(current_device, id, Map.get(params, "parts"), signals) do
       {:ok, transfer} ->
         recipient =
           if transfer.recipient_id,

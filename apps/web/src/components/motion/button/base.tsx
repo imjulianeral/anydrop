@@ -1,19 +1,9 @@
 "use client";
 
-import {
-  AnimatePresence,
-  type HTMLMotionProps,
-  motion,
-  useReducedMotion,
-} from "motion/react";
-import {
-  forwardRef,
-  type PointerEvent,
-  type ReactNode,
-  useCallback,
-  useRef,
-  useState,
-} from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { HTMLMotionProps } from "motion/react";
+import { useCallback, useRef, useState } from "react";
+import type { PointerEvent, ReactNode, Ref } from "react";
 
 import { EASE_OUT, SPRING_PRESS } from "#/lib/ease.ts";
 import { useHoverCapable } from "#/lib/hooks/use-hover-capable.ts";
@@ -46,7 +36,12 @@ export interface ButtonLinkProps extends Omit<
   children?: ReactNode;
 }
 
-type Ripple = { id: number; x: number; y: number; size: number };
+interface Ripple {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+}
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -76,7 +71,8 @@ const useRipple = (enabled: boolean) => {
       }
       const rect = event.currentTarget.getBoundingClientRect();
       const size = Math.max(rect.width, rect.height) * 2;
-      const id = nextId.current++;
+      const id = nextId.current;
+      nextId.current += 1;
       setRipples((prev) => [
         ...prev,
         {
@@ -97,14 +93,13 @@ const useRipple = (enabled: boolean) => {
           <motion.span
             key={ripple.id}
             animate={{ scale: 1, opacity: 0 }}
-            className="absolute rounded-full bg-current"
+            className="absolute top-(--ripple-y) left-(--ripple-x) size-(--ripple-size) rounded-full bg-current"
             exit={{ opacity: 0 }}
             initial={{ scale: 0.05, opacity: 0.3 }}
             style={{
-              left: ripple.x,
-              top: ripple.y,
-              width: ripple.size,
-              height: ripple.size,
+              "--ripple-x": `${ripple.x}px`,
+              "--ripple-y": `${ripple.y}px`,
+              "--ripple-size": `${ripple.size}px`,
               x: "-50%",
               y: "-50%",
             }}
@@ -123,94 +118,86 @@ const useRipple = (enabled: boolean) => {
   return { spawn, layer, clip: active };
 };
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  function Button(
-    {
-      variant = "primary",
-      size = "md",
-      pressScale = 0.93,
-      ripple = true,
-      className,
-      children,
-      onPointerDown,
-      ...rest
-    },
-    ref
-  ) {
-    const reduce = useReducedMotion();
-    const canHover = useHoverCapable();
-    const { spawn, layer, clip } = useRipple(ripple);
+export function Button({
+  variant = "primary",
+  size = "md",
+  pressScale = 0.93,
+  ripple = true,
+  className,
+  children,
+  onPointerDown,
+  ref,
+  ...rest
+}: ButtonProps & { ref?: Ref<HTMLButtonElement> }) {
+  const reduce = useReducedMotion();
+  const canHover = useHoverCapable();
+  const { spawn, layer, clip } = useRipple(ripple);
 
-    return (
-      <motion.button
-        ref={ref}
-        className={cn(
-          "inline-flex cursor-pointer items-center justify-center font-medium select-none",
-          "transition-colors",
-          "disabled:pointer-events-none disabled:opacity-50",
-          clip && "relative overflow-hidden",
-          VARIANT_CLASS[variant],
-          SIZE_CLASS[size],
-          className
-        )}
-        transition={SPRING_PRESS}
-        type="button"
-        whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
-        whileTap={reduce ? undefined : { scale: pressScale }}
-        {...rest}
-        onPointerDown={(event) => {
-          spawn(event);
-          onPointerDown?.(event);
-        }}
-      >
-        {layer}
-        {children}
-      </motion.button>
-    );
-  }
-);
+  return (
+    <motion.button
+      ref={ref}
+      className={cn(
+        "inline-flex cursor-pointer items-center justify-center font-medium select-none",
+        "transition-colors",
+        "disabled:pointer-events-none disabled:opacity-50",
+        clip && "relative overflow-hidden",
+        VARIANT_CLASS[variant],
+        SIZE_CLASS[size],
+        className
+      )}
+      transition={SPRING_PRESS}
+      type="button"
+      whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
+      whileTap={reduce ? undefined : { scale: pressScale }}
+      {...rest}
+      onPointerDown={(event) => {
+        spawn(event);
+        onPointerDown?.(event);
+      }}
+    >
+      {layer}
+      {children}
+    </motion.button>
+  );
+}
 
-export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(
-  function ButtonLink(
-    {
-      variant = "primary",
-      size = "md",
-      pressScale = 0.93,
-      ripple = true,
-      className,
-      children,
-      onPointerDown,
-      ...rest
-    },
-    ref
-  ) {
-    const reduce = useReducedMotion();
-    const canHover = useHoverCapable();
-    const { spawn, layer, clip } = useRipple(ripple);
+export function ButtonLink({
+  variant = "primary",
+  size = "md",
+  pressScale = 0.93,
+  ripple = true,
+  className,
+  children,
+  onPointerDown,
+  ref,
+  ...rest
+}: ButtonLinkProps & { ref?: Ref<HTMLAnchorElement> }) {
+  const reduce = useReducedMotion();
+  const canHover = useHoverCapable();
+  const { spawn, layer, clip } = useRipple(ripple);
 
-    return (
-      <motion.a
-        ref={ref}
-        className={cn(
-          "inline-flex cursor-pointer items-center justify-center font-medium select-none",
-          "transition-colors",
-          clip && "relative overflow-hidden",
-          VARIANT_CLASS[variant],
-          SIZE_CLASS[size],
-          className
-        )}
-        transition={SPRING_PRESS}
-        whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
-        whileTap={reduce ? undefined : { scale: pressScale }}
-        {...rest}
-        onPointerDown={(event) => {
-          spawn(event);
-          onPointerDown?.(event);
-        }}
-      >
-        {layer}
-        {children}
-      </motion.a>
-    );
-  }
-);
+  return (
+    <motion.a
+      ref={ref}
+      className={cn(
+        "inline-flex cursor-pointer items-center justify-center font-medium select-none",
+        "transition-colors",
+        clip && "relative overflow-hidden",
+        VARIANT_CLASS[variant],
+        SIZE_CLASS[size],
+        className
+      )}
+      transition={SPRING_PRESS}
+      whileHover={reduce || !canHover ? undefined : { scale: 1.02 }}
+      whileTap={reduce ? undefined : { scale: pressScale }}
+      {...rest}
+      onPointerDown={(event) => {
+        spawn(event);
+        onPointerDown?.(event);
+      }}
+    >
+      {layer}
+      {children}
+    </motion.a>
+  );
+}

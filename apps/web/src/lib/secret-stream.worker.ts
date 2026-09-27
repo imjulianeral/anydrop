@@ -1,3 +1,5 @@
+import { createSignalHasher } from "./content-signals.ts";
+import type { ContentSignals } from "./content-signals.ts";
 import type { SealOptions } from "./secret-crypto.ts";
 import type { StreamV3Secret, StreamSecret } from "./secret-format.ts";
 import { maxSecretMetadataBytes } from "./secret-format.ts";
@@ -36,7 +38,7 @@ export type StreamTask =
 
 export type StreamResult =
   | { action: "progress"; ratio: number }
-  | { action: "sealed"; secret: StreamV3Secret }
+  | { action: "sealed"; secret: StreamV3Secret; signals: ContentSignals }
   | { action: "opened"; info: SecretFileInfo; downloadUrl: string }
   | { action: "error"; message: string; name: string };
 
@@ -67,6 +69,7 @@ globalThis.addEventListener(
     const { signal } = controller;
     try {
       if (task.action === "seal-file-v3") {
+        const hasher = await createSignalHasher();
         const secret = await sealStreamV3(
           task.file,
           new Uint8Array(task.masterKey),
@@ -74,11 +77,12 @@ globalThis.addEventListener(
           {
             signal,
             onProgress,
+            onPlaintext: hasher.update,
             password: task.password,
             recipientPublicKey: task.recipientPublicKey,
           }
         );
-        report({ action: "sealed", secret });
+        report({ action: "sealed", secret, signals: hasher.digest() });
         return;
       }
       const response = await fetch(task.url, {

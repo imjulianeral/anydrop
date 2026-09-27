@@ -2,12 +2,8 @@
 // beui.dev/components/agents/message
 
 import { motion, useReducedMotion } from "motion/react";
-import {
-  type ComponentPropsWithRef,
-  createContext,
-  type ReactNode,
-  useContext,
-} from "react";
+import { createContext, useContext, useMemo } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 
 import { MessageSideContext } from "#/components/agents/message-context.tsx";
 import { EASE_OUT } from "#/lib/ease.ts";
@@ -82,10 +78,11 @@ export function Message({
   ...props
 }: MessageProps) {
   const reduce = useReducedMotion() ?? false;
+  const messageContext = useMemo(() => ({ from }), [from]);
 
   return (
     <MessageSideContext.Provider value={from === "user" ? "end" : "start"}>
-      <MessageContext.Provider value={{ from }}>
+      <MessageContext.Provider value={messageContext}>
         <motion.article
           data-slot="message"
           data-from={from}
@@ -120,12 +117,10 @@ export function Message({
           transition={
             transition ?? (reduce ? { duration: 0.12 } : MESSAGE_POP_UP)
           }
-          style={{
-            transformOrigin: from === "user" ? "100% 100%" : "0% 100%",
-            ...style,
-          }}
+          style={style}
           className={cn(
             "group/message flex w-full items-start gap-2",
+            from === "user" ? "origin-bottom-right" : "origin-bottom-left",
             from === "user" ? "flex-row-reverse" : "flex-row",
             className
           )}

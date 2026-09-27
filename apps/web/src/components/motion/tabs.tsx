@@ -8,8 +8,8 @@ import {
   motion,
   MotionConfig,
   useReducedMotion,
-  type Transition,
 } from "motion/react";
+import type { Transition } from "motion/react";
 import {
   createContext,
   useCallback,
@@ -19,26 +19,34 @@ import {
   useRef,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
+import type { ReactNode } from "react";
 
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
 type Variant = "pill" | "underline" | "segment";
 
-type Ctx = {
+const SURFACE_CLASS: Record<Variant, string> = {
+  pill: "rounded-full bg-card",
+  segment: "rounded-lg bg-card",
+  underline: "",
+};
+
+interface Ctx {
   value: string;
   setValue: (v: string) => void;
   layoutId: string;
   variant: Variant;
-};
+}
 
 const TabsCtx = createContext<Ctx | null>(null);
 
 function useTabs() {
   const ctx = useContext(TabsCtx);
-  if (!ctx) throw new Error("Tabs.* must be used inside <Tabs>");
+  if (!ctx) {
+    throw new Error("Tabs.* must be used inside <Tabs>");
+  }
   return ctx;
 }
 
@@ -74,7 +82,9 @@ export function Tabs({
   const current = controlled ? value : internal;
   const setValue = useCallback(
     (v: string) => {
-      if (!controlled) setInternal(v);
+      if (!controlled) {
+        setInternal(v);
+      }
       onValueChange?.(v);
     },
     [controlled, onValueChange]
@@ -128,7 +138,9 @@ export function TabsList({
   const measure = useCallback(() => {
     const root = rootRef.current;
     const viewport = viewportRef.current;
-    if (!root || !viewport) return;
+    if (!root || !viewport) {
+      return;
+    }
     // Overlay controls do not reduce the viewport or change its scroll range.
     const overflow = viewport.scrollWidth > root.clientWidth + 1;
     const max = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
@@ -151,8 +163,10 @@ export function TabsList({
   const reveal = useCallback(
     (tab: HTMLElement | null) => {
       const viewport = viewportRef.current;
-      if (!viewport || !tab) return;
-      const frame = viewport.getBoundingClientRect();
+      if (!viewport || !tab) {
+        return;
+      }
+      const viewportBox = viewport.getBoundingClientRect();
       const item = tab.getBoundingClientRect();
       const max = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
       const rtl = getComputedStyle(viewport).direction === "rtl";
@@ -161,20 +175,21 @@ export function TabsList({
         Math.min(max, rtl ? max + viewport.scrollLeft : viewport.scrollLeft)
       );
       // Keep the selected/focused label clear of the arrows over the faded edges.
-      const left = frame.left + (fromLeft > 1 ? 36 : 0);
-      const right = frame.right - (fromLeft < max - 1 ? 36 : 0);
-      const delta =
-        item.left < left
-          ? item.left - left
-          : item.right > right
-            ? item.right - right
-            : 0;
+      const left = viewportBox.left + (fromLeft > 1 ? 36 : 0);
+      const right = viewportBox.right - (fromLeft < max - 1 ? 36 : 0);
+      let delta = 0;
+      if (item.left < left) {
+        delta = item.left - left;
+      } else if (item.right > right) {
+        delta = item.right - right;
+      }
       // Scroll only this viewport; scrollIntoView can also move the whole page.
-      if (delta)
+      if (delta) {
         viewport.scrollBy({
           left: delta,
           behavior: reduce ? "instant" : "smooth",
         });
+      }
     },
     [reduce]
   );
@@ -183,7 +198,9 @@ export function TabsList({
     const root = rootRef.current;
     const viewport = viewportRef.current;
     const list = listRef.current;
-    if (!root || !viewport || !list) return;
+    if (!root || !viewport || !list) {
+      return;
+    }
     const update = () => {
       measure();
       reveal(
@@ -213,22 +230,27 @@ export function TabsList({
         '[role="tab"][aria-selected="true"]'
       ) ?? null
     );
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Children and selection can change without a resize.
   }, [children, value, edges.overflow, measure, reveal]);
 
   useLayoutEffect(() => {
-    if (variant === "underline") return;
+    if (variant === "underline") {
+      return;
+    }
     const list = listRef.current;
-    if (!list) return;
+    if (!list) {
+      return;
+    }
     void children;
-    const labels = Array.from(
-      list.querySelectorAll<HTMLElement>("[data-tabs-label]")
-    );
+    const labels = [...list.querySelectorAll<HTMLElement>("[data-tabs-label]")];
     const indicator = list.querySelector<HTMLElement>("[data-tabs-indicator]");
     const target = list.querySelector<HTMLElement>(
       '[role="tab"][aria-selected="true"]'
     );
     if (!indicator || !target || target.dataset.tabsValue !== value) {
-      for (const label of labels) label.style.clipPath = "inset(0 100% 0 0)";
+      for (const label of labels) {
+        label.style.clipPath = "inset(0 100% 0 0)";
+      }
       return;
     }
     let frames = 0;
@@ -252,10 +274,11 @@ export function TabsList({
           ? "inset(0 100% 0 0)"
           : `inset(0 ${right}px 0 ${left}px)`;
       });
-      labels.forEach((label, index) => {
-        if (label.style.clipPath !== clips[index])
+      for (const [index, label] of labels.entries()) {
+        if (label.style.clipPath !== clips[index]) {
           label.style.clipPath = clips[index];
-      });
+        }
+      }
       frames += 1;
       stillFrames =
         previous &&
@@ -264,30 +287,29 @@ export function TabsList({
           ? stillFrames + 1
           : 0;
       previous = { left: pill.left, right: pill.right };
-      if (reduce || (frames > 2 && stillFrames >= 2)) cancelFrame(syncClips);
+      if (reduce || (frames > 2 && stillFrames >= 2)) {
+        cancelFrame(syncClips);
+      }
     };
     // One shared pass after Motion paints the projected pill keeps every label
     // in sync, including labels crossed during a long or interrupted glide.
     frame.postRender(syncClips, true);
     return () => cancelFrame(syncClips);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Re-sync label clips after the pill moves.
   }, [value, children, variant, reduce]);
 
   const scroll = (direction: number) => {
     const viewport = viewportRef.current;
-    if (viewport)
+    if (viewport) {
       viewport.scrollBy({
         left: direction * viewport.clientWidth * 0.8,
         behavior: reduce ? "instant" : "smooth",
       });
+    }
   };
   const controlClass =
     "absolute inset-y-0 z-20 inline-flex w-9 items-center justify-center text-foreground transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-0";
-  const surfaceClass =
-    variant === "pill"
-      ? "rounded-full bg-card"
-      : variant === "segment"
-        ? "rounded-lg bg-card"
-        : "";
+  const surfaceClass = SURFACE_CLASS[variant];
 
   return (
     <div
@@ -321,6 +343,7 @@ export function TabsList({
         style={
           edges.overflow
             ? {
+                // oxlint-disable-next-line shadcn/no-inline-styles -- The fade follows the scroll edges; black and transparent are mask alpha, not colors.
                 maskImage: `linear-gradient(to right, ${edges.left ? "transparent, black 40px" : "black, black 0px"}, ${edges.right ? "black calc(100% - 40px), transparent" : "black 100%"})`,
               }
             : undefined
@@ -329,8 +352,9 @@ export function TabsList({
           if (
             event.target instanceof HTMLElement &&
             event.target.getAttribute("role") === "tab"
-          )
+          ) {
             reveal(event.target);
+          }
         }}
       >
         <div
@@ -383,6 +407,7 @@ export function TabsTrigger({
   const { value: current, setValue, layoutId, variant } = useTabs();
   const active = current === value;
   // React owns the initial mask only; TabsList synchronizes subsequent masks.
+  // oxlint-disable-next-line react/hook-use-state -- The mask is read once and never set here.
   const [initialClip] = useState(() =>
     active ? "inset(0)" : "inset(0 100% 0 0)"
   );
@@ -426,6 +451,7 @@ export function TabsTrigger({
           data-tabs-indicator=""
           layoutId={layoutId}
           layout
+          // oxlint-disable-next-line shadcn/no-inline-styles -- Motion corrects border radius during layout morphs only when it is set in style.
           style={{ borderRadius: variant === "pill" ? 9999 : 8 }}
           className={cn(
             "bg-primary absolute inset-0",
@@ -452,8 +478,8 @@ export function TabsTrigger({
           data-tabs-label=""
           aria-hidden="true"
           inert
-          className="text-primary-foreground pointer-events-none absolute inset-0 inline-flex items-center justify-center [gap:inherit] [padding:inherit]"
-          style={{ clipPath: initialClip }}
+          className="text-primary-foreground pointer-events-none absolute inset-0 inline-flex items-center justify-center [gap:inherit] [padding:inherit] [clip-path:var(--initial-clip)]"
+          style={{ "--initial-clip": initialClip }}
         >
           {children}
         </span>

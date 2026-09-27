@@ -6,8 +6,8 @@ import {
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
 } from "#/components/ui/chart.tsx";
+import type { ChartConfig } from "#/components/ui/chart.tsx";
 import type { LinkStat } from "#/lib/api.ts";
 import { weekdayLabel } from "#/lib/link-events.ts";
 import { cn } from "#/lib/utils.ts";

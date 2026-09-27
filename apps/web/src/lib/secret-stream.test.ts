@@ -357,6 +357,24 @@ describe("streaming Secrets", () => {
 });
 
 describe("v3 streams", () => {
+  it("shows every plaintext record to onPlaintext before wiping it", async () => {
+    const bytes = Uint8Array.from(
+      { length: secretRecordBytes + 5 },
+      (_, index) => index % 251
+    );
+    const seen: Uint8Array<ArrayBuffer>[] = [];
+    await sealStreamV3(
+      new File([bytes], "private.bin"),
+      crypto.getRandomValues(new Uint8Array(32)),
+      destination().sink,
+      { ...options(), onPlaintext: (chunk) => seen.push(new Uint8Array(chunk)) }
+    );
+    expect(seen).toHaveLength(2);
+    expect(new Uint8Array(await new Blob(seen).arrayBuffer())).toStrictEqual(
+      bytes
+    );
+  }, 30_000);
+
   it.each([undefined, password])(
     "round-trips with optional password %s",
     async (optionalPassword) => {

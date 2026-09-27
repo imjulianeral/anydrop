@@ -411,7 +411,7 @@ defmodule AnyshareWeb.AuthController do
       name: user.name,
       email: user.email,
       webauthn_id: Base.url_encode64(user.id, padding: false),
-      google: if(google, do: %{email: google.email}),
+      google: if(google, do: %{email: google.email, picture: google.picture}),
       passkeys: Enum.map(Auth.passkeys(user), &passkey_json/1),
       reauth_until: Auth.reauth_until(authenticated_at)
     }

@@ -1,23 +1,15 @@
 "use client";
 
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-  type Variants,
-} from "motion/react";
-import {
-  forwardRef,
-  type ReactNode,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import type { Variants } from "motion/react";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { Check, Loader2, X } from "#/components/rune-icons.tsx";
 import { EASE_OUT, SPRING_SWAP } from "#/lib/ease.ts";
 
-import { Button, type ButtonProps } from "./base";
+import { Button } from "./base";
+import type { ButtonProps } from "./base";
 
 export type ButtonState = "idle" | "loading" | "success" | "error";
 
@@ -35,13 +27,13 @@ const ROLL_BLUR = "blur(6px)";
 
 const CASCADE_LETTER_VARIANTS: Variants = {
   initial: { opacity: 0, y: "105%", filter: ROLL_BLUR },
-  animate: (delay: number = 0) => ({
+  animate: (delay = 0) => ({
     opacity: 1,
     y: "0%",
     filter: "blur(0px)",
     transition: { ...SPRING_SWAP, delay },
   }),
-  exit: (delay: number = 0) => ({
+  exit: (delay = 0) => ({
     opacity: 0,
     y: "-105%",
     filter: ROLL_BLUR,
@@ -96,11 +88,22 @@ function TextSlot({ value, children }: { value: string; children: ReactNode }) {
   // Measure strings with the same per-letter layout as the cascade. Measuring
   // the whole string preserves kerning, which can make it narrower than the
   // inline-block letters and clip the final glyph during the width animation.
+  // The observer follows label changes and late font loads.
   useLayoutEffect(() => {
-    const nextWidth = measureRef.current?.offsetWidth;
-    if (!nextWidth) return;
-    setWidth((current) => (current === nextWidth ? current : nextWidth));
-  });
+    const node = measureRef.current;
+    if (!node) {
+      return;
+    }
+    const measure = () => {
+      if (node.offsetWidth) {
+        setWidth(node.offsetWidth);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <motion.span
@@ -115,7 +118,7 @@ function TextSlot({ value, children }: { value: string; children: ReactNode }) {
         className="invisible inline-block whitespace-nowrap"
       >
         {cascade
-          ? label.split("").map((char, index) => (
+          ? [...label].map((char, index) => (
               <span
                 // biome-ignore lint/suspicious/noArrayIndexKey: position is the slot identity.
                 key={index}
@@ -139,7 +142,7 @@ function TextSlot({ value, children }: { value: string; children: ReactNode }) {
               exit="exit"
               className="absolute top-0 left-0 inline-block whitespace-pre"
             >
-              {label.split("").map((char, index) => (
+              {[...label].map((char, index) => (
                 <motion.span
                   // biome-ignore lint/suspicious/noArrayIndexKey: position is the slot identity.
                   key={index}
@@ -181,31 +184,24 @@ function TextSlot({ value, children }: { value: string; children: ReactNode }) {
   );
 }
 
-export const StatefulButton = forwardRef<
-  HTMLButtonElement,
-  StatefulButtonProps
->(function StatefulButton(
-  {
-    state = "idle",
-    children,
-    loadingText = "Loading",
-    successText = "Done",
-    errorText = "Try again",
-    icon,
-    disabled,
-    ...rest
-  },
-  ref
-) {
+export function StatefulButton({
+  state = "idle",
+  children,
+  loadingText = "Loading",
+  successText = "Done",
+  errorText = "Try again",
+  icon,
+  disabled,
+  ref,
+  ...rest
+}: StatefulButtonProps & { ref?: Ref<HTMLButtonElement> }) {
   const isBusy = state === "loading";
-  const stateText =
-    state === "loading"
-      ? loadingText
-      : state === "success"
-        ? successText
-        : state === "error"
-          ? errorText
-          : children;
+  const stateText = {
+    idle: children,
+    loading: loadingText,
+    success: successText,
+    error: errorText,
+  }[state];
   const textKey =
     typeof stateText === "string" ? `${state}-${stateText}` : state;
 
@@ -249,4 +245,4 @@ export const StatefulButton = forwardRef<
       </span>
     </Button>
   );
-});
+}

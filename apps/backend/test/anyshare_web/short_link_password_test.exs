@@ -5,6 +5,7 @@ defmodule AnyshareWeb.ShortLinkPasswordTest do
   alias Anyshare.Repo
   alias Anyshare.Sharing.ShortLink
   alias Anyshare.Sharing.Transfer
+  alias Anyshare.SignalsFixture
 
   @password "four random words"
 
@@ -158,7 +159,10 @@ defmodule AnyshareWeb.ShortLinkPasswordTest do
     completed =
       conn
       |> put_req_header("authorization", "Bearer #{token}")
-      |> post("/api/v1/transfers/#{id}/complete", %{"password" => @password})
+      |> post("/api/v1/transfers/#{id}/complete", %{
+        "password" => @password,
+        "signals" => SignalsFixture.signals()
+      })
       |> json_response(200)
 
     code = completed["short_link"]["code"]

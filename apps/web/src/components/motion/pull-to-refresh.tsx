@@ -4,21 +4,22 @@
 import {
   AnimatePresence,
   animate,
-  type MotionValue,
   motion,
   useMotionValue,
   useReducedMotion,
   useTransform,
 } from "motion/react";
+import type { MotionValue, TargetAndTransition } from "motion/react";
 import {
-  type ReactNode,
-  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 
+import { attempt } from "#/lib/attempt.ts";
 import {
   EASE_IN_OUT,
   EASE_OUT,
@@ -52,12 +53,12 @@ export interface PullToRefreshProps {
   indicatorClassName?: string;
 }
 
-type Gesture = {
+interface Gesture {
   active: boolean;
   startX: number;
   startY: number;
   pointerId: number | null;
-};
+}
 
 const EMPTY_GESTURE: Gesture = {
   active: false,
@@ -98,6 +99,24 @@ function RefreshBuddy({
   const stretch = useTransform(progress, [0, 0.55, 1], [0.68, 1.1, 0.92]);
   const ready = status === "ready";
   const refreshing = status === "refreshing";
+  const loopTransition = reduce ? CALM_PULSE : CHARACTER_LOOP;
+  const transition = refreshing ? loopTransition : SPRING_SWAP;
+  const eyesTransition = refreshing && !reduce ? CHARACTER_LOOP : SPRING_SWAP;
+  let bodyAnimate: TargetAndTransition;
+  let arcAnimate: TargetAndTransition | undefined;
+  let eyesAnimate: TargetAndTransition;
+  if (reduce) {
+    bodyAnimate = refreshing ? { opacity: [0.55, 1, 0.55] } : { opacity: 1 };
+    eyesAnimate = { opacity: 1 };
+  } else if (refreshing) {
+    bodyAnimate = { y: [0, -2, 0], rotate: [-3, 3, -3] };
+    arcAnimate = { rotate: [0, 360] };
+    eyesAnimate = { scaleY: [1, 1, 0.15, 1, 1] };
+  } else {
+    bodyAnimate = { y: 0, rotate: 0, scale: ready ? 1.08 : 1 };
+    arcAnimate = { rotate: ready ? 0 : -35 };
+    eyesAnimate = { scaleY: ready ? 1.18 : 1 };
+  }
 
   return (
     <motion.span
@@ -107,33 +126,15 @@ function RefreshBuddy({
       <motion.svg
         aria-hidden="true"
         viewBox="0 0 36 36"
-        style={{ opacity: 1 }}
         className="h-full w-full overflow-visible"
-        animate={
-          refreshing
-            ? reduce
-              ? { opacity: [0.55, 1, 0.55] }
-              : { y: [0, -2, 0], rotate: [-3, 3, -3] }
-            : reduce
-              ? { opacity: 1 }
-              : { y: 0, rotate: 0, scale: ready ? 1.08 : 1 }
-        }
-        transition={
-          refreshing ? (reduce ? CALM_PULSE : CHARACTER_LOOP) : SPRING_SWAP
-        }
+        animate={bodyAnimate}
+        transition={transition}
       >
         <motion.g
+          // oxlint-disable-next-line shadcn/no-inline-styles -- Motion writes an SVG transform origin inline, so only an inline origin overrides it.
           style={{ transformOrigin: "18px 18px" }}
-          animate={
-            refreshing && !reduce
-              ? { rotate: [0, 360] }
-              : reduce
-                ? undefined
-                : { rotate: ready ? 0 : -35 }
-          }
-          transition={
-            refreshing ? (reduce ? CALM_PULSE : CHARACTER_LOOP) : SPRING_SWAP
-          }
+          animate={arcAnimate}
+          transition={transition}
           className={cn(
             "transition-opacity duration-150",
             ready || refreshing ? "opacity-100" : "opacity-0"
@@ -160,15 +161,10 @@ function RefreshBuddy({
         />
 
         <motion.g
-          style={{ opacity: 1, transformOrigin: "18px 16px" }}
-          animate={
-            refreshing && !reduce
-              ? { scaleY: [1, 1, 0.15, 1, 1] }
-              : reduce
-                ? { opacity: 1 }
-                : { scaleY: ready ? 1.18 : 1 }
-          }
-          transition={refreshing && !reduce ? CHARACTER_LOOP : SPRING_SWAP}
+          // oxlint-disable-next-line shadcn/no-inline-styles -- Motion writes an SVG transform origin inline, so only an inline origin overrides it.
+          style={{ transformOrigin: "18px 16px" }}
+          animate={eyesAnimate}
+          transition={eyesTransition}
         >
           <circle cx="14.2" cy="16" r="1.45" className="fill-background" />
           <circle cx="21.8" cy="16" r="1.45" className="fill-background" />
@@ -233,7 +229,7 @@ export function PullToRefresh({
   const disabledRef = useRef(disabled);
   const externalRefreshingRef = useRef(refreshing);
   const refreshingRef = useRef(refreshing);
-  const [status, setStatusState] = useState<PullToRefreshStatus>("idle");
+  const [status, setStatus] = useState<PullToRefreshStatus>("idle");
   const [internalRefreshing, setInternalRefreshing] = useState(false);
   const reduce = useReducedMotion();
   const pullThreshold = Math.max(24, threshold);
@@ -249,14 +245,18 @@ export function PullToRefresh({
   const indicatorScale = useTransform(y, [0, pullThreshold], [0.86, 1]);
   const isRefreshing = refreshing || internalRefreshing;
 
-  disabledRef.current = disabled;
-  externalRefreshingRef.current = refreshing;
-  refreshingRef.current = isRefreshing;
+  useLayoutEffect(() => {
+    disabledRef.current = disabled;
+    externalRefreshingRef.current = refreshing;
+    refreshingRef.current = isRefreshing;
+  }, [disabled, refreshing, isRefreshing]);
 
-  const setStatus = useCallback((next: PullToRefreshStatus) => {
-    if (statusRef.current === next) return;
+  const updateStatus = useCallback((next: PullToRefreshStatus) => {
+    if (statusRef.current === next) {
+      return;
+    }
     statusRef.current = next;
-    setStatusState(next);
+    setStatus(next);
   }, []);
 
   const settle = useCallback(
@@ -275,36 +275,45 @@ export function PullToRefresh({
 
   const updatePull = useCallback(
     (distance: number) => {
-      if (disabledRef.current || refreshingRef.current) return;
+      if (disabledRef.current || refreshingRef.current) {
+        return;
+      }
       animationRef.current?.stop();
 
       const next = resistedDistance(distance, pullLimit);
       y.set(next);
-      setStatus(next >= pullThreshold ? "ready" : "pulling");
+      updateStatus(next >= pullThreshold ? "ready" : "pulling");
     },
-    [pullLimit, pullThreshold, setStatus, y]
+    [pullLimit, pullThreshold, updateStatus, y]
   );
 
   const runRefresh = useCallback(async () => {
-    if (disabledRef.current || refreshingRef.current) return;
+    if (disabledRef.current || refreshingRef.current) {
+      return;
+    }
 
     setInternalRefreshing(true);
-    setStatus("refreshing");
+    updateStatus("refreshing");
     settle(restingDistance);
 
-    try {
-      await onRefresh();
-    } finally {
-      setInternalRefreshing(false);
+    await attempt(
+      async () => {
+        await onRefresh();
+      },
+      {
+        onSettled: () => {
+          setInternalRefreshing(false);
 
-      // A synchronous refresh can resolve before React commits the temporary
-      // internal state, so release here instead of relying only on the effect.
-      if (!externalRefreshingRef.current) {
-        setStatus("idle");
-        settle(0);
+          // A synchronous refresh can resolve before React commits the temporary
+          // internal state, so release here instead of relying only on the effect.
+          if (!externalRefreshingRef.current) {
+            updateStatus("idle");
+            settle(0);
+          }
+        },
       }
-    }
-  }, [onRefresh, restingDistance, setStatus, settle]);
+    );
+  }, [onRefresh, restingDistance, updateStatus, settle]);
 
   const finishPull = useCallback(() => {
     const shouldRefresh =
@@ -319,26 +328,28 @@ export function PullToRefresh({
       return;
     }
 
-    setStatus("idle");
+    updateStatus("idle");
     settle(0);
-  }, [pullThreshold, runRefresh, setStatus, settle, y]);
+  }, [pullThreshold, runRefresh, updateStatus, settle, y]);
 
   useEffect(() => {
     if (isRefreshing) {
-      setStatus("refreshing");
+      updateStatus("refreshing");
       settle(restingDistance);
       return;
     }
 
     if (statusRef.current === "refreshing") {
-      setStatus("idle");
+      updateStatus("idle");
       settle(0);
     }
-  }, [isRefreshing, restingDistance, setStatus, settle]);
+  }, [isRefreshing, restingDistance, updateStatus, settle]);
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    if (!root) {
+      return;
+    }
 
     const onTouchStart = (event: TouchEvent) => {
       if (
@@ -350,7 +361,7 @@ export function PullToRefresh({
         return;
       }
 
-      const touch = event.touches[0];
+      const [touch] = event.touches;
       gestureRef.current = {
         active: true,
         startX: touch.clientX,
@@ -361,8 +372,10 @@ export function PullToRefresh({
 
     const onTouchMove = (event: TouchEvent) => {
       const gesture = gestureRef.current;
-      const touch = event.touches[0];
-      if (!gesture.active || !touch) return;
+      const [touch] = event.touches;
+      if (!gesture.active || !touch) {
+        return;
+      }
 
       const deltaX = touch.clientX - gesture.startX;
       const deltaY = touch.clientY - gesture.startY;
@@ -372,14 +385,18 @@ export function PullToRefresh({
         return;
       }
 
-      if (Math.abs(deltaX) > deltaY) return;
+      if (Math.abs(deltaX) > deltaY) {
+        return;
+      }
 
       event.preventDefault();
       updatePull(deltaY);
     };
 
     const onTouchEnd = () => {
-      if (gestureRef.current.active) finishPull();
+      if (gestureRef.current.active) {
+        finishPull();
+      }
     };
 
     root.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -395,9 +412,7 @@ export function PullToRefresh({
     };
   }, [finishPull, updatePull]);
 
-  useEffect(() => {
-    return () => animationRef.current?.stop();
-  }, []);
+  useEffect(() => () => animationRef.current?.stop(), []);
 
   const startPointerPull = (event: ReactPointerEvent<HTMLElement>) => {
     // Everything but touch: a finger is driven by the native listeners above,
@@ -428,22 +443,26 @@ export function PullToRefresh({
 
   const movePointerPull = (event: ReactPointerEvent<HTMLElement>) => {
     const gesture = gestureRef.current;
-    if (!gesture.active || gesture.pointerId !== event.pointerId) return;
+    if (!gesture.active || gesture.pointerId !== event.pointerId) {
+      return;
+    }
 
     const deltaX = event.clientX - gesture.startX;
     const deltaY = event.clientY - gesture.startY;
-    if (deltaY < 0 || Math.abs(deltaX) > deltaY) return;
+    if (deltaY < 0 || Math.abs(deltaX) > deltaY) {
+      return;
+    }
 
     event.preventDefault();
     updatePull(deltaY);
   };
 
-  const label =
-    status === "refreshing"
-      ? refreshingLabel
-      : status === "ready"
-        ? releaseLabel
-        : pullingLabel;
+  const label = {
+    idle: pullingLabel,
+    pulling: pullingLabel,
+    ready: releaseLabel,
+    refreshing: refreshingLabel,
+  }[status];
 
   return (
     <section
@@ -455,10 +474,14 @@ export function PullToRefresh({
       onPointerDown={startPointerPull}
       onPointerMove={movePointerPull}
       onPointerUp={(event) => {
-        if (gestureRef.current.pointerId === event.pointerId) finishPull();
+        if (gestureRef.current.pointerId === event.pointerId) {
+          finishPull();
+        }
       }}
       onPointerCancel={(event) => {
-        if (gestureRef.current.pointerId === event.pointerId) finishPull();
+        if (gestureRef.current.pointerId === event.pointerId) {
+          finishPull();
+        }
       }}
       className={cn(
         "bg-background relative w-full overflow-y-auto overscroll-contain",
@@ -470,46 +493,19 @@ export function PullToRefresh({
         // only the pull itself suppresses selection, and only while it runs,
         // so dragging the page down cannot highlight it on the way.
         TOUCH_GESTURE_CONTENT_CLASS,
-        status === "pulling" || status === "ready"
-          ? "cursor-grabbing select-none"
-          : "cursor-grab",
-        (disabled || isRefreshing) && "cursor-default",
+        pullCursorClass(status, disabled || isRefreshing),
         className
       )}
     >
-      <motion.div
-        aria-live="polite"
-        aria-atomic="true"
-        style={
-          reduce
-            ? { opacity: indicatorOpacity }
-            : { opacity: indicatorOpacity, scale: indicatorScale }
-        }
-        className={cn(
-          "from-background via-background/95 text-muted-foreground pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[4.25rem] flex-col items-center justify-center gap-0.5 bg-gradient-to-b to-transparent text-[11px] font-medium",
-          indicatorClassName
-        )}
-      >
-        <RefreshBuddy
-          progress={progress}
-          status={status}
-          reduce={Boolean(reduce)}
-        />
-        <span className="relative h-4 min-w-24 text-center">
-          <AnimatePresence initial={false} mode="wait">
-            <motion.span
-              key={status}
-              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 3 }}
-              animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3 }}
-              transition={LABEL_SWAP}
-              className="absolute inset-x-0 whitespace-nowrap"
-            >
-              {label}
-            </motion.span>
-          </AnimatePresence>
-        </span>
-      </motion.div>
+      <PullIndicator
+        progress={progress}
+        status={status}
+        label={label}
+        reduce={Boolean(reduce)}
+        opacity={indicatorOpacity}
+        scale={indicatorScale}
+        className={indicatorClassName}
+      />
 
       <motion.div
         style={reduce ? undefined : { y }}
@@ -521,5 +517,60 @@ export function PullToRefresh({
         {children}
       </motion.div>
     </section>
+  );
+}
+
+function pullCursorClass(status: PullToRefreshStatus, inactive: boolean) {
+  const dragging = status === "pulling" || status === "ready";
+  return cn(
+    dragging ? "cursor-grabbing select-none" : "cursor-grab",
+    inactive && "cursor-default"
+  );
+}
+
+function PullIndicator({
+  progress,
+  status,
+  label,
+  reduce,
+  opacity,
+  scale,
+  className,
+}: {
+  progress: MotionValue<number>;
+  status: PullToRefreshStatus;
+  label: ReactNode;
+  reduce: boolean;
+  opacity: MotionValue<number>;
+  scale: MotionValue<number>;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      aria-live="polite"
+      aria-atomic="true"
+      // oxlint-disable-next-line shadcn/no-inline-styles -- `opacity` is a MotionValue that follows the pull every frame.
+      style={reduce ? { opacity } : { opacity, scale }}
+      className={cn(
+        "from-background via-background/95 text-muted-foreground pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[4.25rem] flex-col items-center justify-center gap-0.5 bg-gradient-to-b to-transparent text-[11px] font-medium",
+        className
+      )}
+    >
+      <RefreshBuddy progress={progress} status={status} reduce={reduce} />
+      <span className="relative h-4 min-w-24 text-center">
+        <AnimatePresence initial={false} mode="wait">
+          <motion.span
+            key={status}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 3 }}
+            animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3 }}
+            transition={LABEL_SWAP}
+            className="absolute inset-x-0 whitespace-nowrap"
+          >
+            {label}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+    </motion.div>
   );
 }

@@ -43,7 +43,10 @@ export function TextComposer({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="bg-background max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <DialogContent
+        surface="background"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>Send text to {peerName}</DialogTitle>
           <DialogDescription>

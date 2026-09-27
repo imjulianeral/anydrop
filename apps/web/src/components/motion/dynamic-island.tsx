@@ -10,15 +10,15 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
+import type { ReactNode } from "react";
 
 import { EASE_OUT } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
-type IslandContextValue = {
+interface IslandContextValue {
   view: string | null;
-};
+}
 
 const IslandContext = createContext<IslandContextValue | null>(null);
 
@@ -41,7 +41,6 @@ const CONTENT_SPRING = {
 // Constant radius — never animated. The browser clamps it to half the shell
 // height, so the pill-to-rounded-rect morph falls out of the resize for free
 // with zero chance of corner glitches.
-const RADIUS = 32;
 
 // iPhone pill dimensions. Also the shell's pre-measure animate target: if the
 // first commit already has a view active (e.g. a click replayed after
@@ -64,13 +63,17 @@ function useContentSize() {
   // snapped open instead of springing.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     setSize({ width: el.offsetWidth, height: el.offsetHeight });
   }, []);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (!el || typeof ResizeObserver === "undefined") {
+      return;
+    }
     const observer = new ResizeObserver(() => {
       setSize({ width: el.offsetWidth, height: el.offsetHeight });
     });
@@ -122,8 +125,7 @@ function Slot({
       transition={reduce ? { duration: 0.15 } : CONTENT_SPRING}
       // Anchored to the pill line: content unfurls downward out of it and is
       // sucked back up into it.
-      style={{ transformOrigin: "top center" }}
-      className={cn("flex items-center justify-center", className)}
+      className={cn("flex origin-top items-center justify-center", className)}
     >
       {children}
     </motion.div>
@@ -154,6 +156,7 @@ export function DynamicIsland({
   return (
     <IslandContext.Provider value={contextValue}>
       <motion.div
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- An animated block container; <output> only allows phrasing content.
         role="status"
         aria-live="polite"
         initial={false}
@@ -163,12 +166,11 @@ export function DynamicIsland({
             : { width: PILL_WIDTH, height: PILL_HEIGHT }
         }
         transition={reduce ? { duration: 0 } : SHELL_SPRING}
-        style={{ borderRadius: RADIUS }}
         // items-start pins content to the top edge while the shell springs, so
         // expansion reads as unfurling downward out of the pill. Top-align the
         // island in its parent (like under a notch) to complete the effect.
         className={cn(
-          "relative inline-flex items-start justify-center overflow-hidden",
+          "relative inline-flex items-start justify-center overflow-hidden rounded-[32px]",
           "bg-foreground text-background shadow-2xl",
           className
         )}
@@ -207,8 +209,9 @@ export function DynamicIslandView({
   className,
 }: DynamicIslandViewProps) {
   const ctx = useContext(IslandContext);
-  if (!ctx)
+  if (!ctx) {
     throw new Error("DynamicIslandView must be used inside <DynamicIsland>");
+  }
   const active = ctx.view === id;
 
   return (

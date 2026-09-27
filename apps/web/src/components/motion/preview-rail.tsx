@@ -1,15 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import {
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode,
-  useCallback,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useId, useRef, useState } from "react";
+import type { MouseEvent, PointerEvent, ReactNode } from "react";
 
 import { EASE_OUT, SPRING_LAYOUT } from "#/lib/ease.ts";
 import { useDismiss } from "#/lib/hooks/use-dismiss.ts";
@@ -47,6 +40,14 @@ export interface PreviewRailProps {
   previewClassName?: string;
 }
 
+/** Ticks shrink with their distance from the highlighted item. */
+const TICK_SCALE_BY_DISTANCE: Record<number, number> = { 1: 0.68, 2: 0.44 };
+
+const VERTICAL_PREVIEW_CLASS = {
+  before: "inset-y-0 right-16 left-4 content-center",
+  after: "inset-y-0 right-4 left-16 content-center",
+} as const;
+
 function DefaultPreview({ item }: { item: PreviewRailItem }) {
   return (
     <div
@@ -67,6 +68,132 @@ function DefaultPreview({ item }: { item: PreviewRailItem }) {
           {item.description}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** The requested item when it exists, otherwise the first one. */
+function selectedRailId(items: PreviewRailItem[], requestedId: string) {
+  if (items.some((item) => item.id === requestedId)) {
+    return requestedId;
+  }
+  return items[0]?.id ?? "";
+}
+
+/** A previewed tick wins; otherwise the selection, when it stays lit. */
+function highlightedRailId(
+  displayedId: string,
+  highlightActive: boolean,
+  selectedId: string
+) {
+  if (displayedId) {
+    return displayedId;
+  }
+  return highlightActive ? selectedId : "";
+}
+
+function PreviewLayer({
+  items,
+  displayedId,
+  horizontal,
+  previewSide,
+  layoutId,
+  reduce,
+  renderPreview,
+  className,
+  previewClassName,
+}: {
+  items: PreviewRailItem[];
+  displayedId: string;
+  horizontal: boolean;
+  previewSide: "before" | "after";
+  layoutId: string;
+  reduce: boolean;
+  renderPreview?: (item: PreviewRailItem) => ReactNode;
+  className?: string;
+  previewClassName?: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute z-50 grid",
+        horizontal
+          ? "grid-cols-(--rail-template)"
+          : "grid-rows-(--rail-template)",
+        horizontal
+          ? "top-1/2 left-1/2 h-5 w-fit max-w-full -translate-x-1/2 -translate-y-1/2 justify-center"
+          : VERTICAL_PREVIEW_CLASS[previewSide],
+        className
+      )}
+    >
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className={cn(
+            "relative flex items-center",
+            horizontal ? "w-(--rail-item) justify-center" : "h-(--rail-item)"
+          )}
+        >
+          {item.id === displayedId ? (
+            <div
+              className={cn(
+                horizontal
+                  ? "absolute bottom-12 left-1/2 w-72 -translate-x-1/2"
+                  : cn(
+                      "w-full max-w-sm",
+                      previewSide === "before" && "ml-auto"
+                    ),
+                previewClassName
+              )}
+            >
+              <motion.div
+                layoutId={layoutId}
+                transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={item.id}
+                    initial={
+                      reduce
+                        ? { opacity: 0 }
+                        : { opacity: 0, y: 4, filter: "blur(6px)" }
+                    }
+                    animate={
+                      reduce
+                        ? { opacity: 1 }
+                        : { opacity: 1, y: 0, filter: "blur(0px)" }
+                    }
+                    exit={
+                      reduce
+                        ? { opacity: 0 }
+                        : {
+                            opacity: 0,
+                            y: -2,
+                            filter: "blur(4px)",
+                            transition: {
+                              duration: 0.12,
+                              ease: EASE_OUT,
+                            },
+                          }
+                    }
+                    transition={{
+                      duration: reduce ? 0 : 0.18,
+                      ease: EASE_OUT,
+                    }}
+                  >
+                    {renderPreview ? (
+                      renderPreview(item)
+                    ) : (
+                      <DefaultPreview item={item} />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }
@@ -105,6 +232,10 @@ export function PreviewRail({
   // A click carries no pointerType, so the pointerdown before it is what says
   // whether the activation was a tap. Keyboard activation has none at all.
   const tap = useTapGesture<boolean>();
+  // A gesture the platform takes away sends no click, and a key press
+  // starts an activation that never had a pointer behind it: either
+  // one leaves a record the next click would read as a tap of its own.
+  const dropGesture = () => tap.drop();
   const hover = useHoverGesture();
 
   const clearPinned = useCallback(() => setPinnedId(null), []);
@@ -113,12 +244,13 @@ export function PreviewRail({
   // card is a preview, so that tap passes through to whatever it landed on.
   useDismiss(pinnedId !== null, clearPinned, rootRef);
 
-  const requestedActiveId = activeId ?? internalActiveId;
-  const selectedId = items.some((item) => item.id === requestedActiveId)
-    ? requestedActiveId
-    : (items[0]?.id ?? "");
+  const selectedId = selectedRailId(items, activeId ?? internalActiveId);
   const displayedId = hoveredId ?? pinnedId ?? focusedId ?? "";
-  const highlightedId = displayedId || (highlightActive ? selectedId : "");
+  const highlightedId = highlightedRailId(
+    displayedId,
+    highlightActive,
+    selectedId
+  );
   const displayedIndex = items.findIndex((item) => item.id === highlightedId);
   const rowTemplate = items.length
     ? `repeat(${items.length}, ${itemSize}px)`
@@ -126,7 +258,9 @@ export function PreviewRail({
   const isHorizontal = orientation === "horizontal";
 
   const selectItem = (id: string) => {
-    if (activeId === undefined) setInternalActiveId(id);
+    if (activeId === undefined) {
+      setInternalActiveId(id);
+    }
     onActiveChange?.(id);
   };
 
@@ -134,6 +268,10 @@ export function PreviewRail({
     <motion.div
       layoutRoot
       ref={rootRef}
+      style={{
+        "--rail-template": rowTemplate,
+        "--rail-item": `${itemSize}px`,
+      }}
       onBlur={(event) => {
         // Both tick sources leave with the focus: a tap does not always land
         // focus, but when it does, tabbing away must not strand the card.
@@ -155,15 +293,15 @@ export function PreviewRail({
         onPointerLeave={(event) => {
           // A touch pointer leaves on lift, which would clear the tick the tap
           // just chose — that one is cleared by the outside tap instead.
-          if (hover.leave(event)) setHoveredId(null);
+          if (hover.leave(event)) {
+            setHoveredId(null);
+          }
         }}
-        style={
-          isHorizontal
-            ? { gridTemplateColumns: rowTemplate }
-            : { gridTemplateRows: rowTemplate }
-        }
         className={cn(
           "relative z-10 grid shrink-0",
+          isHorizontal
+            ? "grid-cols-(--rail-template)"
+            : "grid-rows-(--rail-template)",
           isHorizontal
             ? "h-12 w-fit max-w-full justify-center self-center"
             : "w-12 content-center",
@@ -174,55 +312,44 @@ export function PreviewRail({
           const selected = item.id === selectedId;
           const highlighted = item.id === highlightedId;
           const distance =
-            displayedIndex < 0
+            displayedIndex === -1
               ? Number.POSITIVE_INFINITY
               : Math.abs(index - displayedIndex);
           const scale = highlighted
             ? 1
-            : distance === 1
-              ? 0.68
-              : distance === 2
-                ? 0.44
-                : 0.25;
+            : (TICK_SCALE_BY_DISTANCE[distance] ?? 0.25);
 
           const itemContent = (
-            <>
-              <motion.span
-                data-slot="preview-rail-tick"
-                aria-hidden="true"
-                animate={isHorizontal ? { scaleY: scale } : { scaleX: scale }}
-                transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
-                className={cn(
-                  "block bg-current",
-                  isHorizontal
-                    ? "h-12 w-0.5 origin-bottom"
-                    : "h-0.5 w-12 origin-left",
-                  highlighted ? "text-foreground" : undefined
-                )}
-              />
-            </>
+            <motion.span
+              data-slot="preview-rail-tick"
+              aria-hidden="true"
+              animate={isHorizontal ? { scaleY: scale } : { scaleX: scale }}
+              transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+              className={cn(
+                "block bg-current",
+                isHorizontal
+                  ? "h-12 w-0.5 origin-bottom"
+                  : "h-0.5 w-12 origin-left",
+                highlighted ? "text-foreground" : undefined
+              )}
+            />
           );
 
           const sharedClassName = cn(
             "text-muted-foreground focus-visible:ring-ring focus-visible:ring-offset-background relative flex focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
             isHorizontal
-              ? "h-12 w-6 items-end justify-center"
-              : "h-6 w-12 items-center"
+              ? "h-12 w-(--rail-item) items-end justify-center"
+              : "h-(--rail-item) w-12 items-center"
           );
-          const sharedStyle = isHorizontal
-            ? { width: itemSize }
-            : { height: itemSize };
           const handlePointerEnter = (event: PointerEvent<HTMLElement>) => {
-            if (hover.enter(event)) setHoveredId(item.id);
+            if (hover.enter(event)) {
+              setHoveredId(item.id);
+            }
           };
           const handlePointerDown = (event: PointerEvent<HTMLElement>) => {
             tap.start(event, pinnedId === item.id);
             setFocusedId(null);
           };
-          // A gesture the platform takes away sends no click, and a key press
-          // starts an activation that never had a pointer behind it: either
-          // one leaves a record the next click would read as a tap of its own.
-          const dropGesture = () => tap.drop();
           const handleFocus = (currentTarget: HTMLElement) => {
             if (currentTarget.matches(":focus-visible")) {
               setFocusedId(item.id);
@@ -266,7 +393,6 @@ export function PreviewRail({
               onKeyDown={dropGesture}
               onFocus={(event) => handleFocus(event.currentTarget)}
               onClick={handleSelect}
-              style={sharedStyle}
               className={sharedClassName}
             >
               {itemContent}
@@ -284,7 +410,6 @@ export function PreviewRail({
               onKeyDown={dropGesture}
               onFocus={(event) => handleFocus(event.currentTarget)}
               onClick={handleSelect}
-              style={sharedStyle}
               className={sharedClassName}
             >
               {itemContent}
@@ -294,92 +419,17 @@ export function PreviewRail({
       </nav>
 
       {showPreview ? (
-        <div
-          aria-hidden="true"
-          style={
-            isHorizontal
-              ? { gridTemplateColumns: rowTemplate }
-              : { gridTemplateRows: rowTemplate }
-          }
-          className={cn(
-            "pointer-events-none absolute z-50 grid",
-            isHorizontal
-              ? "top-1/2 left-1/2 h-5 w-fit max-w-full -translate-x-1/2 -translate-y-1/2 justify-center"
-              : previewSide === "before"
-                ? "inset-y-0 right-16 left-4 content-center"
-                : "inset-y-0 right-4 left-16 content-center",
-            previewContainerClassName
-          )}
-        >
-          {items.map((item) => (
-            <div
-              key={item.id}
-              style={isHorizontal ? { width: itemSize } : { height: itemSize }}
-              className={cn(
-                "relative flex items-center",
-                isHorizontal ? "justify-center" : undefined
-              )}
-            >
-              {item.id === displayedId ? (
-                <div
-                  className={cn(
-                    isHorizontal
-                      ? "absolute bottom-12 left-1/2 w-72 -translate-x-1/2"
-                      : cn(
-                          "w-full max-w-sm",
-                          previewSide === "before" && "ml-auto"
-                        ),
-                    previewClassName
-                  )}
-                >
-                  <motion.div
-                    layoutId={`preview-rail-card-${uid}`}
-                    transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.div
-                        key={item.id}
-                        initial={
-                          reduce
-                            ? { opacity: 0 }
-                            : { opacity: 0, y: 4, filter: "blur(6px)" }
-                        }
-                        animate={
-                          reduce
-                            ? { opacity: 1 }
-                            : { opacity: 1, y: 0, filter: "blur(0px)" }
-                        }
-                        exit={
-                          reduce
-                            ? { opacity: 0 }
-                            : {
-                                opacity: 0,
-                                y: -2,
-                                filter: "blur(4px)",
-                                transition: {
-                                  duration: 0.12,
-                                  ease: EASE_OUT,
-                                },
-                              }
-                        }
-                        transition={{
-                          duration: reduce ? 0 : 0.18,
-                          ease: EASE_OUT,
-                        }}
-                      >
-                        {renderPreview ? (
-                          renderPreview(item)
-                        ) : (
-                          <DefaultPreview item={item} />
-                        )}
-                      </motion.div>
-                    </AnimatePresence>
-                  </motion.div>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <PreviewLayer
+          items={items}
+          displayedId={displayedId}
+          horizontal={isHorizontal}
+          previewSide={previewSide}
+          layoutId={`preview-rail-card-${uid}`}
+          reduce={Boolean(reduce)}
+          renderPreview={renderPreview}
+          className={previewContainerClassName}
+          previewClassName={previewClassName}
+        />
       ) : null}
 
       {children ? (

@@ -3,11 +3,13 @@
 
 import { useReducedMotion } from "motion/react";
 import { useTheme } from "next-themes";
-import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
+import { useEffect } from "react";
+import type { ComponentPropsWithoutRef } from "react";
 
 import { ActionSwapIcon } from "#/components/motion/action-swap.tsx";
 import { Moon, Sun } from "#/components/rune-icons.tsx";
 import { EASE_OUT_CSS } from "#/lib/ease.ts";
+import { useHydrated } from "#/lib/hooks/use-hydrated.ts";
 import { cn } from "#/lib/utils.ts";
 
 export type ThemeVariant = "rectangle" | "circle" | "circle-blur" | "blinds";
@@ -131,14 +133,15 @@ export function useThemeToggle({
 }: { variant?: ThemeVariant; start?: RectStart } = {}) {
   const { setTheme, resolvedTheme } = useTheme();
   const reduce = useReducedMotion() ?? false;
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   useEffect(() => {
-    if (document.getElementById(VT_STYLE_ID)) return;
+    if (document.querySelector(`#${VT_STYLE_ID}`)) {
+      return;
+    }
     const el = document.createElement("style");
     el.id = VT_STYLE_ID;
     el.textContent = VT_CSS;
-    document.head.appendChild(el);
+    document.head.append(el);
   }, []);
   const isDark = mounted && resolvedTheme === "dark";
 
@@ -165,7 +168,7 @@ export function useThemeToggle({
 
     const vt = (
       document as Document & {
-        startViewTransition(cb: () => void): { finished: Promise<void> };
+        startViewTransition: (cb: () => void) => { finished: Promise<void> };
       }
     ).startViewTransition(() => setTheme(next));
 
@@ -193,7 +196,10 @@ export function ThemeToggle({
         mounted && isDark ? "Switch to light mode" : "Switch to dark mode"
       }
       onClick={toggle}
-      className={cn("flex cursor-pointer items-center justify-center", className)}
+      className={cn(
+        "flex cursor-pointer items-center justify-center",
+        className
+      )}
       {...rest}
     >
       {mounted ? (

@@ -1,12 +1,23 @@
+import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import viteReact from "@vitejs/plugin-react";
+import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
 const config = defineConfig(({ mode }) => ({
   resolve: { tsconfigPaths: true },
-  optimizeDeps: { include: ["recharts", "hash-wasm", "libsodium-wrappers"] },
+  optimizeDeps: {
+    // `react/compiler-runtime` is injected by the React Compiler transform, so
+    // the dep scanner can't see it; pre-bundle it with React to avoid a
+    // mid-session re-optimization that loads two React copies.
+    include: [
+      "react/compiler-runtime",
+      "recharts",
+      "hash-wasm",
+      "libsodium-wrappers",
+    ],
+  },
   plugins: [
     devtools(),
     tailwindcss(),
@@ -24,6 +35,7 @@ const config = defineConfig(({ mode }) => ({
       },
     }),
     viteReact(),
+    babel({ presets: [reactCompilerPreset()] }),
   ],
   server: {
     port: 3000,

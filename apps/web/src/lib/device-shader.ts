@@ -9,7 +9,8 @@ const deviceShaders = SHADER_BACKGROUND_VARIANTS.filter(
 export function deviceShader(id: string): ShaderBackgroundVariant {
   let hash = 0;
   for (const character of id) {
-    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+    // Keep the hash within 32 bits so it stays an exact integer.
+    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) % 2 ** 32;
   }
   return deviceShaders[hash % deviceShaders.length] ?? "dot-grid";
 }

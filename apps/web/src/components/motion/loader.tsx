@@ -78,8 +78,8 @@ export function Loader({
   const reduce = useReducedMotion() ?? false;
 
   return (
-    <span
-      role="status"
+    <output
+      aria-live="polite"
       aria-label={label}
       className={cn(
         "text-foreground inline-flex items-center justify-center",
@@ -127,7 +127,7 @@ export function Loader({
         <Percent size={size} speed={speed} reduce={reduce} />
       )}
       <span className="sr-only">{label}</span>
-    </span>
+    </output>
   );
 }
 
@@ -172,15 +172,20 @@ function Spinner({ size, speed, reduce }: PartProps) {
   );
 }
 
+/** A pixel length for a CSS custom property. */
+const px = (value: number) => `${value}px`;
+
 function Dots({ size, speed, reduce }: PartProps) {
   const dot = size * 0.24;
   return (
-    <span className="flex items-center" style={{ gap: size * 0.14 }}>
+    <span
+      className="flex items-center gap-(--gap)"
+      style={{ "--gap": px(size * 0.14), "--dot": px(dot) }}
+    >
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="rounded-full bg-current"
-          style={{ width: dot, height: dot }}
+          className="size-(--dot) rounded-full bg-current"
           animate={
             reduce
               ? { opacity: [0.4, 1, 0.4] }
@@ -218,8 +223,8 @@ function Ascii({
 
   return (
     <span
-      className="font-mono leading-none tabular-nums"
-      style={{ fontSize: size, lineHeight: 1 }}
+      className="font-mono text-(length:--font-size) leading-none tabular-nums"
+      style={{ "--font-size": px(size) }}
     >
       {frames[frame % frames.length]}
     </span>
@@ -241,7 +246,7 @@ function ngonRadius(ang: number, n: number, phase = 0) {
 
 function morphPath(radiusAt: (ang: number) => number) {
   const parts: string[] = [];
-  for (let i = 0; i < MORPH_POINTS; i++) {
+  for (let i = 0; i < MORPH_POINTS; i += 1) {
     const ang = (i / MORPH_POINTS) * 2 * Math.PI - Math.PI / 2;
     const r = Math.min(1.05, radiusAt(ang));
     const x = (50 + Math.cos(ang) * 46 * r).toFixed(2);
@@ -251,12 +256,13 @@ function morphPath(radiusAt: (ang: number) => number) {
   return `${parts.join(" ")} Z`;
 }
 
+// Circle, square, triangle, hexagon, diamond.
 const MORPH_PATHS = [
-  morphPath(() => 1), // circle
-  morphPath((a) => ngonRadius(a, 4, Math.PI / 4)), // square
-  morphPath((a) => ngonRadius(a, 3)), // triangle
-  morphPath((a) => ngonRadius(a, 6)), // hexagon
-  morphPath((a) => ngonRadius(a, 4)), // diamond
+  morphPath(() => 1),
+  morphPath((a) => ngonRadius(a, 4, Math.PI / 4)),
+  morphPath((a) => ngonRadius(a, 3)),
+  morphPath((a) => ngonRadius(a, 6)),
+  morphPath((a) => ngonRadius(a, 4)),
 ];
 
 // Each shape appears twice in a row so it fully forms and HOLDS before the
@@ -273,6 +279,7 @@ function Morph({ size, speed, reduce }: PartProps) {
       width={size}
       height={size}
       viewBox="0 0 100 100"
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- An inline SVG drawing, which <img> cannot hold.
       role="img"
       animate={
         reduce
@@ -306,7 +313,7 @@ function Comet({ size, speed, reduce }: PartProps) {
   const head = size * 0.2;
   const r = size / 2 - head / 2;
   return (
-    <span className="relative" style={{ width: size, height: size }}>
+    <span className="relative size-(--size)" style={{ "--size": px(size) }}>
       <motion.span
         className="absolute inset-0"
         animate={reduce ? REDUCED.animate : { rotate: 360 }}
@@ -322,14 +329,11 @@ function Comet({ size, speed, reduce }: PartProps) {
           return (
             <span
               key={i}
-              className="absolute top-1/2 left-1/2 rounded-full bg-current"
+              className="absolute top-1/2 left-1/2 -mt-[calc(var(--trail)/2)] -ml-[calc(var(--trail)/2)] size-(--trail) transform-(--trail-transform) rounded-full bg-current opacity-(--trail-opacity)"
               style={{
-                width: sz,
-                height: sz,
-                marginLeft: -sz / 2,
-                marginTop: -sz / 2,
-                opacity: 1 - i * 0.16,
-                transform: `rotate(${-i * 15}deg) translateY(${-r}px)`,
+                "--trail": px(sz),
+                "--trail-opacity": 1 - i * 0.16,
+                "--trail-transform": `rotate(${-i * 15}deg) translateY(${-r}px)`,
               }}
             />
           );
@@ -346,7 +350,6 @@ function Scramble({ size, speed, reduce }: PartProps) {
   const [text, setText] = useState(SCRAMBLE_TARGET);
   useEffect(() => {
     if (reduce) {
-      setText(SCRAMBLE_TARGET);
       return;
     }
     let tick = 0;
@@ -355,7 +358,7 @@ function Scramble({ size, speed, reduce }: PartProps) {
       () => {
         const reveal = tick % total;
         let s = "";
-        for (let i = 0; i < SCRAMBLE_TARGET.length; i++) {
+        for (let i = 0; i < SCRAMBLE_TARGET.length; i += 1) {
           s +=
             i < reveal
               ? SCRAMBLE_TARGET[i]
@@ -364,7 +367,7 @@ function Scramble({ size, speed, reduce }: PartProps) {
                 ];
         }
         setText(s);
-        tick++;
+        tick += 1;
       },
       (speed / SCRAMBLE_TARGET.length) * 1000 * 0.55
     );
@@ -373,17 +376,18 @@ function Scramble({ size, speed, reduce }: PartProps) {
 
   return (
     <span
-      className="font-mono font-medium tracking-[0.2em] tabular-nums"
-      style={{ fontSize: size * 0.42 }}
+      className="font-mono text-(length:--font-size) font-medium tracking-[0.2em] tabular-nums"
+      style={{ "--font-size": px(size * 0.42) }}
     >
-      {text}
+      {reduce ? SCRAMBLE_TARGET : text}
     </span>
   );
 }
 
 function Metaballs({ size, speed, reduce }: PartProps) {
-  const id = useId().replace(/:/g, "");
+  const id = useId().replaceAll(":", "");
   return (
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- An inline SVG drawing, which <img> cannot hold.
     <svg width={size} height={size} viewBox="0 0 100 100" role="img">
       <title>Loading</title>
       <defs>
@@ -437,14 +441,16 @@ function Newton({ size, speed, reduce }: PartProps) {
   };
 
   return (
-    <span className="flex items-center justify-center" style={{ height: d }}>
+    <span
+      className="flex h-(--ball) items-center justify-center"
+      style={{ "--ball": px(d) }}
+    >
       {NEWTON_BALLS.map((i) => {
         const move = moves[i];
         return (
           <motion.span
             key={i}
-            className="rounded-full bg-current"
-            style={{ width: d, height: d }}
+            className="size-(--ball) rounded-full bg-current"
             animate={reduce || !move ? undefined : { x: move.x }}
             transition={
               reduce || !move
@@ -468,15 +474,21 @@ function Helix({ size, speed, reduce }: PartProps) {
   const dot = size * 0.14;
   const amp = size * 0.32;
   return (
-    <span className="relative" style={{ width: size, height: size }}>
+    <span
+      className="relative size-(--size)"
+      style={{
+        "--size": px(size),
+        "--dot": px(dot),
+        "--dot-left": px(size / 2 - dot / 2),
+      }}
+    >
       {Array.from({ length: rows }, (_, r) => {
         const top = (r / (rows - 1)) * (size - dot);
         const delay = (r / rows) * speed;
         return (
-          <span key={`row-${top}`}>
+          <span key={`row-${top}`} style={{ "--dot-top": px(top) }}>
             <motion.span
-              className="absolute rounded-full bg-current"
-              style={{ width: dot, height: dot, left: size / 2 - dot / 2, top }}
+              className="absolute top-(--dot-top) left-(--dot-left) size-(--dot) rounded-full bg-current"
               animate={
                 reduce
                   ? { opacity: [0.4, 1, 0.4] }
@@ -494,8 +506,7 @@ function Helix({ size, speed, reduce }: PartProps) {
               }}
             />
             <motion.span
-              className="absolute rounded-full bg-current"
-              style={{ width: dot, height: dot, left: size / 2 - dot / 2, top }}
+              className="absolute top-(--dot-top) left-(--dot-left) size-(--dot) rounded-full bg-current"
               animate={
                 reduce
                   ? { opacity: [0.4, 1, 0.4] }
@@ -529,29 +540,30 @@ function Percent({ size, speed, reduce }: PartProps) {
       start.t += tickMs;
       const next = Math.min(100, Math.round((start.t / dur) * 100));
       setP(next);
-      if (next >= 100) start.t = 0;
+      if (next >= 100) {
+        start.t = 0;
+      }
     }, tickMs);
     return () => clearInterval(id);
   }, [speed, reduce]);
 
   return (
     <span
-      className="flex flex-col items-center"
-      style={{ gap: size * 0.14, width: size * 1.4 }}
+      className="flex w-(--width) flex-col items-center gap-(--gap)"
+      style={{
+        "--gap": px(size * 0.14),
+        "--width": px(size * 1.4),
+        "--font-size": px(size * 0.42),
+        "--track": px(Math.max(3, size * 0.1)),
+      }}
     >
-      <span
-        className="font-mono font-medium tabular-nums"
-        style={{ fontSize: size * 0.42, lineHeight: 1 }}
-      >
+      <span className="font-mono text-(length:--font-size) leading-none font-medium tabular-nums">
         {p}%
       </span>
-      <span
-        className="w-full overflow-hidden rounded-full bg-current/15"
-        style={{ height: Math.max(3, size * 0.1) }}
-      >
+      <span className="h-(--track) w-full overflow-hidden rounded-full bg-current/15">
         <span
-          className="block h-full rounded-full bg-current"
-          style={{ width: `${p}%` }}
+          className="block h-full w-(--progress) rounded-full bg-current"
+          style={{ "--progress": `${p}%` }}
         />
       </span>
     </span>
@@ -562,14 +574,18 @@ function Bars({ size, speed, reduce }: PartProps) {
   const bar = size * 0.16;
   return (
     <span
-      className="flex items-center"
-      style={{ gap: size * 0.1, height: size }}
+      className="flex h-(--size) items-center gap-(--gap)"
+      style={{
+        "--gap": px(size * 0.1),
+        "--size": px(size),
+        "--bar": px(bar),
+      }}
     >
       {[0, 1, 2, 3].map((i) => (
         <motion.span
           key={i}
-          className="rounded-full bg-current"
-          style={{ width: bar, height: size, originY: 1 }}
+          className="h-(--size) w-(--bar) rounded-full bg-current"
+          style={{ originY: 1 }}
           animate={
             reduce ? { opacity: [0.4, 1, 0.4] } : { scaleY: [0.3, 1, 0.3] }
           }
@@ -592,10 +608,11 @@ function DotMatrix({ size, speed, reduce }: PartProps) {
   const cells = Array.from({ length: n * n }, (_, idx) => idx);
   return (
     <span
-      className="grid"
+      className="grid grid-cols-(--columns) gap-(--gap)"
       style={{
-        gap,
-        gridTemplateColumns: `repeat(${n}, ${dot}px)`,
+        "--gap": px(gap),
+        "--columns": `repeat(${n}, ${dot}px)`,
+        "--dot": px(dot),
       }}
     >
       {cells.map((idx) => {
@@ -606,8 +623,7 @@ function DotMatrix({ size, speed, reduce }: PartProps) {
         return (
           <motion.span
             key={idx}
-            className="rounded-full bg-current"
-            style={{ width: dot, height: dot }}
+            className="size-(--dot) rounded-full bg-current"
             animate={
               reduce
                 ? { opacity: [0.3, 1, 0.3] }
@@ -636,15 +652,18 @@ function Dither({ size, speed, reduce }: PartProps) {
   const cell = (size - gap * (n - 1)) / n;
   return (
     <span
-      className="grid"
-      style={{ gap, gridTemplateColumns: `repeat(${n}, ${cell}px)` }}
+      className="grid grid-cols-(--columns) gap-(--gap)"
+      style={{
+        "--gap": px(gap),
+        "--columns": `repeat(${n}, ${cell}px)`,
+        "--cell": px(cell),
+      }}
     >
       {BAYER_4.map((order, idx) => (
         <motion.span
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed matrix cells, order never changes
           key={idx}
-          className="bg-current"
-          style={{ width: cell, height: cell }}
+          className="size-(--cell) bg-current"
           animate={
             reduce ? { opacity: [0.3, 1, 0.3] } : { opacity: [0.1, 1, 0.1] }
           }

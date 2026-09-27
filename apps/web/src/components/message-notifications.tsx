@@ -31,7 +31,8 @@ export function MessageNotifications() {
   const { self, peers, invitations, subscribeToEvents } = useAppSession();
   const [notice, setNotice] = useState<IslandNotice | null>(null);
   const [notifications, setNotifications] = useState<MessageNotification[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  // The island opens for each new notification until the person collapses it.
+  const [collapsedId, setCollapsedId] = useState<string | null>(null);
   const seen = useRef(new Set<string>());
   const [notification] = notifications;
   const invitation = invitations.find(
@@ -59,7 +60,7 @@ export function MessageNotifications() {
     }
     seen.current.add(item.transfer.id);
     setNotifications((current) => [...current, item]);
-    setExpanded(true);
+    setCollapsedId(null);
   });
 
   useEffect(
@@ -106,13 +107,6 @@ export function MessageNotifications() {
   }, []);
 
   useEffect(() => {
-    if (!notification) {
-      return;
-    }
-    setExpanded(true);
-  }, [notification]);
-
-  useEffect(() => {
     if (
       !notification ||
       notification.source !== "sent" ||
@@ -155,7 +149,7 @@ export function MessageNotifications() {
   const { transfer, peerName, source } = notification;
   const preview = transferPreview(transfer);
   const sent = source === "sent";
-  const Icon = noticeIcon(sent, transfer.kind);
+  const expanded = collapsedId !== transfer.id;
   const peerId = sent
     ? (transfer.recipient_id ?? undefined)
     : transfer.sender_id;
@@ -209,7 +203,11 @@ export function MessageNotifications() {
             aria-label={openLabel}
             onClick={() => dismiss(transfer.id)}
           >
-            <Icon aria-hidden="true" className="size-5 shrink-0" />
+            <NoticeIcon
+              sent={sent}
+              kind={transfer.kind}
+              className="size-5 shrink-0"
+            />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate text-sm font-medium">{title}</span>
               <span className="line-clamp-2 text-xs opacity-80">{preview}</span>
@@ -228,7 +226,7 @@ export function MessageNotifications() {
                 ? "Collapse sent notification"
                 : "Collapse message notifications"
             }
-            onClick={() => setExpanded(false)}
+            onClick={() => setCollapsedId(transfer.id)}
           >
             <X aria-hidden="true" className="size-4" />
           </button>
@@ -238,12 +236,20 @@ export function MessageNotifications() {
   );
 }
 
-function noticeIcon(sent: boolean, kind: Transfer["kind"]) {
+function NoticeIcon({
+  sent,
+  kind,
+  className,
+}: {
+  sent: boolean;
+  kind: Transfer["kind"];
+  className: string;
+}) {
   if (sent) {
-    return Check;
+    return <Check aria-hidden="true" className={className} />;
   }
   if (kind === "file") {
-    return Paperclip;
+    return <Paperclip aria-hidden="true" className={className} />;
   }
-  return MessageSquare;
+  return <MessageSquare aria-hidden="true" className={className} />;
 }

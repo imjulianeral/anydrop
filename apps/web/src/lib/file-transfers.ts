@@ -65,7 +65,8 @@ export const beginFileTransfer = ({
   onCancel?: () => void;
   phase?: string;
 }): FileTransferHandle => {
-  const id = ++nextId;
+  nextId += 1;
+  const id = nextId;
   publish([
     ...transfers,
     {
@@ -142,7 +143,8 @@ export const beginFileTransfer = ({
 };
 
 export const noteBrowserDownload = (name: string) => {
-  const id = ++nextId;
+  nextId += 1;
+  const id = nextId;
   publish([
     ...transfers,
     {

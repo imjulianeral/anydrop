@@ -5,6 +5,7 @@ defmodule AnyshareWeb.GroupControllerTest do
   alias Anyshare.Groups
   alias Anyshare.Repo
   alias Anyshare.Sharing
+  alias Anyshare.SignalsFixture
 
   setup do
     {owner_token, owner} = device("Owner")
@@ -266,7 +267,10 @@ defmodule AnyshareWeb.GroupControllerTest do
     id = payload["transfer"]["id"]
 
     completed =
-      request(c.owner_token, :post, "/api/v1/transfers/#{id}/complete") |> json_response(200)
+      request(c.owner_token, :post, "/api/v1/transfers/#{id}/complete", %{
+        "signals" => SignalsFixture.signals()
+      })
+      |> json_response(200)
 
     assert completed["transfer"]["group_id"] == group.id
     refute Map.has_key?(completed, "short_link")

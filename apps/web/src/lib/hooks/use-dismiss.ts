@@ -1,6 +1,7 @@
 "use client";
 
-import { type RefObject, useEffect } from "react";
+import { useEffect } from "react";
+import type { RefObject } from "react";
 
 /**
  * What the dismissing gesture does to the control it landed on.
@@ -35,7 +36,9 @@ function claimedByAnotherScope(
   target: Element
 ) {
   for (const scope of openScopes) {
-    if (scope !== self && scope(target)) return true;
+    if (scope !== self && scope(target)) {
+      return true;
+    }
   }
   return false;
 }
@@ -56,7 +59,9 @@ function consumeActivation(source: Event) {
     release();
   };
   const restart = (event: Event) => {
-    if (event !== source) release();
+    if (event !== source) {
+      release();
+    }
   };
   const release = () => {
     window.removeEventListener("click", swallow, true);
@@ -91,15 +96,21 @@ export function useDismiss(
   }: DismissOptions = {}
 ) {
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const inside = (target: Element) =>
       Boolean(ref?.current?.contains(target)) || Boolean(ignore?.(target));
     const onKey = (event: KeyboardEvent) => {
-      if (dismissOnEscape && event.key === "Escape") onDismiss();
+      if (dismissOnEscape && event.key === "Escape") {
+        onDismiss();
+      }
     };
     const onPointer = (event: PointerEvent) => {
       const target = event.target as Element | null;
-      if (!target || inside(target)) return;
+      if (!target || inside(target)) {
+        return;
+      }
       // Outside this overlay, but inside one that is also open: the gesture is
       // that overlay's to answer, and swallowing its click from behind would
       // cost the user the control they actually aimed at.

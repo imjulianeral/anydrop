@@ -2,9 +2,13 @@ import { useRef, useState } from "react";
 
 import { ExpirationOptions } from "#/components/expiration-options.tsx";
 import { AttachmentUpload } from "#/components/motion/attachment-upload.tsx";
-import type { AttachmentUploadItem } from "#/components/motion/attachment-upload.tsx";
+import type {
+  AttachmentUploadItem,
+  AttachmentUploadKind,
+} from "#/components/motion/attachment-upload.tsx";
 import { Button } from "#/components/motion/button/base.tsx";
 import { StatefulButton } from "#/components/motion/button/stateful.tsx";
+import type { ButtonState } from "#/components/motion/button/stateful.tsx";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog.tsx";
+import { attempt } from "#/lib/attempt.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
@@ -39,11 +44,7 @@ export function FileComposer({
     files.map((file, index) => ({
       id: `${file.name}-${file.lastModified}-${index}`,
       name: file.name,
-      kind: file.type.startsWith("image/")
-        ? "image"
-        : file.type.startsWith("audio/")
-          ? "audio"
-          : "file",
+      kind: attachmentKind(file.type),
       size: file.size,
       file,
     }))
@@ -62,7 +63,10 @@ export function FileComposer({
         }
       }}
     >
-      <DialogContent className="bg-background max-h-[calc(100dvh-2rem)] min-w-0 grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
+      <DialogContent
+        surface="background"
+        className="max-h-[calc(100dvh-2rem)] min-w-0 grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto"
+      >
         <DialogHeader className="min-w-0">
           <DialogTitle>
             Share {selectedFiles.length === 1 ? "a file" : "files"}
@@ -106,14 +110,14 @@ export function FileComposer({
           with file-save support to receive, such as desktop Chrome or Edge.
         </p>
         {sending ? (
-          <output className="text-muted-foreground text-sm">
+          <output aria-live="polite" className="text-muted-foreground text-sm">
             {phase} · {Math.round((progress ?? 0) * 100)}%
           </output>
         ) : null}
         <StatefulButton
           type="button"
           className="max-w-full min-w-0"
-          state={sending ? "loading" : sent ? "success" : "idle"}
+          state={sendState(sending, sent)}
           loadingText="Sending…"
           successText="Sent"
           disabled={selectedFiles.length === 0}
@@ -123,19 +127,26 @@ export function FileComposer({
             }
             sendingClick.current = true;
             setSent(false);
-            try {
-              const didSend = await onSend(selectedFiles, expiration);
-              setSent(didSend);
-            } catch (error) {
-              setSent(false);
-              toast.add({
-                title: "Could not send files",
-                description: error instanceof Error ? error.message : undefined,
-                type: "error",
-              });
-            } finally {
-              sendingClick.current = false;
-            }
+            await attempt(
+              async () => {
+                const didSend = await onSend(selectedFiles, expiration);
+                setSent(didSend);
+              },
+              {
+                onError: (error) => {
+                  setSent(false);
+                  toast.add({
+                    title: "Could not send files",
+                    description:
+                      error instanceof Error ? error.message : undefined,
+                    type: "error",
+                  });
+                },
+                onSettled: () => {
+                  sendingClick.current = false;
+                },
+              }
+            );
           }}
         >
           Send files
@@ -148,4 +159,21 @@ export function FileComposer({
       </DialogContent>
     </Dialog>
   );
+}
+
+function attachmentKind(type: string): AttachmentUploadKind {
+  if (type.startsWith("image/")) {
+    return "image";
+  }
+  if (type.startsWith("audio/")) {
+    return "audio";
+  }
+  return "file";
+}
+
+function sendState(sending: boolean, sent: boolean): ButtonState {
+  if (sending) {
+    return "loading";
+  }
+  return sent ? "success" : "idle";
 }

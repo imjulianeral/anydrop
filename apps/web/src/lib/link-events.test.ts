@@ -18,7 +18,7 @@ const event = {
   occurredAt: "2026-09-07T01:00:00.000Z",
 };
 
-describe("readShortLinkEvent", () => {
+describe(readShortLinkEvent, () => {
   it("reads a view pulse", () => {
     expect(
       readShortLinkEvent({
@@ -29,7 +29,7 @@ describe("readShortLinkEvent", () => {
         download_count: 1,
         occurred_at: "2026-09-07T01:00:00.000Z",
       })
-    ).toEqual(event);
+    ).toStrictEqual(event);
   });
 
   it("ignores other cable events", () => {
@@ -37,7 +37,7 @@ describe("readShortLinkEvent", () => {
   });
 });
 
-describe("applyShortLinkEventToLink", () => {
+describe(applyShortLinkEventToLink, () => {
   it("expires a file immediately on its final download without removing the row", () => {
     const link = {
       code: event.code,
@@ -53,14 +53,15 @@ describe("applyShortLinkEventToLink", () => {
       kind: "download",
     });
     expect(updated.code).toBe(link.code);
-    expect(limitReached(updated.max_downloads, updated.download_count)).toBe(
-      true
-    );
+    expect(
+      limitReached(updated.max_downloads, updated.download_count)
+    ).toBeTruthy();
     expect(
       applyShortLinkEventToLink(updated, { ...event, downloadCount: 0 })
         .download_count
     ).toBe(1);
   });
+
   it("updates matching counts", () => {
     const link = {
       code: "ABC1234",
@@ -74,7 +75,7 @@ describe("applyShortLinkEventToLink", () => {
   });
 });
 
-describe("statsFromEvents", () => {
+describe(statsFromEvents, () => {
   it("puts a UTC Monday event on Sunday in Sao Paulo", () => {
     const now = new Date("2026-09-07T01:00:00.000Z");
     const stats = statsFromEvents(
@@ -101,7 +102,7 @@ describe("statsFromEvents", () => {
   });
 });
 
-describe("applyShortLinkEventToStats", () => {
+describe(applyShortLinkEventToStats, () => {
   it("increments the local day for a UTC timestamp", () => {
     const stats = [
       { date: "2026-09-06", views: 1, downloads: 0 },
@@ -109,14 +110,14 @@ describe("applyShortLinkEventToStats", () => {
     ];
     expect(
       applyShortLinkEventToStats(stats, event, "America/Sao_Paulo")
-    ).toEqual([
+    ).toStrictEqual([
       { date: "2026-09-06", views: 2, downloads: 0 },
       { date: "2026-09-07", views: 3, downloads: 1 },
     ]);
   });
 });
 
-describe("dateKeyInTimeZone", () => {
+describe(dateKeyInTimeZone, () => {
   it("uses the civil date in the given zone", () => {
     const instant = new Date("2026-09-07T01:00:00.000Z");
     expect(dateKeyInTimeZone(instant, "America/Sao_Paulo")).toBe("2026-09-06");
@@ -124,7 +125,7 @@ describe("dateKeyInTimeZone", () => {
   });
 });
 
-describe("weekdayLabel", () => {
+describe(weekdayLabel, () => {
   it("labels a local calendar date without shifting the day", () => {
     expect(weekdayLabel("2026-09-06", "en-US")).toBe("Sun");
     expect(weekdayLabel("2026-09-07", "en-US")).toBe("Mon");

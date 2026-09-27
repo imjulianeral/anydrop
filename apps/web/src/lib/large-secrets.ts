@@ -1,3 +1,4 @@
+import type { ContentSignals } from "./content-signals.ts";
 import type { SealOptions } from "./secret-crypto.ts";
 import { maxSecretFileBytes } from "./secret-format.ts";
 import type { Secret } from "./secret-format.ts";
@@ -12,6 +13,7 @@ interface PreparedFile {
   file: File;
   secret: Secret;
   masterKey: Uint8Array;
+  signals: ContentSignals;
 }
 
 const stagingName = "anyshare-secret-staging";
@@ -99,6 +101,7 @@ export const withPreparedFile = async <T>(
           file: encrypted,
           secret: result.secret,
           masterKey,
+          signals: result.signals,
         });
       } catch (error) {
         if (error instanceof Error && error.name === "QuotaExceededError") {

@@ -35,7 +35,7 @@ export function ExpirationOptions({
   const id = useId();
   const unit = kind === "file" ? "download" : "open";
   return (
-    <FieldGroup className={compact ? "gap-2" : undefined}>
+    <FieldGroup density={compact ? "compact" : "default"}>
       <div className="grid grid-cols-2 gap-3">
         <Field data-disabled={disabled}>
           <FieldLabel id={`${id}-time`}>Expires after</FieldLabel>
@@ -96,7 +96,7 @@ export function ExpirationOptions({
           </MorphSelect>
         </Field>
       </div>
-      <FieldDescription className={compact ? "text-xs" : undefined}>
+      <FieldDescription size={compact ? "sm" : "default"}>
         {compact ? (
           "Ends at the first limit; downloads count when started."
         ) : (

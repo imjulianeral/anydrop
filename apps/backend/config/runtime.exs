@@ -71,7 +71,9 @@ end
 config :anyshare,
   allowed_origins: System.get_env("ALLOWED_ORIGINS", ""),
   expire_secret: unwrap_redacted.(System.get_env("EXPIRE_SECRET")),
-  r2: r2
+  r2: r2,
+  web_risk: %{api_key: unwrap_redacted.(System.get_env("WEB_RISK_API_KEY"))},
+  malware_bazaar: %{auth_key: unwrap_redacted.(System.get_env("MALWARE_BAZAAR_AUTH_KEY"))}
 
 auth_origin = System.get_env("AUTH_ORIGIN", "http://localhost:3000") |> URI.decode()
 auth_uri = URI.parse(auth_origin)

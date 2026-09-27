@@ -3,6 +3,8 @@ defmodule Anyshare.Uploads do
 
   import Ecto.Query, only: [from: 2]
 
+  alias Anyshare.Moderation
+  alias Anyshare.ObjectStore
   alias Anyshare.ObjectStore.Multipart
   alias Anyshare.Repo
   alias Anyshare.Sharing.Transfer
@@ -35,18 +37,40 @@ defmodule Anyshare.Uploads do
     end)
   end
 
-  def complete(sender, id, parts) do
-    with_transfer(
-      sender,
+  def complete(sender, id, parts, signals \\ nil) do
+    sender
+    |> with_transfer(
       id,
       fn transfer ->
-        if transfer.status == "pending", do: finish(transfer, parts), else: transfer
+        if transfer.status == "pending", do: finish(transfer, parts, signals), else: transfer
       end,
       completed: true
     )
+    |> case do
+      {:ok, :blocked} -> {:error, :blocked}
+      result -> result
+    end
   end
 
-  defp finish(transfer, parts) do
+  # Screening runs before the multipart commit, so a match never becomes a readable object.
+  defp finish(transfer, parts, signals) do
+    case Moderation.screen_upload(transfer, signals) do
+      :ok -> store(transfer, parts)
+      {:blocked, _match} -> block(transfer)
+    end
+  end
+
+  defp block(transfer) do
+    # Best effort: the bucket lifecycle removes anything a failed cleanup leaves behind.
+    if transfer.upload_id,
+      do: Multipart.abort(transfer),
+      else: ObjectStore.delete(transfer.r2_key)
+
+    update(transfer, %{status: "blocked", upload_id: nil})
+    :blocked
+  end
+
+  defp store(transfer, parts) do
     if transfer.upload_part_size do
       if is_nil(transfer.upload_id), do: Repo.rollback(:not_multipart)
 

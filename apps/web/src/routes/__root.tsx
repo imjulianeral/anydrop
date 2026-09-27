@@ -1,9 +1,6 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import {
-  Outlet,
-  createRootRoute,
-  type ErrorComponentProps,
-} from "@tanstack/react-router";
+import { Outlet, createRootRoute, useRouter } from "@tanstack/react-router";
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
 import { FileTransfersHost } from "#/components/file-transfers-host.tsx";
@@ -14,10 +11,11 @@ import "../styles.css";
 
 export const Route = createRootRoute({
   component: RootComponent,
-  errorComponent: RootError,
+  errorComponent: RootErrorBoundary,
 });
 
-function RootError({ error }: ErrorComponentProps) {
+function RootErrorBoundary({ error }: ErrorComponentProps) {
+  const router = useRouter();
   if (isRouteModuleLoadError(error)) {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-6 text-center">
@@ -38,8 +36,20 @@ function RootError({ error }: ErrorComponentProps) {
   const message =
     error instanceof Error ? error.message : "Something went wrong";
   return (
-    <main className="flex min-h-svh items-center justify-center p-6">
-      <p className="text-muted-foreground text-sm">{message}</p>
+    <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-6 text-center">
+      <p role="alert" className="text-muted-foreground text-sm">
+        {message}
+      </p>
+      <button
+        className="rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+        type="button"
+        onClick={() => {
+          // Re-runs the route loaders and resets this boundary.
+          void router.invalidate();
+        }}
+      >
+        Try again
+      </button>
     </main>
   );
 }

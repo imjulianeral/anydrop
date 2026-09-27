@@ -9,6 +9,7 @@ import {
   FieldLabel,
 } from "#/components/ui/field.tsx";
 import { resolveAssetUrl, savingDownloadUrl } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { beginFileTransfer } from "#/lib/file-transfers.ts";
 import type { FileTransferHandle } from "#/lib/file-transfers.ts";
 import {
@@ -68,85 +69,78 @@ export function LargeSecretContent({
       setFailure("");
       setProgress(null);
       let transfer: FileTransferHandle | null = null;
-      try {
-        const download = validateDownload(item, supported);
-        // The picker must run in the click handler, before other asynchronous work.
-        const handle = save
-          ? await pickSecretDestination(info?.filename ?? "Shared file")
-          : undefined;
-        controller.signal.throwIfAborted();
-        if (save) {
-          transfer = beginFileTransfer({
-            direction: "download",
-            name: info?.filename ?? "Shared file",
-            totalBytes: info?.byteSize ?? download.bytes,
-            phase: "Downloading",
-            onCancel: () => controller.abort(),
-          });
-        }
-        const source = resolveAssetUrl(
-          save ? savingDownloadUrl(download.url) : download.url
-        );
-        const common = {
-          url: save ? source : downloadUrl.current || source,
-          cipherBytes: download.bytes,
-          handle,
-          expectedPrefix: save ? info?.prefix : undefined,
-          password: save ? unlockedPassword.current : password,
-        };
-        let task: StreamTask;
-        if (secret.version === 3) {
-          if (!masterKey) {
-            throw new Error("This link is missing its key.");
+      const filename = info?.filename ?? "Shared file";
+      await attempt(
+        async () => {
+          const download = validateDownload(item, supported);
+          // The picker must run in the click handler, before other asynchronous work.
+          const handle = save
+            ? await pickSecretDestination(filename)
+            : undefined;
+          controller.signal.throwIfAborted();
+          if (save) {
+            transfer = beginFileTransfer({
+              direction: "download",
+              name: filename,
+              totalBytes: info?.byteSize ?? download.bytes,
+              phase: "Downloading",
+              onCancel: () => controller.abort(),
+            });
           }
-          task = {
-            ...common,
-            action: "open-v3",
-            secret,
-            masterKey: new Uint8Array(masterKey).buffer,
-          };
-        } else {
-          task = { ...common, action: "open", secret };
-        }
-        const result = await runStreamTask(task, controller.signal, (ratio) => {
-          setProgress(ratio);
-          transfer?.update("Downloading", ratio);
-        });
-        if (result.action !== "opened") {
-          throw new Error("Could not unlock this Secret.");
-        }
-        if (operation.current !== controller) {
-          return;
-        }
-        setInfo(result.info);
-        // Reuse this download grant when saving after the metadata request.
-        downloadUrl.current = result.downloadUrl;
-        if (!save) {
-          unlockedPassword.current = password;
-        }
-        setPassword("");
-        setSaved(save);
-        transfer?.done();
-      } catch (error) {
-        if (controller.signal.aborted) {
-          transfer?.cancel();
-        } else {
-          transfer?.fail();
-        }
-        if (operation.current === controller) {
-          setFailure(
-            error instanceof Error && error.name !== "AbortError"
-              ? error.message
-              : "Cancelled."
+          const source = resolveAssetUrl(
+            save ? savingDownloadUrl(download.url) : download.url
           );
+          const task = openTask(secret, masterKey, {
+            url: save ? source : downloadUrl.current || source,
+            cipherBytes: download.bytes,
+            handle,
+            expectedPrefix: save ? info?.prefix : undefined,
+            password: save ? unlockedPassword.current : password,
+          });
+          const result = await runStreamTask(
+            task,
+            controller.signal,
+            (ratio) => {
+              setProgress(ratio);
+              transfer?.update("Downloading", ratio);
+            }
+          );
+          if (result.action !== "opened") {
+            throw new Error("Could not unlock this Secret.");
+          }
+          if (operation.current !== controller) {
+            return;
+          }
+          setInfo(result.info);
+          // Reuse this download grant when saving after the metadata request.
+          downloadUrl.current = result.downloadUrl;
+          if (!save) {
+            unlockedPassword.current = password;
+          }
+          setPassword("");
+          setSaved(save);
+          transfer?.done();
+        },
+        {
+          onError: (error) => {
+            if (controller.signal.aborted) {
+              transfer?.cancel();
+            } else {
+              transfer?.fail();
+            }
+            if (operation.current === controller) {
+              setFailure(failureMessage(error));
+            }
+          },
+          onSettled: () => {
+            if (operation.current === controller) {
+              operation.current = null;
+              setBusy(false);
+              setProgress(null);
+            }
+          },
         }
-      } finally {
-        if (operation.current === controller) {
-          operation.current = null;
-          setBusy(false);
-          setProgress(null);
-        }
-      }
+      );
     },
     [item, supported, info, secret, masterKey, password]
   );
@@ -268,7 +262,7 @@ export function LargeSecretContent({
       ) : null}
       {busy ? (
         <>
-          <output className="text-muted-foreground text-sm">
+          <output aria-live="polite" className="text-muted-foreground text-sm">
             {progress === null
               ? "Processing…"
               : `Saving · ${Math.round(progress * 100)}%`}
@@ -311,3 +305,34 @@ const validateDownload = (
   }
   return { url: item.download.url, bytes: item.byte_size };
 };
+
+function openTask(
+  secret: StreamSecret | StreamV3Secret,
+  masterKey: Uint8Array | undefined,
+  common: {
+    url: string;
+    cipherBytes: number;
+    handle?: FileSystemFileHandle;
+    expectedPrefix?: string;
+    password: string;
+  }
+): StreamTask {
+  if (secret.version !== 3) {
+    return { ...common, action: "open", secret };
+  }
+  if (!masterKey) {
+    throw new Error("This link is missing its key.");
+  }
+  return {
+    ...common,
+    action: "open-v3",
+    secret,
+    masterKey: new Uint8Array(masterKey).buffer,
+  };
+}
+
+function failureMessage(error: unknown) {
+  return error instanceof Error && error.name !== "AbortError"
+    ? error.message
+    : "Cancelled.";
+}

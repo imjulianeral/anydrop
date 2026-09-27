@@ -5,9 +5,6 @@ import {
   cloneElement,
   createContext,
   isValidElement,
-  type ReactElement,
-  type ReactNode,
-  type Ref,
   useCallback,
   useContext,
   useEffect,
@@ -16,16 +13,19 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 
 import { usePopoverPortalPosition } from "#/components/motion/popover-position.ts";
+import type { PortalLayout } from "#/components/motion/popover-position.ts";
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
+import { useHydrated } from "#/lib/hooks/use-hydrated.ts";
 import { cn } from "#/lib/utils.ts";
 
 type Side = "top" | "bottom";
 type Align = "start" | "center" | "end";
 
-type MorphContextValue = {
+interface MorphContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
@@ -35,13 +35,15 @@ type MorphContextValue = {
   triggerRef: React.MutableRefObject<HTMLElement | null>;
   registerTrigger: (node: HTMLElement | null) => void;
   contentRef: React.MutableRefObject<HTMLDivElement | null>;
-};
+}
 
 const MorphContext = createContext<MorphContextValue | null>(null);
 
 function useMorphContext(component: string) {
   const ctx = useContext(MorphContext);
-  if (!ctx) throw new Error(`${component} must be used within <MorphPopover>`);
+  if (!ctx) {
+    throw new Error(`${component} must be used within <MorphPopover>`);
+  }
   return ctx;
 }
 
@@ -77,7 +79,9 @@ export function MorphPopover({
 
   const setOpen = useCallback(
     (next: boolean) => {
-      if (!controlled) setInternalOpen(next);
+      if (!controlled) {
+        setInternalOpen(next);
+      }
       onOpenChange?.(next);
     },
     [controlled, onOpenChange]
@@ -108,13 +112,17 @@ export function MorphPopover({
     const focused = document.activeElement;
     const inPanel =
       focused instanceof HTMLElement && contentRef.current?.contains(focused);
-    if (!inPanel) return;
+    if (!inPanel) {
+      return;
+    }
     const restore = trigger ?? (root && root.tabIndex >= 0 ? root : null);
     restore?.focus();
   }, [root, setOpen, trigger]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     const onPointer = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -122,8 +130,9 @@ export function MorphPopover({
         root &&
         !root.contains(target) &&
         !contentRef.current?.contains(target)
-      )
+      ) {
         close();
+      }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
@@ -160,12 +169,14 @@ export interface MorphPopoverTriggerProps {
   children: ReactElement;
 }
 
-function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
+function mergeRefs<T>(...refs: (Ref<T> | undefined)[]) {
   return (node: T | null) => {
     for (const ref of refs) {
-      if (typeof ref === "function") ref(node);
-      else if (ref && typeof ref === "object")
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref && typeof ref === "object") {
         (ref as React.MutableRefObject<T | null>).current = node;
+      }
     }
   };
 }
@@ -173,7 +184,9 @@ function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
 /** Wraps a single element, toggling the popover on click. */
 export function MorphPopoverTrigger({ children }: MorphPopoverTriggerProps) {
   const ctx = useMorphContext("MorphPopoverTrigger");
-  if (!isValidElement(children)) return children;
+  if (!isValidElement(children)) {
+    return children;
+  }
 
   const child = children as ReactElement<Record<string, unknown>>;
   const childOnClick = child.props.onClick as
@@ -181,6 +194,7 @@ export function MorphPopoverTrigger({ children }: MorphPopoverTriggerProps) {
     | undefined;
   const childRef = (child.props as { ref?: Ref<HTMLElement> }).ref;
 
+  // oxlint-disable-next-line react/no-clone-element -- The trigger is the caller's own element, wired up in place.
   return cloneElement(child, {
     id: ctx.triggerId,
     ref: mergeRefs(childRef, ctx.registerTrigger),
@@ -210,6 +224,30 @@ const hiddenSides = {
 } as const;
 
 // The clip starts at the trigger's horizontal anchor. inset(top right bottom left).
+/** Viewport position of the content next to its trigger. */
+function contentPosition(
+  layout: PortalLayout | null,
+  side: Side,
+  align: Align,
+  sideOffset: number
+) {
+  if (!layout) {
+    return { left: 0, top: 0 };
+  }
+  const { trigger, content } = layout;
+  let alignShift = trigger.width - content.width;
+  if (align === "start") {
+    alignShift = 0;
+  } else if (align === "center") {
+    alignShift /= 2;
+  }
+  const top =
+    side === "bottom"
+      ? trigger.top + trigger.height + sideOffset
+      : trigger.top - content.height - sideOffset;
+  return { left: trigger.left + alignShift, top };
+}
+
 function clipHidden(side: Side, align: Align, radius: number) {
   const top = side === "bottom" ? "0%" : "92%";
   const bottom = side === "bottom" ? "92%" : "0%";
@@ -241,29 +279,17 @@ export function MorphPopoverContent({
   radius = 16,
   className,
 }: MorphPopoverContentProps) {
-  const ctx = useMorphContext("MorphPopoverContent");
+  const { triggerRef, contentRef, contentId, triggerId, open } =
+    useMorphContext("MorphPopoverContent");
   const reduce = useReducedMotion() ?? false;
-  const [portalReady, setPortalReady] = useState(false);
+  const portalReady = useHydrated();
   const layout = usePopoverPortalPosition(
-    ctx.triggerRef,
-    ctx.contentRef,
-    portalReady && ctx.open
+    triggerRef,
+    contentRef,
+    portalReady && open
   );
 
-  useEffect(() => setPortalReady(true), []);
-  const left = layout
-    ? layout.trigger.left +
-      (align === "start"
-        ? 0
-        : align === "center"
-          ? (layout.trigger.width - layout.content.width) / 2
-          : layout.trigger.width - layout.content.width)
-    : 0;
-  const top = layout
-    ? side === "bottom"
-      ? layout.trigger.top + layout.trigger.height + sideOffset
-      : layout.trigger.top - layout.content.height - sideOffset
-    : 0;
+  const { left, top } = contentPosition(layout, side, align, sideOffset);
 
   // Both directions travel between the exact same hidden/show states. Exit
   // targets "hidden" directly instead of introducing separate choreography.
@@ -287,11 +313,13 @@ export function MorphPopoverContent({
       };
 
   // Keep the server and first client render identical, then mount the portal.
-  if (!portalReady) return null;
+  if (!portalReady) {
+    return null;
+  }
 
   return createPortal(
     <AnimatePresence>
-      {ctx.open ? (
+      {open ? (
         <motion.div
           data-morph-popover-portal=""
           // Wrapper carries the shadow as a drop-shadow filter, which hugs the
@@ -302,22 +330,25 @@ export function MorphPopoverContent({
           exit={reduce ? { opacity: 0 } : "hidden"}
           transition={reduce ? { duration: 0.12 } : undefined}
           style={{
-            left,
-            top,
-            visibility: layout ? "visible" : "hidden",
-            transformOrigin: originFor(side, align),
+            "--popover-left": `${left}px`,
+            "--popover-top": `${top}px`,
+            "--popover-origin": originFor(side, align),
           }}
-          className="fixed z-[9999] [filter:drop-shadow(0_10px_18px_rgba(0,0,0,0.14))]"
+          className={cn(
+            "fixed top-(--popover-top) left-(--popover-left) z-[9999] origin-(--popover-origin) [filter:drop-shadow(0_10px_18px_rgba(0,0,0,0.14))]",
+            !layout && "invisible"
+          )}
         >
           <motion.div
-            ref={ctx.contentRef}
-            id={ctx.contentId}
+            ref={contentRef}
+            id={contentId}
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A native <dialog> stays hidden unless opened imperatively; Motion drives this popover.
             role="dialog"
-            aria-labelledby={ctx.triggerId}
+            aria-labelledby={triggerId}
             variants={clip}
-            style={{ borderRadius: radius }}
+            style={{ "--popover-radius": `${radius}px` }}
             className={cn(
-              "border-border bg-background overflow-hidden border",
+              "border-border bg-background overflow-hidden rounded-(--popover-radius) border",
               className
             )}
           >

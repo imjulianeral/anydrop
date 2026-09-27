@@ -7,9 +7,7 @@ import { cn } from "#/lib/utils.ts";
 
 const themes = {
   black: {
-    backFill: "black",
     backInsetColor: "0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.37 0",
-    backInsetShadow: "inset 0 0 6px 2px rgba(255,255,255,0.37)",
     flapFill: "#292929",
     flapFillOpacity: 0.25,
     flapStroke: "#979797",
@@ -20,9 +18,7 @@ const themes = {
     cardInsetColor: "0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0",
   },
   white: {
-    backFill: "#ffffff",
     backInsetColor: "0 0 0 0 0.7 0 0 0 0 0.7 0 0 0 0 0.7 0 0 0 0.25 0",
-    backInsetShadow: "inset 0 0 6px 2px rgba(178,178,178,0.25)",
     flapFill: "#f5f5f5",
     flapFillOpacity: 0.85,
     flapStroke: "#d4d4d4",
@@ -33,9 +29,7 @@ const themes = {
     cardInsetColor: "0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.15 0",
   },
   blue: {
-    backFill: "#50B1FD",
     backInsetColor: "0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.35 0",
-    backInsetShadow: "inset 0 0 6px 2px rgba(255,255,255,0.35)",
     flapFill: "#3a9ae8",
     flapFillOpacity: 0.45,
     flapStroke: "#7ec8ff",
@@ -58,11 +52,42 @@ type FolderComponentProps = Omit<React.ComponentProps<"div">, "color"> & {
   size?: "sm" | "md" | "lg";
 };
 
-const BASE_WIDTH = 321;
-const BASE_HEIGHT = 270;
-
 const FLAP_PATH =
   "M0 25C0 11.1929 11.1929 0 25 0H136.084C143.044 0 149.689 2.90139 154.42 8.00608L178.08 33.5343C182.811 38.639 189.456 41.5404 196.416 41.5404H296C309.807 41.5404 321 52.7333 321 66.5404V216C321 229.807 309.807 241 296 241H25C11.1929 241 0 229.807 0 216V25Z";
+
+type Pose = "open" | "hover" | "rest";
+
+interface CardPose {
+  x: number;
+  y: number;
+  rotate: number;
+  delay: number;
+}
+
+/** Where each card sits, from back to front, in every folder pose. */
+const CARD_POSES: Record<Pose, CardPose>[] = [
+  {
+    open: { y: -160, x: 70, rotate: 18, delay: 0.1 },
+    hover: { y: -30, x: 40, rotate: 14, delay: 0.12 },
+    rest: { y: -10, x: 40, rotate: 10, delay: 0 },
+  },
+  {
+    open: { y: -180, x: 0, rotate: -3, delay: 0.05 },
+    hover: { y: -35, x: 3, rotate: -1, delay: 0.06 },
+    rest: { y: -20, x: 3, rotate: 2, delay: 0 },
+  },
+  {
+    open: { y: -170, x: -65, rotate: -14, delay: 0 },
+    hover: { y: -44, x: -40, rotate: -9, delay: 0 },
+    rest: { y: -22, x: -40, rotate: -5, delay: 0 },
+  },
+];
+
+const FLAP_ROTATE_X: Record<Pose, number> = {
+  open: -55,
+  hover: -45,
+  rest: -15,
+};
 
 const FolderComponent = ({
   color = "black",
@@ -74,24 +99,29 @@ const FolderComponent = ({
   const scale = sizeScales[size];
   const [isHovered, setIsHovered] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  let pose: Pose = "rest";
+  if (isOpen) {
+    pose = "open";
+  } else if (isHovered) {
+    pose = "hover";
+  }
 
   return (
     <div
       data-slot="folder"
+      data-folder-theme={color}
       className={cn(
         "relative flex h-full w-full items-center justify-center",
         className
       )}
       {...props}
     >
-      <div
-        className="relative cursor-pointer select-none"
-        style={{
-          width: BASE_WIDTH * scale,
-          height: BASE_HEIGHT * scale,
-          touchAction: "manipulation",
-          WebkitTapHighlightColor: "transparent",
-        }}
+      <button
+        type="button"
+        aria-label="Open folder"
+        aria-pressed={isOpen}
+        className="relative block h-[calc(270px*var(--scale))] w-[calc(321px*var(--scale))] cursor-pointer touch-manipulation select-none [-webkit-tap-highlight-color:transparent]"
+        style={{ "--scale": scale }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => {
           setIsHovered(false);
@@ -99,101 +129,40 @@ const FolderComponent = ({
         }}
         onClick={() => setIsOpen((o) => !o)}
       >
-        <div
-          className="absolute top-1/2 left-1/2"
-          style={{
-            width: BASE_WIDTH,
-            height: BASE_HEIGHT,
-            transform: `translate(-50%, -50%) scale(${scale})`,
-            perspective: 800 * scale,
-          }}
-        >
+        <div className="absolute top-1/2 left-1/2 h-[270px] w-[321px] [transform:translate(-50%,-50%)_scale(var(--scale))] perspective-[calc(800px*var(--scale))]">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div
-              style={{
-                width: BASE_WIDTH,
-                height: BASE_HEIGHT,
-                borderRadius: 25,
-                backgroundColor: theme.backFill,
-                boxShadow: theme.backInsetShadow,
-              }}
-            />
+            <div className="h-[270px] w-[321px] rounded-[25px] bg-(--folder-back) shadow-(--folder-back-shadow)" />
           </div>
 
           <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-            <motion.div
-              className="absolute"
-              animate={{
-                y: isOpen ? -160 : isHovered ? -30 : -10,
-                x: isOpen ? 70 : 40,
-                rotate: isOpen ? 18 : isHovered ? 14 : 10,
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 120,
-                damping: 13,
-                delay: isOpen ? 0.1 : isHovered ? 0.12 : 0,
-              }}
-            >
-              <Card id={1} theme={theme} />
-            </motion.div>
-            <motion.div
-              className="absolute"
-              animate={{
-                y: isOpen ? -180 : isHovered ? -35 : -20,
-                x: isOpen ? 0 : 3,
-                rotate: isOpen ? -3 : isHovered ? -1 : 2,
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 120,
-                damping: 13,
-                delay: isOpen ? 0.05 : isHovered ? 0.06 : 0,
-              }}
-            >
-              <Card id={2} theme={theme} />
-            </motion.div>
-            <motion.div
-              className="absolute"
-              animate={{
-                y: isOpen ? -170 : isHovered ? -44 : -22,
-                x: isOpen ? -65 : -40,
-                rotate: isOpen ? -14 : isHovered ? -9 : -5,
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 120,
-                damping: 13,
-                delay: isOpen ? 0 : 0,
-              }}
-            >
-              <Card id={3} theme={theme} />
-            </motion.div>
+            {CARD_POSES.map((poses, index) => {
+              const { delay, ...target } = poses[pose];
+              return (
+                <motion.div
+                  key={index}
+                  className="absolute"
+                  animate={target}
+                  transition={{
+                    type: "spring",
+                    stiffness: 120,
+                    damping: 13,
+                    delay,
+                  }}
+                >
+                  <Card id={index + 1} theme={theme} />
+                </motion.div>
+              );
+            })}
           </div>
 
           <motion.div
-            className="absolute top-1/2 left-1/2 mt-4 -translate-x-1/2 -translate-y-1/2"
-            style={{
-              transformOrigin: "bottom center",
-              transformStyle: "preserve-3d",
-              width: 321,
-              height: 241,
-            }}
-            animate={{ rotateX: isOpen ? -55 : isHovered ? -45 : -15 }}
+            className="absolute top-1/2 left-1/2 mt-4 h-[241px] w-[321px] origin-bottom -translate-x-1/2 -translate-y-1/2 transform-3d"
+            animate={{ rotateX: FLAP_ROTATE_X[pose] }}
             transition={{ type: "spring", stiffness: 120, damping: 14 }}
           >
             <div
-              className="absolute inset-0"
-              style={{
-                backdropFilter: "blur(6px)",
-                WebkitBackdropFilter: "blur(6px)",
-                clipPath: `path('${FLAP_PATH}')`,
-                WebkitClipPath: `path('${FLAP_PATH}')`,
-                transform: "translateZ(0)",
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
-                willChange: "transform",
-              }}
+              className="absolute inset-0 translate-z-0 backdrop-blur-[6px] will-change-transform [clip-path:var(--flap-path)] backface-hidden"
+              style={{ "--flap-path": `path('${FLAP_PATH}')` }}
             />
             <svg
               className="absolute inset-0"
@@ -256,7 +225,7 @@ const FolderComponent = ({
             </svg>
           </motion.div>
         </div>
-      </div>
+      </button>
     </div>
   );
 };

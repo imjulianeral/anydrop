@@ -3,15 +3,17 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
-  type FormEvent,
-  type KeyboardEvent,
-  type ReactNode,
-  type TextareaHTMLAttributes,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+} from "react";
+import type {
+  FormEvent,
+  KeyboardEvent,
+  ReactNode,
+  TextareaHTMLAttributes,
 } from "react";
 
 import { Button } from "#/components/motion/button/index.tsx";
@@ -67,15 +69,18 @@ export interface PromptInputProps extends Omit<
   className?: string;
 }
 
+const NO_MODELS: PromptModel[] = [];
+const NO_ACTIONS: PromptAction[] = [];
+
 export function PromptInput({
   value,
   defaultValue = "",
   onValueChange,
-  models = [],
+  models = NO_MODELS,
   model,
   defaultModel,
   onModelChange,
-  actions = [],
+  actions = NO_ACTIONS,
   onAction,
   onSubmit,
   loading = false,
@@ -97,18 +102,17 @@ export function PromptInput({
   const [internalModel, setInternalModel] = useState(
     defaultModel ?? models[0]?.value
   );
-  const [actionsOpen, setActionsOpen] = useState(false);
   const currentValue = value ?? internalValue;
   const currentModelValue = model ?? internalModel;
-  const currentModel = models.find(
-    (option) => option.value === currentModelValue
-  );
-  const canSubmit = Boolean(currentValue.trim()) && !disabled && !loading;
+  const busy = Boolean(disabled || loading);
+  const canSubmit = Boolean(currentValue.trim()) && !busy;
 
   const resizeTextarea = useCallback(() => {
     const textarea = textareaRef.current;
     const measurement = measurementRef.current;
-    if (!textarea || !measurement || textarea.value !== currentValue) return;
+    if (!textarea || !measurement || textarea.value !== currentValue) {
+      return;
+    }
 
     const lineHeight = 24;
     const nextHeight = Math.min(
@@ -116,7 +120,9 @@ export function PromptInput({
       maxRows * lineHeight
     );
     const height = `${nextHeight}px`;
-    if (textarea.style.height !== height) textarea.style.height = height;
+    if (textarea.style.height !== height) {
+      textarea.style.height = height;
+    }
   }, [currentValue, maxRows, minRows]);
 
   useLayoutEffect(() => {
@@ -125,29 +131,39 @@ export function PromptInput({
 
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || typeof ResizeObserver === "undefined") return;
+    if (!textarea || typeof ResizeObserver === "undefined") {
+      return;
+    }
     const observer = new ResizeObserver(resizeTextarea);
     observer.observe(textarea);
     return () => observer.disconnect();
   }, [resizeTextarea]);
 
   const setValue = (next: string) => {
-    if (value === undefined) setInternalValue(next);
+    if (value === undefined) {
+      setInternalValue(next);
+    }
     onValueChange?.(next);
   };
 
   const setModel = (next: string) => {
-    if (model === undefined) setInternalModel(next);
+    if (model === undefined) {
+      setInternalModel(next);
+    }
     onModelChange?.(next);
   };
 
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
     const prompt = currentValue.trim();
-    if (!prompt || disabled || loading) return;
+    if (!prompt || disabled || loading) {
+      return;
+    }
 
     onSubmit?.(prompt, currentModelValue);
-    if (value === undefined) setInternalValue("");
+    if (value === undefined) {
+      setInternalValue("");
+    }
     textareaRef.current?.focus({ preventScroll: true });
   };
 
@@ -169,7 +185,7 @@ export function PromptInput({
     <form
       onSubmit={submit}
       className={cn(
-        "border-border/80 bg-background focus-within:border-foreground/25 relative w-full rounded-2xl border p-2 transition-colors",
+        "border-border/80 bg-background has-focus-visible:border-ring has-focus-visible:ring-ring/50 relative w-full rounded-2xl border p-2 transition-[color,box-shadow] has-focus-visible:ring-3",
         disabled && "opacity-60",
         className
       )}
@@ -179,7 +195,7 @@ export function PromptInput({
         aria-hidden="true"
         className="pointer-events-none invisible absolute inset-x-2 top-0 px-2 text-sm leading-6 [overflow-wrap:break-word] whitespace-pre-wrap"
       >
-        {`${currentValue}\u200b`}
+        {`${currentValue}\u200B`}
       </div>
       <textarea
         ref={textareaRef}
@@ -188,6 +204,7 @@ export function PromptInput({
         placeholder={placeholder}
         aria-label={ariaLabel}
         rows={minRows}
+        required
         {...textareaProps}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
@@ -196,136 +213,199 @@ export function PromptInput({
 
       <div className="mt-1 flex min-h-8 items-center gap-1">
         {actions.length ? (
-          <MorphPopover open={actionsOpen} onOpenChange={setActionsOpen}>
-            <MorphPopoverTrigger>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                disabled={disabled || loading}
-                aria-label="Add to prompt"
-                className="size-8 rounded-full"
-              >
-                <motion.span
-                  aria-hidden="true"
-                  animate={{ rotate: actionsOpen ? 45 : 0 }}
-                  transition={reduce ? { duration: 0 } : SPRING_SWAP}
-                >
-                  <Plus className="size-4" />
-                </motion.span>
-              </Button>
-            </MorphPopoverTrigger>
-
-            <MorphPopoverContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              radius={12}
-              className="w-56 p-1.5"
-            >
-              {actions.map((action) => (
-                <button
-                  key={action.value}
-                  type="button"
-                  disabled={action.disabled}
-                  onClick={() => {
-                    onAction?.(action.value);
-                    setActionsOpen(false);
-                  }}
-                  className="hover:bg-muted focus-visible:bg-muted flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors outline-none disabled:pointer-events-none disabled:opacity-50"
-                >
-                  {action.icon ? (
-                    <span className="text-muted-foreground mt-0.5 grid size-5 shrink-0 place-items-center [&_svg]:size-4">
-                      {action.icon}
-                    </span>
-                  ) : null}
-                  <span className="min-w-0">
-                    <span className="text-foreground block text-sm">
-                      {action.label}
-                    </span>
-                    {action.description ? (
-                      <span className="text-muted-foreground mt-0.5 block text-xs leading-4">
-                        {action.description}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-              ))}
-            </MorphPopoverContent>
-          </MorphPopover>
+          <PromptActionsMenu
+            actions={actions}
+            disabled={busy}
+            reduce={reduce}
+            onAction={onAction}
+          />
         ) : null}
         {leadingAction}
         {models.length ? (
-          <Select
+          <PromptModelSelect
+            models={models}
             value={currentModelValue}
-            onValueChange={setModel}
-            disabled={disabled || loading}
-            className="min-w-0"
-          >
-            <SelectTrigger className="hover:bg-muted h-8 w-auto max-w-52 rounded-xl border-0 bg-transparent px-2 py-0 text-xs focus-visible:ring-2">
-              <span className="flex min-w-0 items-center gap-1.5">
-                {currentModel?.icon ? (
-                  <span className="text-muted-foreground grid size-4 shrink-0 place-items-center [&_svg]:size-3.5">
-                    {currentModel.icon}
-                  </span>
-                ) : null}
-                <span className="text-muted-foreground truncate">
-                  {currentModel?.label ?? "Choose model"}
-                </span>
-              </span>
-            </SelectTrigger>
-            <SelectContent className="right-auto w-52 shadow-none">
-              {models.map((option) => (
-                <SelectItem
-                  key={option.value}
-                  value={option.value}
-                  disabled={option.disabled}
-                  className="py-2"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    {option.icon ? (
-                      <span className="text-muted-foreground grid size-5 shrink-0 place-items-center [&_svg]:size-4">
-                        {option.icon}
-                      </span>
-                    ) : null}
-                    <span className="text-foreground min-w-0 truncate text-sm">
-                      {option.label}
-                    </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={setModel}
+            disabled={busy}
+          />
         ) : null}
 
-        <Button
-          type={loading ? "button" : "submit"}
-          size="icon"
-          disabled={loading ? !onStop : !canSubmit}
-          aria-label={loading ? "Stop generating" : "Send prompt"}
-          onClick={loading ? onStop : undefined}
-          className="ml-auto size-8 rounded-full"
-        >
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              key={loading ? "stop" : "send"}
-              initial={
-                reduce ? { opacity: 1 } : { opacity: 0, y: 3, scale: 0.8 }
-              }
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3, scale: 0.8 }}
-              transition={reduce ? { duration: 0 } : SPRING_SWAP}
-              className="grid place-items-center"
-            >
-              {loading ? (
-                <Square className="size-3 fill-current" />
-              ) : (
-                <ArrowUp className="size-4" />
-              )}
-            </motion.span>
-          </AnimatePresence>
-        </Button>
+        <PromptSendButton
+          loading={loading}
+          canSubmit={canSubmit}
+          onStop={onStop}
+          reduce={reduce}
+        />
       </div>
     </form>
+  );
+}
+
+function PromptActionsMenu({
+  actions,
+  disabled,
+  reduce,
+  onAction,
+}: {
+  actions: PromptAction[];
+  disabled: boolean;
+  reduce: boolean;
+  onAction?: (action: string) => void;
+}) {
+  const [actionsOpen, setActionsOpen] = useState(false);
+  return (
+    <MorphPopover open={actionsOpen} onOpenChange={setActionsOpen}>
+      <MorphPopoverTrigger>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          aria-label="Add to prompt"
+          className="size-8 rounded-full"
+        >
+          <motion.span
+            aria-hidden="true"
+            animate={{ rotate: actionsOpen ? 45 : 0 }}
+            transition={reduce ? { duration: 0 } : SPRING_SWAP}
+          >
+            <Plus className="size-4" />
+          </motion.span>
+        </Button>
+      </MorphPopoverTrigger>
+
+      <MorphPopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        radius={12}
+        className="w-56 p-1.5"
+      >
+        {actions.map((action) => (
+          <button
+            key={action.value}
+            type="button"
+            disabled={action.disabled}
+            onClick={() => {
+              onAction?.(action.value);
+              setActionsOpen(false);
+            }}
+            className="hover:bg-muted focus-visible:bg-muted flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors outline-none disabled:pointer-events-none disabled:opacity-50"
+          >
+            {action.icon ? (
+              <span className="text-muted-foreground mt-0.5 grid size-5 shrink-0 place-items-center [&_svg]:size-4">
+                {action.icon}
+              </span>
+            ) : null}
+            <span className="min-w-0">
+              <span className="text-foreground block text-sm">
+                {action.label}
+              </span>
+              {action.description ? (
+                <span className="text-muted-foreground mt-0.5 block text-xs leading-4">
+                  {action.description}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        ))}
+      </MorphPopoverContent>
+    </MorphPopover>
+  );
+}
+
+function PromptModelSelect({
+  models,
+  value,
+  onChange,
+  disabled,
+}: {
+  models: PromptModel[];
+  value: string | undefined;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const currentModel = models.find((option) => option.value === value);
+  return (
+    <Select
+      value={value}
+      onValueChange={onChange}
+      disabled={disabled}
+      className="min-w-0"
+    >
+      <SelectTrigger className="hover:bg-muted h-8 w-auto max-w-52 rounded-xl border-0 bg-transparent px-2 py-0 text-xs focus-visible:ring-2">
+        <span className="flex min-w-0 items-center gap-1.5">
+          {currentModel?.icon ? (
+            <span className="text-muted-foreground grid size-4 shrink-0 place-items-center [&_svg]:size-3.5">
+              {currentModel.icon}
+            </span>
+          ) : null}
+          <span className="text-muted-foreground truncate">
+            {currentModel?.label ?? "Choose model"}
+          </span>
+        </span>
+      </SelectTrigger>
+      <SelectContent className="right-auto w-52 shadow-none">
+        {models.map((option) => (
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            disabled={option.disabled}
+            className="py-2"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              {option.icon ? (
+                <span className="text-muted-foreground grid size-5 shrink-0 place-items-center [&_svg]:size-4">
+                  {option.icon}
+                </span>
+              ) : null}
+              <span className="text-foreground min-w-0 truncate text-sm">
+                {option.label}
+              </span>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function PromptSendButton({
+  loading,
+  canSubmit,
+  onStop,
+  reduce,
+}: {
+  loading: boolean;
+  canSubmit: boolean;
+  onStop?: () => void;
+  reduce: boolean;
+}) {
+  return (
+    <Button
+      type={loading ? "button" : "submit"}
+      size="icon"
+      disabled={loading ? !onStop : !canSubmit}
+      aria-label={loading ? "Stop generating" : "Send prompt"}
+      onClick={loading ? onStop : undefined}
+      className="ml-auto size-8 rounded-full"
+    >
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={loading ? "stop" : "send"}
+          initial={reduce ? { opacity: 1 } : { opacity: 0, y: 3, scale: 0.8 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -3, scale: 0.8 }}
+          transition={reduce ? { duration: 0 } : SPRING_SWAP}
+          className="grid place-items-center"
+        >
+          {loading ? (
+            <Square className="size-3 fill-current" />
+          ) : (
+            <ArrowUp className="size-4" />
+          )}
+        </motion.span>
+      </AnimatePresence>
+    </Button>
   );
 }

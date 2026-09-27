@@ -145,12 +145,16 @@ export function MorphFab({
     actions.filter((action) => action.position !== "top").length,
     ACTION_SIZE
   );
+  const slots: (typeof lowerSlots)[number][] = [];
   let lowerIndex = 0;
-  const slots = actions.map((action) =>
-    action.position === "top"
-      ? topSlot(anchor, ACTION_SIZE)
-      : lowerSlots[lowerIndex++]
-  );
+  for (const action of actions) {
+    if (action.position === "top") {
+      slots.push(topSlot(anchor, ACTION_SIZE));
+    } else {
+      slots.push(lowerSlots[lowerIndex]);
+      lowerIndex += 1;
+    }
+  }
 
   // Clip the SVG bridges at the viewport edge so they cannot add page scrollbars.
   return createPortal(
@@ -205,8 +209,11 @@ export function MorphFab({
           }}
         >
           <div
-            className="pointer-events-none absolute size-px"
-            style={{ left: anchor.x, top: anchor.y }}
+            className="pointer-events-none absolute top-(--anchor-y) left-(--anchor-x) size-px"
+            style={{
+              "--anchor-x": `${anchor.x}px`,
+              "--anchor-y": `${anchor.y}px`,
+            }}
           >
             {actions.map((action, index) => (
               <FabAction
@@ -283,11 +290,11 @@ function FabAction({
     <>
       <svg
         aria-hidden="true"
-        className="text-background pointer-events-none absolute"
+        className="text-background pointer-events-none absolute -top-(--extent) -left-(--extent)"
         width={extent * 2}
         height={extent * 2}
         viewBox={`${-extent} ${-extent} ${extent * 2} ${extent * 2}`}
-        style={{ left: -extent, top: -extent }}
+        style={{ "--extent": `${extent}px` }}
       >
         <defs>
           <mask
@@ -303,8 +310,10 @@ function FabAction({
               y={-extent}
               width={extent * 2}
               height={extent * 2}
+              // oxlint-disable-next-line shadcn/no-raw-colors -- Mask luminance: white keeps the shape, black cuts the hole.
               fill="white"
             />
+            {/* oxlint-disable-next-line shadcn/no-raw-colors -- Mask luminance: black cuts the hole. */}
             <circle r={radius} fill="black" />
           </mask>
         </defs>
@@ -323,8 +332,8 @@ function FabAction({
         type="button"
         role="menuitem"
         aria-label={action.label}
-        className="text-foreground focus-visible:outline-foreground pointer-events-auto absolute flex size-16 cursor-pointer items-center justify-center rounded-full outline-offset-4 will-change-transform focus-visible:outline-2"
-        style={{ left: -ACTION_SIZE / 2, top: -ACTION_SIZE / 2, x, y, scale }}
+        className="text-foreground focus-visible:outline-foreground pointer-events-auto absolute -top-8 -left-8 flex size-16 cursor-pointer items-center justify-center rounded-full outline-offset-4 will-change-transform focus-visible:outline-2"
+        style={{ x, y, scale }}
         variants={{ closed: { opacity: 0 }, open: { opacity: 1 } }}
         transition={{ duration: reduce ? 0 : DURATION, ease: EASE_IN_OUT }}
         onClick={onSelect}

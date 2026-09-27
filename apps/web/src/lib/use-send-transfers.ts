@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { createFileTransfer, createTextTransfer } from "#/lib/api.ts";
 import type { Peer, Transfer } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import { beginFileTransfer } from "#/lib/file-transfers.ts";
@@ -50,10 +51,11 @@ export function useSendTransfers({
         `Ask ${missing.map((recipient) => recipient.display_name).join(", ")} to reload AnyShare before sending.`
       );
     }
-    const sameFiles =
-      files?.length === batch.current?.files?.length &&
-      files?.every((file, index) => file === batch.current?.files?.[index]);
-    if (!batch.current || batch.current.key !== key || (files && !sameFiles)) {
+    if (
+      !batch.current ||
+      batch.current.key !== key ||
+      (files && !sameFiles(files, batch.current.files))
+    ) {
       batch.current = { key, files, completed: new Set() };
     }
     busy.current = true;
@@ -84,36 +86,46 @@ export function useSendTransfers({
     if (!completed) {
       return false;
     }
-    try {
-      await sendBatch(
-        recipients.map((recipient) => ({
-          id: recipient.id,
-          label: recipient.display_name,
-          send: async () => {
-            const prepared = await prepareText(body, {
-              recipientPublicKey: recipientKey(recipient),
-            });
-            try {
-              const created = await createTextTransfer(token, {
-                recipientId: recipient.id,
-                groupId,
-                expiration,
-                body: prepared.body,
-                secret: prepared.secret,
+    return await attempt(
+      async () => {
+        await sendBatch(
+          recipients.map((recipient) => ({
+            id: recipient.id,
+            label: recipient.display_name,
+            send: async () => {
+              const prepared = await prepareText(body, {
+                recipientPublicKey: recipientKey(recipient),
               });
-              sent(created.transfer, recipient);
-            } finally {
-              prepared.masterKey?.fill(0);
-            }
-          },
-        })),
-        completed
-      );
-      batch.current = null;
-      return true;
-    } finally {
-      finish();
-    }
+              await attempt(
+                async () => {
+                  const created = await createTextTransfer(token, {
+                    recipientId: recipient.id,
+                    groupId,
+                    expiration,
+                    body: prepared.body,
+                    secret: prepared.secret,
+                  });
+                  sent(created.transfer, recipient);
+                },
+                {
+                  onSettled: () => {
+                    prepared.masterKey?.fill(0);
+                  },
+                }
+              );
+            },
+          })),
+          completed
+        );
+        batch.current = null;
+        return true;
+      },
+      {
+        onSettled: () => {
+          finish();
+        },
+      }
+    );
   };
 
   const sendFiles = async (files: File[], expiration = defaultExpiration) => {
@@ -137,80 +149,91 @@ export function useSendTransfers({
     }
     const controller = new AbortController();
     upload.current = controller;
-    try {
-      await sendBatch(
-        files.flatMap((file, index) =>
-          recipients.map((recipient) => ({
-            id: `${index}:${recipient.id}`,
-            label: `${file.name} → ${recipient.display_name}`,
-            send: async () => {
-              const transfer = beginFileTransfer({
-                direction: "upload",
-                name: `${file.name} → ${recipient.display_name}`,
-                totalBytes: file.size,
-                phase: "Encrypting",
-                onCancel: () => controller.abort(),
-              });
-              setProgress(0);
-              setPhase(`Encrypting for ${recipient.display_name}`);
-              try {
-                await withPreparedFile(
-                  file,
-                  { recipientPublicKey: recipientKey(recipient) },
-                  async (prepared) => {
-                    const uploadPhase = `Uploading to ${recipient.display_name}`;
-                    setPhase(uploadPhase);
-                    setProgress(0);
-                    transfer.update(uploadPhase, 0, prepared.file.size);
-                    const created = await createFileTransfer(token, {
-                      recipientId: recipient.id,
-                      groupId,
-                      expiration,
-                      filename: prepared.file.name,
-                      byteSize: prepared.file.size,
-                      contentType:
-                        prepared.file.type || "application/octet-stream",
-                      secret: prepared.secret,
-                    });
-                    const result = await uploadFile(
-                      token,
-                      created.transfer.id,
-                      created.upload,
-                      prepared.file,
-                      (ratio) => {
-                        setProgress(ratio);
-                        transfer.update(uploadPhase, ratio, prepared.file.size);
-                      },
-                      controller.signal
-                    );
-                    sent(result.transfer, recipient);
-                  },
-                  controller.signal,
-                  (ratio) => {
-                    setProgress(ratio);
-                    transfer.update("Encrypting", ratio, file.size);
+    return await attempt(
+      async () => {
+        await sendBatch(
+          files.flatMap((file, index) =>
+            recipients.map((recipient) => ({
+              id: `${index}:${recipient.id}`,
+              label: `${file.name} → ${recipient.display_name}`,
+              send: async () => {
+                const transfer = beginFileTransfer({
+                  direction: "upload",
+                  name: `${file.name} → ${recipient.display_name}`,
+                  totalBytes: file.size,
+                  phase: "Encrypting",
+                  onCancel: () => controller.abort(),
+                });
+                setProgress(0);
+                setPhase(`Encrypting for ${recipient.display_name}`);
+                try {
+                  await withPreparedFile(
+                    file,
+                    { recipientPublicKey: recipientKey(recipient) },
+                    async (prepared) => {
+                      const uploadPhase = `Uploading to ${recipient.display_name}`;
+                      setPhase(uploadPhase);
+                      setProgress(0);
+                      transfer.update(uploadPhase, 0, prepared.file.size);
+                      const created = await createFileTransfer(token, {
+                        recipientId: recipient.id,
+                        groupId,
+                        expiration,
+                        filename: prepared.file.name,
+                        byteSize: prepared.file.size,
+                        contentType:
+                          prepared.file.type || "application/octet-stream",
+                        secret: prepared.secret,
+                      });
+                      const result = await uploadFile(
+                        token,
+                        created.transfer.id,
+                        created.upload,
+                        prepared.file,
+                        (ratio) => {
+                          setProgress(ratio);
+                          transfer.update(
+                            uploadPhase,
+                            ratio,
+                            prepared.file.size
+                          );
+                        },
+                        controller.signal,
+                        undefined,
+                        prepared.signals
+                      );
+                      sent(result.transfer, recipient);
+                    },
+                    controller.signal,
+                    (ratio) => {
+                      setProgress(ratio);
+                      transfer.update("Encrypting", ratio, file.size);
+                    }
+                  );
+                  transfer.done();
+                } catch (error) {
+                  if (controller.signal.aborted) {
+                    transfer.cancel();
+                  } else {
+                    transfer.fail();
                   }
-                );
-                transfer.done();
-              } catch (error) {
-                if (controller.signal.aborted) {
-                  transfer.cancel();
-                } else {
-                  transfer.fail();
+                  throw error;
                 }
-                throw error;
-              }
-            },
-          }))
-        ),
-        completed,
-        controller.signal
-      );
-      batch.current = null;
-      return true;
-    } finally {
-      finish();
-    }
+              },
+            }))
+          ),
+          completed,
+          controller.signal
+        );
+        batch.current = null;
+        return true;
+      },
+      {
+        onSettled: () => {
+          finish();
+        },
+      }
+    );
   };
 
   return {
@@ -221,6 +244,13 @@ export function useSendTransfers({
     sendFiles,
     cancel: () => upload.current?.abort(),
   };
+}
+
+function sameFiles(files: File[], previous: File[] | undefined) {
+  return (
+    files.length === previous?.length &&
+    files.every((file, index) => file === previous[index])
+  );
 }
 
 function recipientKey(recipient: Recipient) {

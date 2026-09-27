@@ -7,6 +7,7 @@ defmodule AnyshareWeb.InvitationControllerTest do
   alias Anyshare.Repo
   alias Anyshare.RoomEvents
   alias Anyshare.Sharing
+  alias Anyshare.SignalsFixture
   alias Anyshare.Time
 
   test "remote devices remain hidden until an exact-name invitation is accepted" do
@@ -59,7 +60,7 @@ defmodule AnyshareWeb.InvitationControllerTest do
         sender_token,
         :post,
         "/api/v1/transfers/#{file_response["transfer"]["id"]}/complete",
-        %{}
+        %{"signals" => SignalsFixture.signals()}
       )
       |> json_response(200)
 

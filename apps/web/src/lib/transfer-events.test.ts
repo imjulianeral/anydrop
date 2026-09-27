@@ -71,17 +71,17 @@ describe("live transfer expiration", () => {
     }
     const grouped = { ...transfer, group_id: "group-1" };
 
-    expect(belongsToHistory(transfer, "sender", "recipient")).toBe(true);
-    expect(belongsToHistory(grouped, "sender", "recipient")).toBe(false);
-    expect(belongsToHistory(grouped, "sender", "recipient", "group-1")).toBe(
-      true
-    );
-    expect(belongsToHistory(grouped, "recipient", "sender", "group-1")).toBe(
-      true
-    );
-    expect(belongsToHistory(grouped, "stranger", "sender", "group-1")).toBe(
-      false
-    );
+    expect(belongsToHistory(transfer, "sender", "recipient")).toBeTruthy();
+    expect(belongsToHistory(grouped, "sender", "recipient")).toBeFalsy();
+    expect(
+      belongsToHistory(grouped, "sender", "recipient", "group-1")
+    ).toBeTruthy();
+    expect(
+      belongsToHistory(grouped, "recipient", "sender", "group-1")
+    ).toBeTruthy();
+    expect(
+      belongsToHistory(grouped, "stranger", "sender", "group-1")
+    ).toBeFalsy();
   });
 
   it("retains the item and marks its limit reached from a usage event", () => {
@@ -144,7 +144,7 @@ describe("live transfer expiration", () => {
       throw new Error("Invalid fixture");
     }
     expect(offered.expires_at).toBe("");
-    expect(itemExpired(offered)).toBe(false);
+    expect(itemExpired(offered)).toBeFalsy();
     expect(mergeTransfers([transfer], [offered])[0]?.expires_at).toBe(
       transfer.expires_at
     );

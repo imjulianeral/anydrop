@@ -26,6 +26,7 @@ import {
 } from "#/components/rune-icons.tsx";
 import { deleteShortLink, listShortLinks } from "#/lib/api.ts";
 import type { ShortLink } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { limitReached } from "#/lib/expiry.ts";
 import {
   applyShortLinkEventToLink,
@@ -68,7 +69,7 @@ export function LinkHistoryPanel({
   const { token, subscribeToEvents } = useAppSession();
   const [links, setLinks] = useState<ShortLink[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [deletingCode, setDeletingCode] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const deletedCodes = useRef(new Set<string>());
@@ -77,24 +78,30 @@ export function LinkHistoryPanel({
   useEffect(() => () => clearTimeout(copyResetTimer.current), []);
 
   const refresh = useCallback(async () => {
-    try {
-      const payload = await listShortLinks(token);
-      setLinks(
-        payload.short_links.filter(
-          (link) => !deletedCodes.current.has(link.code)
-        )
-      );
-      setError(false);
-    } catch (cause) {
-      setError(true);
-      toast.add({
-        title: "Could not load links",
-        description: cause instanceof Error ? cause.message : undefined,
-        type: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
+    await attempt(
+      async () => {
+        const payload = await listShortLinks(token);
+        setLinks(
+          payload.short_links.filter(
+            (link) => !deletedCodes.current.has(link.code)
+          )
+        );
+        setLoadFailed(false);
+      },
+      {
+        onError: (cause) => {
+          setLoadFailed(true);
+          toast.add({
+            title: "Could not load links",
+            description: cause instanceof Error ? cause.message : undefined,
+            type: "error",
+          });
+        },
+        onSettled: () => {
+          setLoading(false);
+        },
+      }
+    );
   }, [token]);
 
   useEffect(() => {
@@ -119,26 +126,34 @@ export function LinkHistoryPanel({
       return;
     }
     setDeletingCode(link.code);
-    try {
-      await deleteShortLink(token, link.code);
-      deletedCodes.current.add(link.code);
-      setLinks((current) => current.filter((item) => item.code !== link.code));
-      onDeleted(link.code);
-      try {
-        forgetLinkKey(link.code);
-      } catch {
-        // The link is revoked even if this browser cannot write local storage.
+    await attempt(
+      async () => {
+        await deleteShortLink(token, link.code);
+        deletedCodes.current.add(link.code);
+        setLinks((current) =>
+          current.filter((item) => item.code !== link.code)
+        );
+        onDeleted(link.code);
+        try {
+          forgetLinkKey(link.code);
+        } catch {
+          // The link is revoked even if this browser cannot write local storage.
+        }
+        toast.add({ title: "Link deleted", type: "success" });
+      },
+      {
+        onError: (cause) => {
+          toast.add({
+            title: "Could not delete link",
+            description: cause instanceof Error ? cause.message : undefined,
+            type: "error",
+          });
+        },
+        onSettled: () => {
+          setDeletingCode(null);
+        },
       }
-      toast.add({ title: "Link deleted", type: "success" });
-    } catch (cause) {
-      toast.add({
-        title: "Could not delete link",
-        description: cause instanceof Error ? cause.message : undefined,
-        type: "error",
-      });
-    } finally {
-      setDeletingCode(null);
-    }
+    );
   };
 
   const copy = async (link: ShortLink) => {
@@ -150,10 +165,10 @@ export function LinkHistoryPanel({
         setCopiedCode(null);
       }, 2000);
       toast.add({ title: "Link copied", type: "success" });
-    } catch (cause) {
+    } catch (error) {
       toast.add({
         title: "Could not copy link",
-        description: cause instanceof Error ? cause.message : undefined,
+        description: error instanceof Error ? error.message : undefined,
         type: "error",
       });
     }
@@ -200,8 +215,8 @@ export function LinkHistoryPanel({
           },
           renderButton: ({ actionWidth, focusable, side, onClick }) => (
             <div
-              className="flex h-full shrink-0 items-center justify-center"
-              style={{ width: actionWidth }}
+              className="flex h-full w-(--action-width) shrink-0 items-center justify-center"
+              style={{ "--action-width": `${actionWidth}px` }}
             >
               <ActionSwapCascadeButton
                 data-swipe-action={side}
@@ -230,7 +245,7 @@ export function LinkHistoryPanel({
             <p className="text-foreground truncate text-sm font-medium">
               {label}
             </p>
-            <p className="text-muted-foreground mt-0.5 truncate font-mono text-[11px]">
+            <p className="text-muted-foreground text-2xs mt-0.5 truncate font-mono">
               {linkPageUrl(link.code)}
             </p>
             <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
@@ -278,17 +293,20 @@ export function LinkHistoryPanel({
               Pull to refresh · Swipe for actions
             </p>
           </div>
-          <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-1 font-mono text-[10px]">
+          <span className="bg-muted text-muted-foreground text-3xs rounded-full px-2.5 py-1 font-mono">
             {loading ? "…" : `${links.length} links`}
           </span>
         </header>
 
         {loading ? (
-          <div className="flex h-44 items-center justify-center" role="status">
+          <output
+            aria-live="polite"
+            className="flex h-44 items-center justify-center"
+          >
             <Loader label="Loading links" variant="dots" />
-          </div>
+          </output>
         ) : null}
-        {!loading && error && links.length === 0 ? (
+        {!loading && loadFailed && links.length === 0 ? (
           <div className="flex h-44 flex-col items-center justify-center gap-3 px-5 text-center">
             <p className="text-muted-foreground text-sm">
               Could not load link history.
@@ -304,7 +322,7 @@ export function LinkHistoryPanel({
             </button>
           </div>
         ) : null}
-        {!loading && !error && links.length === 0 ? (
+        {!loading && !loadFailed && links.length === 0 ? (
           <div className="flex h-44 items-center justify-center px-5 text-center">
             <p className="text-muted-foreground text-sm">
               Your links will appear here.
@@ -339,7 +357,7 @@ function LinkUsage({
 }) {
   const [open, setOpen] = useState(false);
   const Icon = kind === "download" ? Download : Eye;
-  const unlimited = limit == null;
+  const unlimited = limit === null || limit === undefined;
   const label = unlimited
     ? `${count} ${kind}${count === 1 ? "" : "s"}, unlimited`
     : `${count} of ${limit} ${kind}${limit === 1 ? "" : "s"}`;

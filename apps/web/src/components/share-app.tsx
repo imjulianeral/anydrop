@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Link as LinkIcon, UsersRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
 import { AppDock } from "#/components/app-dock.tsx";
 import type { DockAction } from "#/components/app-dock.tsx";
@@ -28,7 +29,7 @@ import { SelfCard } from "#/components/self-card.tsx";
 import { SendOptions } from "#/components/send-options.tsx";
 import { TextComposer } from "#/components/text-composer.tsx";
 import { TransferHistory } from "#/components/transfer-history.tsx";
-import type { Peer, ShortLink } from "#/lib/api.ts";
+import type { DeviceGroup, Peer, ShortLink, Transfer } from "#/lib/api.ts";
 import { linkLabel } from "#/lib/link-label.ts";
 import { SHARE_BACKGROUND_SHADER } from "#/lib/share-shaders.ts";
 import { toast } from "#/lib/toast.ts";
@@ -94,27 +95,34 @@ export function ShareApp({
   } = useGroups();
   const activeGroup = groups.find((group) => group.id === activeGroupId);
   const managedGroup = groups.find((group) => group.id === manageGroupId);
-  const selectedId = selected?.id ?? null;
-  const targetId = activeGroup?.id ?? selectedId;
-  const targetName = activeGroup?.name ?? selected?.display_name;
-  const showHistory =
-    Boolean(targetId) &&
-    !sendOptionsOpen &&
-    (showShared || Boolean(!activeGroup && messageId));
-  const showCarouselHint =
-    !sendOptionsOpen && !targetId && peers.length + groups.length > 1;
-  const recipients =
-    activeGroup?.members.filter((member) => member.id !== self.id) ??
-    (selected ? [selected] : []);
+  const {
+    online,
+    peerHistoryId,
+    groupId,
+    targetId,
+    targetName,
+    recipients,
+    showHistory,
+    showCarouselHint,
+  } = shareSelection({
+    selected,
+    activeGroup,
+    selfId: self.id,
+    messageId,
+    showShared,
+    sendOptionsOpen,
+    peers,
+    circleCount: peers.length + groups.length,
+  });
   const { transfers, loading, appendTransfer } = usePeerTransfers(
-    activeGroup ? null : selectedId,
-    activeGroup?.id
+    peerHistoryId,
+    groupId
   );
   const { sending, progress, phase, sendText, sendFiles, cancel } =
     useSendTransfers({
       token,
       recipients,
-      groupId: activeGroup?.id,
+      groupId,
       onTransfer: appendTransfer,
     });
 
@@ -180,7 +188,7 @@ export function ShareApp({
         event.preventDefault();
         return;
       }
-      const first = focusable[0];
+      const [first] = focusable;
       const last = focusable.at(-1);
       if (
         event.shiftKey &&
@@ -226,10 +234,7 @@ export function ShareApp({
       label: "Create a link",
       icon: LinkIcon,
       onClick: () => openPanel("link"),
-      active:
-        activePanel === "link" ||
-        activePanel === "history" ||
-        activePanel === "link-stats",
+      active: isLinkPanel(activePanel),
     },
   ];
 
@@ -253,47 +258,9 @@ export function ShareApp({
           }
         }}
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10"
-        >
-          <ShaderBackground
-            className="absolute inset-0"
-            colorBack={isLight ? "#ffffff" : "#0a0a0a"}
-            colorFront={isLight ? "#0a0a0a" : "#ffffff"}
-            colorMid="#47a6ff"
-            speed={0.4}
-            variant={SHARE_BACKGROUND_SHADER}
-          />
-          <div className="from-background/90 via-background/20 to-background/85 absolute inset-0 bg-linear-to-b" />
-        </div>
+        <ShareBackdrop light={isLight} />
         <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-start px-5 py-5 sm:px-9 sm:py-7">
-          <MorphPopover className="pointer-events-auto">
-            <MorphPopoverTrigger>
-              <Button
-                variant="secondary"
-                size="sm"
-                aria-label={`This device: ${self.display_name}, ${connected ? "connected" : "disconnected"}. Show invitation details`}
-              >
-                <Monitor className="size-4" />
-                <span className="max-w-32 truncate">{self.display_name}</span>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-2 shrink-0 rounded-full",
-                    connected ? "bg-emerald-500" : "bg-destructive"
-                  )}
-                />
-              </Button>
-            </MorphPopoverTrigger>
-            <MorphPopoverContent
-              side="bottom"
-              align="start"
-              className="max-h-[70dvh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto"
-            >
-              <SelfCard connected={connected} device={self} />
-            </MorphPopoverContent>
-          </MorphPopover>
+          <DeviceBadge self={self} connected={connected} />
         </header>
         <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 sm:px-9">
           <div className="flex min-h-64 flex-1 flex-col items-center justify-center gap-9 py-8 sm:gap-12">
@@ -301,18 +268,19 @@ export function ShareApp({
               <h1 className="text-3xl font-medium tracking-tight sm:text-5xl">
                 Your sharing space
               </h1>
-              <output className="text-muted-foreground text-sm leading-relaxed">
-                {connected
-                  ? `${peers.length} ${peers.length === 1 ? "device" : "devices"} available`
-                  : "Reconnecting…"}
+              <output
+                aria-live="polite"
+                className="text-muted-foreground text-sm leading-relaxed"
+              >
+                {availabilityLabel(connected, peers.length)}
               </output>
             </div>
             {peers.length || groups.length ? (
               <PeerCarousel
                 peers={peers}
                 groups={groups}
-                selectedId={activeGroup ? null : selectedId}
-                selectedGroupId={activeGroup?.id ?? null}
+                selectedId={peerHistoryId}
+                selectedGroupId={groupId ?? null}
                 disabled={sending}
                 onSelect={(peer) => {
                   setActiveGroupId(null);
@@ -354,52 +322,19 @@ export function ShareApp({
           {showHistory || sending || showCarouselHint ? (
             <div className="relative mx-auto flex w-full max-w-sm shrink-0 flex-col gap-4 pt-4 pb-6 sm:pb-8">
               {showHistory && targetId ? (
-                <>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="truncate">
-                      {targetName}
-                      {activeGroup ||
-                      peers.some((peer) => peer.id === selectedId)
-                        ? ""
-                        : " · Offline"}
-                    </span>
-                    {activeGroup ? (
-                      <button
-                        type="button"
-                        aria-label="Clear selected group"
-                        className="bg-background/70 flex size-8 shrink-0 items-center justify-center rounded-full"
-                        onClick={() => setActiveGroupId(null)}
-                      >
-                        <X className="size-4" />
-                      </button>
-                    ) : (
-                      <Link
-                        to="/"
-                        search={(previous) => ({
-                          ...previous,
-                          peer: undefined,
-                          peerName: undefined,
-                          message: undefined,
-                        })}
-                        aria-label="Clear selected device"
-                        className="bg-background/70 flex size-8 shrink-0 items-center justify-center rounded-full"
-                      >
-                        <X className="size-4" />
-                      </Link>
-                    )}
-                  </div>
-                  <TransferHistory
-                    key={`${activeGroup ? "group" : "peer"}-${targetId}-${activeGroup ? "" : (messageId ?? "")}`}
-                    visible
-                    loading={loading}
-                    transfers={transfers}
-                    selfId={self.id}
-                    peerName={targetName ?? "Device"}
-                    messageId={activeGroup ? undefined : messageId}
-                    participants={activeGroup?.members}
-                  />
-                </>
-              ) : showCarouselHint ? (
+                <SelectionHistory
+                  targetId={targetId}
+                  targetName={targetName ?? "Device"}
+                  group={activeGroup}
+                  online={online}
+                  messageId={messageId}
+                  loading={loading}
+                  transfers={transfers}
+                  selfId={self.id}
+                  onClearGroup={() => setActiveGroupId(null)}
+                />
+              ) : null}
+              {showCarouselHint ? (
                 <p className="text-muted-foreground text-center text-xs">
                   Drag the space between circles, scroll, or use the arrow keys.
                 </p>
@@ -471,8 +406,10 @@ export function ShareApp({
         className={activePanel ? panelClassNames[activePanel] : undefined}
       >
         {activePanel ? (
+          // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Swallows file drops so they don't reach the page's drop zone.
           <div
             ref={panelRef}
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A native <dialog> stays hidden unless opened imperatively; MorphingModal drives this panel.
             role="dialog"
             aria-modal="true"
             aria-label={panelLabels[activePanel]}
@@ -487,64 +424,299 @@ export function ShareApp({
               event.stopPropagation();
             }}
           >
-            {activePanel === "groups" ? (
-              <GroupsPanel
-                groups={groups}
-                loading={groupsLoading}
-                error={groupsError}
-                disabled={sending}
-                onCreate={() => openGroupManager(null)}
-                onOpenGroup={openGroupManager}
-              />
-            ) : null}
-            {activePanel === "invite" ? <RemoteDevicesPanel /> : null}
-            {activePanel === "link" ? (
-              <CreateLinkPanel
-                created={createdLink}
-                onCreated={setCreatedLink}
-                onBusyChange={setLinkBusy}
-                onClose={closePanel}
-                onViewHistory={() => setActivePanel("history")}
-              />
-            ) : null}
-            {activePanel === "history" ? (
-              <LinkHistoryPanel
-                onBack={() => setActivePanel("link")}
-                onDeleted={(code) => {
-                  setCreatedLink((current) =>
-                    current?.code === code ? null : current
-                  );
-                  setStatsLink((current) =>
-                    current?.code === code ? null : current
-                  );
-                }}
-                onStats={(link) => {
-                  setStatsLink(link);
-                  setActivePanel("link-stats");
-                }}
-              />
-            ) : null}
-            {activePanel === "link-stats" && statsLink ? (
-              <div className="flex flex-col gap-5">
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground inline-flex w-fit cursor-pointer items-center gap-2 text-sm focus-visible:outline-2"
-                  onClick={() => setActivePanel("history")}
-                >
-                  <ArrowLeft aria-hidden="true" className="size-4" />
-                  Link history
-                </button>
-                <LinkDetails
-                  embedded
-                  label={linkLabel(statsLink)}
-                  link={statsLink}
-                  token={token}
-                />
-              </div>
-            ) : null}
+            <SharePanelBody
+              panel={activePanel}
+              groups={groups}
+              groupsLoading={groupsLoading}
+              groupsError={groupsError}
+              sending={sending}
+              createdLink={createdLink}
+              statsLink={statsLink}
+              token={token}
+              onOpenGroupManager={openGroupManager}
+              onCreatedLink={setCreatedLink}
+              onStatsLink={setStatsLink}
+              onLinkBusyChange={setLinkBusy}
+              onPanelChange={setActivePanel}
+              onClose={closePanel}
+            />
           </div>
         ) : null}
       </MorphingModal>
+    </>
+  );
+}
+
+const LINK_PANELS = new Set<SharePanel | null>([
+  "link",
+  "history",
+  "link-stats",
+]);
+
+function isLinkPanel(panel: SharePanel | null) {
+  return LINK_PANELS.has(panel);
+}
+
+function availabilityLabel(connected: boolean, count: number) {
+  if (!connected) {
+    return "Reconnecting…";
+  }
+  return `${count} ${count === 1 ? "device" : "devices"} available`;
+}
+
+/**
+ * Who the next send goes to: the selected group, otherwise the selected
+ * device, plus which parts of the space that selection shows.
+ */
+function shareSelection({
+  selected,
+  activeGroup,
+  selfId,
+  messageId,
+  showShared,
+  sendOptionsOpen,
+  peers,
+  circleCount,
+}: {
+  selected: ReturnType<typeof findSelectedPeer>;
+  activeGroup: DeviceGroup | undefined;
+  selfId: string;
+  messageId: string | undefined;
+  showShared: boolean;
+  sendOptionsOpen: boolean;
+  peers: Peer[];
+  circleCount: number;
+}) {
+  const selectedId = selected?.id ?? null;
+  const targetId = activeGroup?.id ?? selectedId;
+  const deepLinked = Boolean(!activeGroup && messageId);
+  let recipients: Pick<Peer, "id" | "display_name" | "public_key">[] = selected
+    ? [selected]
+    : [];
+  if (activeGroup) {
+    recipients = activeGroup.members.filter((member) => member.id !== selfId);
+  }
+  return {
+    online: Boolean(
+      activeGroup || peers.some((peer) => peer.id === selectedId)
+    ),
+    peerHistoryId: activeGroup ? null : selectedId,
+    groupId: activeGroup?.id,
+    targetId,
+    targetName: activeGroup?.name ?? selected?.display_name,
+    recipients,
+    showHistory:
+      Boolean(targetId) && !sendOptionsOpen && (showShared || deepLinked),
+    showCarouselHint: !sendOptionsOpen && !targetId && circleCount > 1,
+  };
+}
+
+function ShareBackdrop({ light }: { light: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 -z-10"
+    >
+      <ShaderBackground
+        className="absolute inset-0"
+        colorBack={light ? "#ffffff" : "#0a0a0a"}
+        colorFront={light ? "#0a0a0a" : "#ffffff"}
+        colorMid="#47a6ff"
+        speed={0.4}
+        variant={SHARE_BACKGROUND_SHADER}
+      />
+      <div className="from-background/90 via-background/20 to-background/85 absolute inset-0 bg-linear-to-b" />
+    </div>
+  );
+}
+
+function DeviceBadge({ self, connected }: { self: Peer; connected: boolean }) {
+  return (
+    <MorphPopover className="pointer-events-auto">
+      <MorphPopoverTrigger>
+        <Button
+          variant="secondary"
+          size="sm"
+          aria-label={`This device: ${self.display_name}, ${connected ? "connected" : "disconnected"}. Show invitation details`}
+        >
+          <Monitor className="size-4" />
+          <span className="max-w-32 truncate">{self.display_name}</span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-2 shrink-0 rounded-full",
+              connected ? "bg-success" : "bg-destructive"
+            )}
+          />
+        </Button>
+      </MorphPopoverTrigger>
+      <MorphPopoverContent
+        side="bottom"
+        align="start"
+        className="max-h-[70dvh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto"
+      >
+        <SelfCard connected={connected} device={self} />
+      </MorphPopoverContent>
+    </MorphPopover>
+  );
+}
+
+function SelectionHistory({
+  targetId,
+  targetName,
+  group,
+  online,
+  messageId,
+  loading,
+  transfers,
+  selfId,
+  onClearGroup,
+}: {
+  targetId: string;
+  targetName: string;
+  group: DeviceGroup | undefined;
+  online: boolean;
+  messageId: string | undefined;
+  loading: boolean;
+  transfers: Transfer[];
+  selfId: string;
+  onClearGroup: () => void;
+}) {
+  const historyKey = group
+    ? `group-${targetId}-`
+    : `peer-${targetId}-${messageId ?? ""}`;
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="truncate">
+          {targetName}
+          {online ? "" : " · Offline"}
+        </span>
+        {group ? (
+          <button
+            type="button"
+            aria-label="Clear selected group"
+            className="bg-background/70 flex size-8 shrink-0 items-center justify-center rounded-full"
+            onClick={onClearGroup}
+          >
+            <X className="size-4" />
+          </button>
+        ) : (
+          <Link
+            to="/"
+            search={(previous) => ({
+              ...previous,
+              peer: undefined,
+              peerName: undefined,
+              message: undefined,
+            })}
+            aria-label="Clear selected device"
+            className="bg-background/70 flex size-8 shrink-0 items-center justify-center rounded-full"
+          >
+            <X className="size-4" />
+          </Link>
+        )}
+      </div>
+      <TransferHistory
+        key={historyKey}
+        visible
+        loading={loading}
+        transfers={transfers}
+        selfId={selfId}
+        peerName={targetName}
+        messageId={group ? undefined : messageId}
+        participants={group?.members}
+      />
+    </>
+  );
+}
+
+function SharePanelBody({
+  panel,
+  groups,
+  groupsLoading,
+  groupsError,
+  sending,
+  createdLink,
+  statsLink,
+  token,
+  onOpenGroupManager,
+  onCreatedLink,
+  onStatsLink,
+  onLinkBusyChange,
+  onPanelChange,
+  onClose,
+}: {
+  panel: SharePanel;
+  groups: DeviceGroup[];
+  groupsLoading: boolean;
+  groupsError: string | null;
+  sending: boolean;
+  createdLink: ShortLink | null;
+  statsLink: ShortLink | null;
+  token: string;
+  onOpenGroupManager: (id: string | null) => void;
+  onCreatedLink: Dispatch<SetStateAction<ShortLink | null>>;
+  onStatsLink: Dispatch<SetStateAction<ShortLink | null>>;
+  onLinkBusyChange: (busy: boolean) => void;
+  onPanelChange: (panel: SharePanel) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {panel === "groups" ? (
+        <GroupsPanel
+          groups={groups}
+          loading={groupsLoading}
+          error={groupsError}
+          disabled={sending}
+          onCreate={() => onOpenGroupManager(null)}
+          onOpenGroup={onOpenGroupManager}
+        />
+      ) : null}
+      {panel === "invite" ? <RemoteDevicesPanel /> : null}
+      {panel === "link" ? (
+        <CreateLinkPanel
+          created={createdLink}
+          onCreated={onCreatedLink}
+          onBusyChange={onLinkBusyChange}
+          onClose={onClose}
+          onViewHistory={() => onPanelChange("history")}
+        />
+      ) : null}
+      {panel === "history" ? (
+        <LinkHistoryPanel
+          onBack={() => onPanelChange("link")}
+          onDeleted={(code) => {
+            onCreatedLink((current) =>
+              current?.code === code ? null : current
+            );
+            onStatsLink((current) => (current?.code === code ? null : current));
+          }}
+          onStats={(link) => {
+            onStatsLink(link);
+            onPanelChange("link-stats");
+          }}
+        />
+      ) : null}
+      {panel === "link-stats" && statsLink ? (
+        <div className="flex flex-col gap-5">
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground inline-flex w-fit cursor-pointer items-center gap-2 text-sm focus-visible:outline-2"
+            onClick={() => onPanelChange("history")}
+          >
+            <ArrowLeft aria-hidden="true" className="size-4" />
+            Link history
+          </button>
+          <LinkDetails
+            embedded
+            label={linkLabel(statsLink)}
+            link={statsLink}
+            token={token}
+          />
+        </div>
+      ) : null}
     </>
   );
 }
@@ -570,7 +742,10 @@ function SendingProgress({
   phase: string;
 }) {
   return (
-    <output className="bg-background/90 flex flex-col gap-2 rounded-2xl p-4">
+    <output
+      aria-live="polite"
+      className="bg-background/90 flex flex-col gap-2 rounded-2xl p-4"
+    >
       <span className="text-xs">
         {progress === null
           ? "Sending…"

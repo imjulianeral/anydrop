@@ -6,9 +6,10 @@ const DAY = 24 * HOUR;
 export const limitReached = (
   limit: number | null | undefined,
   count: number | undefined
-): boolean => limit != null && limit > 0 && (count ?? 0) >= limit;
+): boolean =>
+  limit !== null && limit !== undefined && limit > 0 && (count ?? 0) >= limit;
 
-const zonedInstant = /(?:Z|[+-]\d{2}:\d{2})$/i;
+const zonedInstant = /(?:Z|[+-]\d{2}:\d{2})$/iu;
 
 export const parseInstant = (
   value: string | null | undefined

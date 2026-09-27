@@ -50,7 +50,7 @@ export function PeerCarousel({
   }, []);
 
   useEffect(() => {
-    if (selectedPeerIndex >= 0) {
+    if (selectedPeerIndex !== -1) {
       carouselRef.current?.scrollTo(groups.length + selectedPeerIndex);
     }
   }, [groups.length, selectedPeerIndex]);
@@ -70,7 +70,7 @@ export function PeerCarousel({
         minScale={0.65}
         height={280}
         defaultIndex={
-          selectedPeerIndex >= 0 ? groups.length + selectedPeerIndex : 0
+          selectedPeerIndex === -1 ? 0 : groups.length + selectedPeerIndex
         }
       >
         {groups.map((group, index) => (

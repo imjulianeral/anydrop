@@ -5,7 +5,7 @@ defmodule Anyshare.Sharing.Transfer do
   import Ecto.Changeset
 
   @kinds ~w(file text)
-  @statuses ~w(pending uploaded delivered expired failed)
+  @statuses ~w(pending uploaded delivered expired failed blocked)
   # R2's documented 5 TiB object limit excludes 5 GiB.
   @max_file_bytes 5 * 1024 * 1024 * 1024 * 1024 - 5 * 1024 * 1024 * 1024
   @max_text_length 64 * 1024

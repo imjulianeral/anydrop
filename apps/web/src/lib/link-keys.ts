@@ -28,8 +28,9 @@ export const rememberLinkKey = (code: string, masterKey: Uint8Array): void => {
   );
 };
 export const forgetLinkKey = (code: string): void => {
-  const keys = readKeys();
-  delete keys[code];
+  const keys = Object.fromEntries(
+    Object.entries(readKeys()).filter(([key]) => key !== code)
+  );
   localStorage.setItem(storageKey, JSON.stringify(keys));
 };
 export const loadLinkKey = (code: string): Uint8Array<ArrayBuffer> | null =>

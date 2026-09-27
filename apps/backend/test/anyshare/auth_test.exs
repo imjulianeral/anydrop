@@ -72,6 +72,26 @@ defmodule Anyshare.AuthTest do
              })
   end
 
+  test "keeps the Google profile photo only when Google hosts it", %{user: user} do
+    assert is_nil(Auth.google_identity(user).picture)
+    photo = "https://lh3.googleusercontent.com/a/photo=s96-c"
+    subject = Auth.google_identity(user).subject
+    claims = %{"sub" => subject, "email" => user.email, "email_verified" => true}
+
+    {:ok, _} = Auth.google_sign_in(Map.put(claims, "picture", photo))
+    assert Auth.google_identity(user).picture == photo
+
+    for url <- [
+          "http://lh3.googleusercontent.com/a/photo",
+          "https://googleusercontent.com.example.com/a/photo",
+          "javascript:alert(1)",
+          42
+        ] do
+      {:ok, _} = Auth.google_sign_in(Map.put(claims, "picture", url))
+      assert is_nil(Auth.google_identity(user).picture)
+    end
+  end
+
   test "links Google to a passkey-only account and refuses identities owned elsewhere", %{
     user: user,
     key: key

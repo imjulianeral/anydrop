@@ -16,6 +16,7 @@ import {
 } from "#/components/ui/dialog.tsx";
 import { getShortLinkStats } from "#/lib/api.ts";
 import type { LinkStat, ShortLink } from "#/lib/api.ts";
+import { attempt } from "#/lib/attempt.ts";
 import { limitReached } from "#/lib/expiry.ts";
 import {
   applyShortLinkEventToStats,
@@ -45,7 +46,7 @@ export function LinkDetails({
 }: LinkDetailsProps) {
   const { subscribeToEvents } = useAppSession();
   const [activity, setActivity] = useState<Activity>({ status: "loading" });
-  const [attempt, setAttempt] = useState(0);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const isFile = link.kind === "file";
   const views = link.view_count ?? 0;
   const downloads = link.download_count ?? 0;
@@ -54,25 +55,31 @@ export function LinkDetails({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      try {
-        const payload = await getShortLinkStats(token, link.code);
-        if (!cancelled) {
-          setActivity({
-            status: "ready",
-            stats: statsFromEvents(payload.events ?? []),
-          });
+      await attempt(
+        async () => {
+          const payload = await getShortLinkStats(token, link.code);
+          if (!cancelled) {
+            setActivity({
+              status: "ready",
+              stats: statsFromEvents(payload.events ?? []),
+            });
+          }
+        },
+        {
+          onError: () => {
+            if (!cancelled) {
+              setActivity({ status: "error" });
+            }
+          },
         }
-      } catch {
-        if (!cancelled) {
-          setActivity({ status: "error" });
-        }
-      }
+      );
     };
     void load();
     return () => {
       cancelled = true;
     };
-  }, [link.code, token, attempt]);
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- "Try again" reloads by bumping loadAttempt.
+  }, [link.code, token, loadAttempt]);
 
   useEffect(
     () =>
@@ -109,15 +116,19 @@ export function LinkDetails({
           </p>
         </header>
       ) : (
-        <DialogHeader className="min-w-0 pr-8">
-          <DialogTitle className="truncate">{label}</DialogTitle>
-          <DialogDescription className="break-all">
-            {linkPageUrl(link.code)}
-            {link.password_protected
-              ? " Visitors need the password before this link opens."
-              : ""}
-          </DialogDescription>
-        </DialogHeader>
+        <div className="min-w-0 pr-8">
+          <DialogHeader>
+            <DialogTitle>
+              <span className="block truncate">{label}</span>
+            </DialogTitle>
+            <DialogDescription className="break-all">
+              {linkPageUrl(link.code)}
+              {link.password_protected
+                ? " Visitors need the password before this link opens."
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
       )}
 
       <section className="flex flex-col gap-3">
@@ -159,18 +170,21 @@ export function LinkDetails({
       </section>
 
       {activity.status === "loading" ? (
-        <div className="flex h-60 items-center justify-center" role="status">
+        <output
+          aria-live="polite"
+          className="flex h-60 items-center justify-center"
+        >
           <Loader label="Loading activity" variant="dots" />
-        </div>
+        </output>
       ) : null}
       {activity.status === "error" ? (
         <div className="flex h-60 flex-col items-center justify-center gap-3">
-          <p role="alert">Could not load this link's activity.</p>
+          <p role="alert">Could not load this link&apos;s activity.</p>
           <Button
             variant="outline"
             onClick={() => {
               setActivity({ status: "loading" });
-              setAttempt((current) => current + 1);
+              setLoadAttempt((current) => current + 1);
             }}
           >
             Try again
