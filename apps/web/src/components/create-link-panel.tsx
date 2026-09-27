@@ -1,0 +1,608 @@
+import { useEffect, useId, useRef, useState } from "react";
+
+import { useAppSession } from "#/components/app-session.tsx";
+import { ExpirationOptions } from "#/components/expiration-options.tsx";
+import { ActionSwapCascadeButton } from "#/components/motion/action-swap-cascade.tsx";
+import type { ActionSwapItem } from "#/components/motion/action-swap-cascade.tsx";
+import { AttachmentUpload } from "#/components/motion/attachment-upload.tsx";
+import type { AttachmentUploadItem } from "#/components/motion/attachment-upload.tsx";
+import { Input } from "#/components/motion/input.tsx";
+import { PasswordOptions } from "#/components/password-options.tsx";
+import {
+  Check,
+  Copy,
+  FileIcon,
+  Link2,
+  MessageSquare,
+  X,
+} from "#/components/rune-icons.tsx";
+import {
+  createFileTransfer,
+  createShortLink,
+  createTextTransfer,
+} from "#/lib/api.ts";
+import type { ShortLink } from "#/lib/api.ts";
+import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
+import { defaultExpiration } from "#/lib/expiration-options.ts";
+import { beginFileTransfer } from "#/lib/file-transfers.ts";
+import { withPreparedFile } from "#/lib/large-secrets.ts";
+import { linkPageUrl, rememberLinkKey } from "#/lib/link-keys.ts";
+import { prepareText } from "#/lib/secrets.ts";
+import { toast } from "#/lib/toast.ts";
+import { uploadFile } from "#/lib/upload.ts";
+
+type LinkKind = "url" | "text" | "file";
+
+const choices = [
+  {
+    kind: "url",
+    label: "Shorten URL",
+    description: "Turn a long URL into a short link.",
+    icon: Link2,
+  },
+  {
+    kind: "text",
+    label: "Message",
+    description: "Share an encrypted message with a link.",
+    icon: MessageSquare,
+  },
+  {
+    kind: "file",
+    label: "File",
+    description: "Share an encrypted file with a link.",
+    icon: FileIcon,
+  },
+] as const;
+
+const copyLinkItems: ActionSwapItem[] = [
+  {
+    id: "copy",
+    label: "Copy your latest link",
+    icon: <Copy className="size-4" />,
+  },
+  {
+    id: "copied",
+    label: "Copied link",
+    icon: <Check className="size-4" />,
+  },
+];
+
+const closeButtonClass =
+  "text-muted-foreground hover:bg-foreground/[0.06] inline-flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+const cancelButtonClass =
+  "bg-foreground/[0.06] text-foreground inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-full px-4 text-sm font-medium transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none";
+const actionButtonClass =
+  "bg-foreground text-background inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none";
+
+const reportError = (error: unknown, title: string) => {
+  toast.add({
+    title,
+    description: error instanceof Error ? error.message : undefined,
+    type: "error",
+  });
+};
+
+export function CreateLinkPanel({
+  created,
+  onCreated,
+  onBusyChange,
+  onClose,
+  onViewHistory,
+}: {
+  created: ShortLink | null;
+  onCreated: (link: ShortLink) => void;
+  onBusyChange: (busy: boolean) => void;
+  onClose: () => void;
+  onViewHistory: () => void;
+}) {
+  const { token } = useAppSession();
+  const messageId = useId();
+  const backButton = useRef<HTMLButtonElement>(null);
+  const optionButtons = useRef<Record<LinkKind, HTMLButtonElement | null>>({
+    url: null,
+    text: null,
+    file: null,
+  });
+  const previousKind = useRef<LinkKind | null>(null);
+  const upload = useRef<AbortController | null>(null);
+  const copyResetTimer = useRef(0);
+  const busyRef = useRef(false);
+  const [kind, setKind] = useState<LinkKind | null>(null);
+  const [url, setUrl] = useState("");
+  const [message, setMessage] = useState("");
+  const [attachment, setAttachment] = useState<AttachmentUploadItem | null>(
+    null
+  );
+  const file = attachment?.file ?? null;
+  const [expiration, setExpiration] = useState(defaultExpiration);
+  const [password, setPassword] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"copy" | "copied">("copy");
+  const [progress, setProgress] = useState<number | null>(null);
+  const [phase, setPhase] = useState("Encrypting");
+  const passwordTooShort = password !== null && password.trim().length < 12;
+  const selected = choices.find((choice) => choice.kind === kind);
+  const DetailIcon = selected?.icon;
+
+  useEffect(() => () => upload.current?.abort(), []);
+  useEffect(() => () => clearTimeout(copyResetTimer.current), []);
+
+  useEffect(() => {
+    if (kind) {
+      backButton.current?.focus({ preventScroll: true });
+    } else if (previousKind.current) {
+      optionButtons.current[previousKind.current]?.focus({
+        preventScroll: true,
+      });
+    }
+    previousKind.current = kind;
+  }, [kind]);
+
+  const start = () => {
+    if (busyRef.current) {
+      return false;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    onBusyChange(true);
+    return true;
+  };
+
+  const stop = () => {
+    busyRef.current = false;
+    setBusy(false);
+    onBusyChange(false);
+  };
+
+  const finish = (link: ShortLink, title: string) => {
+    clearTimeout(copyResetTimer.current);
+    setCopyStatus("copy");
+    onCreated(link);
+    setExpiration(defaultExpiration);
+    setPassword(null);
+    toast.add({ title, type: "success" });
+  };
+
+  const checkPassword = () => {
+    if (!passwordTooShort) {
+      return true;
+    }
+    reportError(
+      new Error("Use a password or passphrase with 12–1024 characters."),
+      "Use a longer password"
+    );
+    return false;
+  };
+
+  const shorten = async () => {
+    const destination = url.trim();
+    if (destination === "" || busyRef.current) {
+      return;
+    }
+    if (!checkPassword()) {
+      return;
+    }
+    if (!start()) {
+      return;
+    }
+    try {
+      const { short_link: link } = await createShortLink(
+        token,
+        destination,
+        expiration,
+        password ?? undefined
+      );
+      finish(link, "Short link created");
+      setUrl("");
+    } catch (error) {
+      reportError(error, "Could not shorten URL");
+    } finally {
+      stop();
+    }
+  };
+
+  const createMessage = async () => {
+    const body = message.trim();
+    if (body === "" || busyRef.current) {
+      return;
+    }
+    if (new TextEncoder().encode(body).length > maxTextBytes) {
+      reportError(
+        new Error("The message is too long."),
+        "Could not create link"
+      );
+      return;
+    }
+    if (!checkPassword()) {
+      return;
+    }
+    if (!start()) {
+      return;
+    }
+    let masterKey: Uint8Array | undefined;
+    try {
+      const prepared = await prepareText(body);
+      masterKey = prepared.masterKey;
+      const { short_link: link } = await createTextTransfer(token, {
+        body: prepared.body,
+        secret: prepared.secret,
+        expiration,
+        password: password ?? undefined,
+      });
+      if (!link) {
+        throw new Error("Could not create link");
+      }
+      rememberLinkKey(link.code, masterKey);
+      finish(link, "Message link created");
+      setMessage("");
+    } catch (error) {
+      reportError(error, "Could not create message link");
+    } finally {
+      masterKey?.fill(0);
+      stop();
+    }
+  };
+
+  const createFile = async () => {
+    if (!file || !checkPassword() || !start()) {
+      return;
+    }
+    const controller = new AbortController();
+    upload.current = controller;
+    const progressTransfer = beginFileTransfer({
+      direction: "upload",
+      name: file.name,
+      totalBytes: file.size,
+      phase: "Encrypting",
+      onCancel: () => controller.abort(),
+    });
+    setPhase("Encrypting");
+    setProgress(0);
+    try {
+      await withPreparedFile(
+        file,
+        {},
+        async (prepared) => {
+          setPhase("Uploading");
+          setProgress(0);
+          progressTransfer.update("Uploading", 0, prepared.file.size);
+          const transfer = await createFileTransfer(token, {
+            filename: prepared.file.name,
+            byteSize: prepared.file.size,
+            contentType: prepared.file.type || "application/octet-stream",
+            secret: prepared.secret,
+            expiration,
+          });
+          const completed = await uploadFile(
+            token,
+            transfer.transfer.id,
+            transfer.upload,
+            prepared.file,
+            (ratio) => {
+              setProgress(ratio);
+              progressTransfer.update("Uploading", ratio, prepared.file.size);
+            },
+            controller.signal,
+            password ?? undefined
+          );
+          if (!completed.short_link) {
+            throw new Error("Could not create link");
+          }
+          rememberLinkKey(completed.short_link.code, prepared.masterKey);
+          finish(completed.short_link, "File link created");
+          setAttachment(null);
+        },
+        controller.signal,
+        (ratio) => {
+          setProgress(ratio);
+          progressTransfer.update("Encrypting", ratio, file.size);
+        }
+      );
+      progressTransfer.done();
+    } catch (error) {
+      if (controller.signal.aborted) {
+        progressTransfer.cancel();
+      } else {
+        progressTransfer.fail();
+        reportError(error, "Could not create file link");
+      }
+    } finally {
+      upload.current = null;
+      setProgress(null);
+      stop();
+    }
+  };
+
+  const copy = async () => {
+    if (!created) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(linkPageUrl(created.code));
+      setCopyStatus("copied");
+      clearTimeout(copyResetTimer.current);
+      copyResetTimer.current = window.setTimeout(() => {
+        setCopyStatus("copy");
+      }, 2000);
+    } catch (error) {
+      reportError(error, "Could not copy link");
+    }
+  };
+
+  return (
+    <section className="flex min-w-0 flex-col" aria-label="Create a link">
+      {selected ? (
+        <>
+          <div className="mb-3 flex items-start justify-between">
+            {DetailIcon ? (
+              <DetailIcon
+                aria-hidden="true"
+                className="text-foreground size-5"
+              />
+            ) : null}
+            <button
+              ref={backButton}
+              type="button"
+              className={closeButtonClass}
+              aria-label="Back to link options"
+              disabled={busy}
+              onClick={() => setKind(null)}
+            >
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+          <h2 className="text-foreground text-xl font-semibold tracking-tight">
+            {selected.label}
+          </h2>
+          <p className="text-muted-foreground mt-2 text-sm">
+            {selected.description}
+          </p>
+          <hr className="border-border my-4" />
+        </>
+      ) : (
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-foreground text-base font-semibold">
+            Create a link
+          </h2>
+          <button
+            type="button"
+            className={closeButtonClass}
+            aria-label="Close create link modal"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+      )}
+      {kind === null ? (
+        <fieldset className="flex min-w-0 flex-col gap-2">
+          <legend className="sr-only">Link type</legend>
+          {choices.map((choice) => {
+            const Icon = choice.icon;
+            return (
+              <button
+                ref={(node) => {
+                  optionButtons.current[choice.kind] = node;
+                }}
+                key={choice.kind}
+                type="button"
+                className="bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08] flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition-[background-color,transform] focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
+                onClick={() => setKind(choice.kind)}
+              >
+                <Icon aria-hidden="true" className="size-4 shrink-0" />
+                {choice.label}
+              </button>
+            );
+          })}
+        </fieldset>
+      ) : null}
+      {kind === "url" ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void shorten();
+          }}
+        >
+          <Input
+            label="Destination URL"
+            type="url"
+            placeholder="https://"
+            value={url}
+            onChange={setUrl}
+            disabled={busy}
+            required
+          />
+          <ExpirationOptions
+            value={expiration}
+            onChange={setExpiration}
+            disabled={busy}
+            kind="url"
+          />
+          <PasswordOptions
+            password={password}
+            onChange={setPassword}
+            disabled={busy}
+          />
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              className={cancelButtonClass}
+              disabled={busy}
+              onClick={() => setKind(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className={actionButtonClass}
+              disabled={busy || url.trim() === "" || passwordTooShort}
+              aria-busy={busy}
+            >
+              {busy ? "Shortening…" : "Shorten URL"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {kind === "text" ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createMessage();
+          }}
+        >
+          <label htmlFor={messageId} className="text-sm font-medium">
+            Message
+          </label>
+          <textarea
+            id={messageId}
+            className="border-border bg-background min-h-28 w-full resize-y rounded-2xl border p-3 text-sm outline-none focus-visible:ring-2"
+            placeholder="Write a message"
+            value={message}
+            maxLength={maxTextBytes}
+            disabled={busy}
+            required
+            onChange={(event) => setMessage(event.target.value)}
+          />
+          <ExpirationOptions
+            value={expiration}
+            onChange={setExpiration}
+            disabled={busy}
+            kind="text"
+          />
+          <PasswordOptions
+            password={password}
+            onChange={setPassword}
+            disabled={busy}
+          />
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              className={cancelButtonClass}
+              disabled={busy}
+              onClick={() => setKind(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className={actionButtonClass}
+              disabled={busy || message.trim() === "" || passwordTooShort}
+              aria-busy={busy}
+            >
+              {busy ? "Creating…" : "Create message link"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {kind === "file" ? (
+        <div className="flex flex-col gap-4">
+          <div inert={busy}>
+            <AttachmentUpload
+              value={attachment ? [attachment] : []}
+              onValueChange={(items) => setAttachment(items[0] ?? null)}
+              multiple={false}
+              maxFiles={1}
+              maxFileSize={maxFileBytes}
+              disabled={busy}
+              title="Choose or drop a file"
+              description="Choose one file to encrypt and share"
+              attachmentsLabel="Selected file"
+              classNames={{ dropzone: "min-h-44 rounded-2xl py-6" }}
+              onFilesRejected={(rejected, reason) => {
+                reportError(
+                  new Error(rejected.map((item) => item.name).join(", ")),
+                  reason === "too-large" ? "File too large" : "Too many files"
+                );
+              }}
+            />
+          </div>
+          {file && file.size > 100 * 1024 ** 2 ? (
+            <p className="text-muted-foreground text-xs leading-snug">
+              Over 100 MiB: saving needs disk space and file-save support (e.g.
+              Chrome or Edge).
+            </p>
+          ) : null}
+          {busy ? (
+            <div className="flex flex-col gap-2">
+              <progress
+                className="h-1 w-full"
+                max={1}
+                value={progress ?? 0}
+                aria-label={`${phase} file`}
+              />
+              <output className="text-muted-foreground text-xs">
+                {phase} · {Math.round((progress ?? 0) * 100)}%
+              </output>
+              <button
+                type="button"
+                className={cancelButtonClass}
+                onClick={() => upload.current?.abort()}
+              >
+                Cancel upload
+              </button>
+            </div>
+          ) : (
+            <>
+              <ExpirationOptions
+                value={expiration}
+                onChange={setExpiration}
+                kind="file"
+                compact
+              />
+              <PasswordOptions
+                password={password}
+                onChange={setPassword}
+                compact
+              />
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  className={cancelButtonClass}
+                  onClick={() => setKind(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={actionButtonClass}
+                  disabled={!file || passwordTooShort}
+                  onClick={() => {
+                    void createFile();
+                  }}
+                >
+                  Create file link
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+      {created &&
+      (kind !== "file" || (file === null && password === null && !busy)) ? (
+        <ActionSwapCascadeButton
+          aria-live="polite"
+          className="mt-5 w-full"
+          cycle={false}
+          items={copyLinkItems}
+          size="lg"
+          value={copyStatus}
+          variant="secondary"
+          onClick={() => {
+            void copy();
+          }}
+        />
+      ) : null}
+      {busy ? null : (
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground mt-4 cursor-pointer self-start text-xs underline underline-offset-2"
+          onClick={onViewHistory}
+        >
+          View link history
+        </button>
+      )}
+    </section>
+  );
+}

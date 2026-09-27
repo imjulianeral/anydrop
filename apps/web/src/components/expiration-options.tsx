@@ -24,16 +24,18 @@ export function ExpirationOptions({
   onChange,
   disabled = false,
   kind,
+  compact = false,
 }: {
   value: Options;
   onChange: (value: Options) => void;
   disabled?: boolean;
   kind: "file" | "text" | "url";
+  compact?: boolean;
 }) {
   const id = useId();
   const unit = kind === "file" ? "download" : "open";
   return (
-    <FieldGroup>
+    <FieldGroup className={compact ? "gap-2" : undefined}>
       <div className="grid grid-cols-2 gap-3">
         <Field data-disabled={disabled}>
           <FieldLabel id={`${id}-time`}>Expires after</FieldLabel>
@@ -94,11 +96,17 @@ export function ExpirationOptions({
           </MorphSelect>
         </Field>
       </div>
-      <FieldDescription>
-        Expires when either limit is reached.
-        {kind === "file"
-          ? " A download counts when it starts."
-          : " Each time the item is opened counts."}
+      <FieldDescription className={compact ? "text-xs" : undefined}>
+        {compact ? (
+          "Ends at the first limit; downloads count when started."
+        ) : (
+          <>
+            Expires when either limit is reached.
+            {kind === "file"
+              ? " A download counts when it starts."
+              : " Each time the item is opened counts."}
+          </>
+        )}
       </FieldDescription>
     </FieldGroup>
   );

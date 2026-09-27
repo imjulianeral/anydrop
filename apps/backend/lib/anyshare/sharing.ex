@@ -17,6 +17,8 @@ defmodule Anyshare.Sharing do
   alias Anyshare.Time
 
   @short_code_attempts 8
+  @download_token_salt "short-link-download"
+  @download_token_max_age 604_800
 
   @spec list_transfers(Device.t(), String.t()) :: [Transfer.t()]
   def list_transfers(device, peer_id) do
@@ -262,8 +264,7 @@ defmodule Anyshare.Sharing do
           {:ok, ShortLink.t()} | {:error, :not_found | :invalid_password | :not_protected}
   def unlock_short_link(code, password) do
     case get_live_short_link(code) do
-      %ShortLink{target_url: url, password_verifier: verifier} = link
-      when is_binary(url) and is_binary(verifier) ->
+      %ShortLink{password_verifier: verifier} = link when is_binary(verifier) ->
         if LinkPassword.verify(password, verifier) do
           consume_short_link(link.code, "view")
         else
@@ -278,9 +279,23 @@ defmodule Anyshare.Sharing do
     end
   end
 
-  @spec mint_short_link(Device.t(), Transfer.t()) ::
+  @spec short_link_download_allowed?(ShortLink.t(), term()) :: boolean()
+  def short_link_download_allowed?(%ShortLink{password_verifier: nil}, _token), do: true
+
+  def short_link_download_allowed?(%ShortLink{code: code}, token) when is_binary(token) do
+    case Phoenix.Token.verify(AnyshareWeb.Endpoint, @download_token_salt, token,
+           max_age: @download_token_max_age
+         ) do
+      {:ok, ^code} -> true
+      _invalid -> false
+    end
+  end
+
+  def short_link_download_allowed?(_link, _token), do: false
+
+  @spec mint_short_link(Device.t(), Transfer.t(), map()) ::
           {:ok, ShortLink.t()} | {:error, Ecto.Changeset.t() | :code_allocation_failed}
-  def mint_short_link(device, transfer) do
+  def mint_short_link(device, transfer, params \\ %{}) do
     case Repo.one(from(link in ShortLink, where: link.transfer_id == ^transfer.id, limit: 1)) do
       nil ->
         insert_short_link(
@@ -290,7 +305,8 @@ defmodule Anyshare.Sharing do
             max_downloads: transfer.max_downloads,
             expires_at: transfer.expires_at,
             created_at: Time.now()
-          },
+          }
+          |> maybe_put_password(Map.get(params, "password")),
           @short_code_attempts
         )
 
@@ -312,6 +328,18 @@ defmodule Anyshare.Sharing do
     )
     |> Repo.all()
     |> Enum.filter(&live_link/1)
+  end
+
+  @spec delete_short_link(Device.t(), String.t()) :: :ok | {:error, :not_found}
+  def delete_short_link(device, code) do
+    from(link in ShortLink,
+      where: link.code == ^String.upcase(code) and link.device_id == ^device.id
+    )
+    |> Repo.delete_all()
+    |> case do
+      {1, _deleted} -> :ok
+      _missing -> {:error, :not_found}
+    end
   end
 
   @spec record_event(ShortLink.t(), String.t()) :: :ok
@@ -466,28 +494,43 @@ defmodule Anyshare.Sharing do
   @spec short_link_json(ShortLink.t(), keyword()) :: map()
   def short_link_json(link, opts \\ [])
 
-  def short_link_json(%ShortLink{transfer: %Transfer{} = transfer} = link, _opts) do
+  def short_link_json(%ShortLink{transfer: %Transfer{} = transfer} = link, opts) do
+    protected = is_binary(link.password_verifier)
+
     payload =
       counts_json(link)
       |> Map.merge(%{
         code: link.code,
         expires_at: Time.iso8601(link.expires_at),
-        created_at: Time.iso8601(link.created_at)
+        created_at: Time.iso8601(link.created_at),
+        kind: transfer.kind,
+        password_protected: protected
       })
-      |> Map.merge(drop_json(transfer))
 
-    if downloadable?(transfer) do
+    if protected and not Keyword.get(opts, :reveal, true) do
       payload
-      |> Map.put(:download, %{
-        url: "/api/v1/short_links/#{link.code}/download"
-      })
-      |> then(fn payload ->
-        if transfer.secret,
-          do: payload,
-          else: Map.put(payload, :track_download, "/api/v1/short_links/#{link.code}/download")
-      end)
     else
-      payload
+      payload = Map.merge(payload, drop_json(transfer))
+
+      if downloadable?(transfer) do
+        path = "/api/v1/short_links/#{link.code}/download"
+
+        path =
+          if protected do
+            token = Phoenix.Token.sign(AnyshareWeb.Endpoint, @download_token_salt, link.code)
+            path <> "?token=" <> URI.encode_www_form(token)
+          else
+            path
+          end
+
+        payload
+        |> Map.put(:download, %{url: path})
+        |> then(fn payload ->
+          if transfer.secret, do: payload, else: Map.put(payload, :track_download, path)
+        end)
+      else
+        payload
+      end
     end
   end
 

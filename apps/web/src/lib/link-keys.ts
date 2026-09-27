@@ -27,6 +27,11 @@ export const rememberLinkKey = (code: string, masterKey: Uint8Array): void => {
     JSON.stringify({ ...readKeys(), [code]: toBase64Url(masterKey) })
   );
 };
+export const forgetLinkKey = (code: string): void => {
+  const keys = readKeys();
+  delete keys[code];
+  localStorage.setItem(storageKey, JSON.stringify(keys));
+};
 export const loadLinkKey = (code: string): Uint8Array<ArrayBuffer> | null =>
   parseFragmentKey(readKeys()[code] ?? "");
 export const linkPageUrl = (code: string): string =>

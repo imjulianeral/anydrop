@@ -9,6 +9,8 @@ import {
   FieldLabel,
 } from "#/components/ui/field.tsx";
 import { resolveAssetUrl, savingDownloadUrl } from "#/lib/api.ts";
+import { beginFileTransfer } from "#/lib/file-transfers.ts";
+import type { FileTransferHandle } from "#/lib/file-transfers.ts";
 import {
   pickSecretDestination,
   runStreamTask,
@@ -65,6 +67,7 @@ export function LargeSecretContent({
       setBusy(true);
       setFailure("");
       setProgress(null);
+      let transfer: FileTransferHandle | null = null;
       try {
         const download = validateDownload(item, supported);
         // The picker must run in the click handler, before other asynchronous work.
@@ -72,6 +75,15 @@ export function LargeSecretContent({
           ? await pickSecretDestination(info?.filename ?? "Shared file")
           : undefined;
         controller.signal.throwIfAborted();
+        if (save) {
+          transfer = beginFileTransfer({
+            direction: "download",
+            name: info?.filename ?? "Shared file",
+            totalBytes: info?.byteSize ?? download.bytes,
+            phase: "Downloading",
+            onCancel: () => controller.abort(),
+          });
+        }
         const source = resolveAssetUrl(
           save ? savingDownloadUrl(download.url) : download.url
         );
@@ -96,11 +108,10 @@ export function LargeSecretContent({
         } else {
           task = { ...common, action: "open", secret };
         }
-        const result = await runStreamTask(
-          task,
-          controller.signal,
-          setProgress
-        );
+        const result = await runStreamTask(task, controller.signal, (ratio) => {
+          setProgress(ratio);
+          transfer?.update("Downloading", ratio);
+        });
         if (result.action !== "opened") {
           throw new Error("Could not unlock this Secret.");
         }
@@ -115,7 +126,13 @@ export function LargeSecretContent({
         }
         setPassword("");
         setSaved(save);
+        transfer?.done();
       } catch (error) {
+        if (controller.signal.aborted) {
+          transfer?.cancel();
+        } else {
+          transfer?.fail();
+        }
         if (operation.current === controller) {
           setFailure(
             error instanceof Error && error.name !== "AbortError"

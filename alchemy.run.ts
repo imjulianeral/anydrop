@@ -24,7 +24,8 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
-    if (yield* ALCHEMY_DEV) {
+    const dev = yield* ALCHEMY_DEV;
+    if (dev) {
       yield* LocalPostgres;
     }
 
@@ -33,11 +34,15 @@ export default Alchemy.Stack(
     const website = yield* Cloudflare.Website.Vite("Website", {
       assets: {
         notFoundHandling: "single-page-application",
+        // Vite's module-runner WebSocket must bypass the SPA fallback.
+        runWorkerFirst: dev ? true : ["/auth/*"],
       },
       dev: { port: websitePort },
       env: {
+        API_URL: api.url.as<string>(),
         VITE_API_URL: api.url.as<string>(),
       },
+      main: "auth-worker.ts",
       rootDir: webDir,
     });
 

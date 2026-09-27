@@ -1,16 +1,21 @@
 "use client";
 // beui.dev/components/motion/dock
 
-import { motion, useReducedMotion } from "motion/react";
-import { createContext, useContext, useId, useMemo } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { createContext, useContext, useId, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { SPRING_LAYOUT } from "#/lib/ease.ts";
+import { EASE_OUT, SPRING_LAYOUT } from "#/lib/ease.ts";
+import { useHoverCapable } from "#/lib/hooks/use-hover-capable.ts";
 import { cn } from "#/lib/utils.ts";
 
 interface DockContextValue {
   size: number;
   pillLayoutId: string;
+  hoverLayoutId: string;
+  hoveredId: string | null;
+  setHoveredId: (id: string | null) => void;
+  canHover: boolean;
 }
 
 const DockContext = createContext<DockContextValue | null>(null);
@@ -23,22 +28,33 @@ export interface DockProps {
 }
 
 export function Dock({ children, size = 44, className }: DockProps) {
-  const pillLayoutId = useId();
+  const id = useId();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const canHover = useHoverCapable();
   const ctx = useMemo<DockContextValue>(
-    () => ({ size, pillLayoutId }),
-    [size, pillLayoutId]
+    () => ({
+      size,
+      pillLayoutId: `${id}-active`,
+      hoverLayoutId: `${id}-hover`,
+      hoveredId,
+      setHoveredId,
+      canHover,
+    }),
+    [size, id, hoveredId, canHover]
   );
 
   return (
     <DockContext.Provider value={ctx}>
-      <div
+      <motion.div
+        layoutRoot
+        onMouseLeave={() => setHoveredId(null)}
         className={cn(
           "border-border bg-card/80 inline-flex h-auto items-end gap-1.5 rounded-2xl border px-2 py-1 shadow-2xl backdrop-blur-xl",
           className
         )}
       >
         {children}
-      </div>
+      </motion.div>
     </DockContext.Provider>
   );
 }
@@ -61,19 +77,53 @@ export function DockItem({
 }: DockItemProps) {
   const dock = useContext(DockContext);
   const reduce = useReducedMotion();
+  const id = useId();
   const size = dock?.size ?? 44;
   const pillLayoutId = dock?.pillLayoutId ?? "dock-pill";
+  const hoverId = dock?.hoveredId ?? null;
+  const hovered = hoverId === id;
+  const onHover = () => {
+    if (dock?.canHover) dock.setHoveredId(id);
+  };
+  const hover = (
+    <AnimatePresence initial={false}>
+      {hoverId !== null ? (
+        <motion.span
+          key="hover"
+          initial={
+            reduce ? { opacity: 0 } : { opacity: 0, filter: "blur(6px)" }
+          }
+          animate={
+            reduce ? { opacity: 1 } : { opacity: 1, filter: "blur(0px)" }
+          }
+          exit={reduce ? { opacity: 0 } : { opacity: 0, filter: "blur(6px)" }}
+          transition={
+            reduce ? { duration: 0 } : { duration: 0.18, ease: EASE_OUT }
+          }
+          className="pointer-events-none absolute inset-0.5 -z-10"
+        >
+          {hovered ? (
+            <motion.span
+              layoutId={dock?.hoverLayoutId ?? "dock-hover"}
+              transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+              className="bg-muted/70 block size-full rounded-xl"
+            />
+          ) : null}
+        </motion.span>
+      ) : null}
+    </AnimatePresence>
+  );
 
   const pill = active ? (
     <motion.span
       layoutId={pillLayoutId}
       transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
-      className="bg-primary/5 absolute inset-0.5 -z-10 rounded-xl"
+      className="bg-primary/5 pointer-events-none absolute inset-0.5 -z-10 rounded-xl"
     />
   ) : null;
   const sharedStyle = { width: size, height: size };
   const sharedClass = cn(
-    "text-foreground relative flex shrink-0 items-center justify-center rounded-full",
+    "text-foreground relative isolate flex shrink-0 items-center justify-center rounded-full",
     className
   );
 
@@ -81,6 +131,7 @@ export function DockItem({
     return (
       <button
         type="button"
+        onMouseEnter={onHover}
         onClick={onClick}
         aria-label={rest["aria-label"]}
         aria-pressed={active}
@@ -92,6 +143,7 @@ export function DockItem({
         )}
       >
         {pill}
+        {hover}
         {children}
       </button>
     );
@@ -99,8 +151,9 @@ export function DockItem({
 
   // Children carry their own link or button (and its accessible name).
   return (
-    <div style={sharedStyle} className={sharedClass}>
+    <div style={sharedStyle} className={sharedClass} onMouseEnter={onHover}>
       {pill}
+      {hover}
       {children}
     </div>
   );

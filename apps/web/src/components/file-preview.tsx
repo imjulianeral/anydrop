@@ -14,6 +14,7 @@ import {
   FileVideoCamera,
 } from "#/components/rune-icons.tsx";
 import { resolveAssetUrl, savingDownloadUrl } from "#/lib/api.ts";
+import { noteBrowserDownload } from "#/lib/file-transfers.ts";
 import { displayFilename, formatBytes, mediaKind } from "#/lib/media.ts";
 import type { MediaKind } from "#/lib/media.ts";
 
@@ -100,7 +101,14 @@ const DOWNLOAD_ITEMS: ActionSwapItem[] = [
   },
 ];
 
-export function startFileDownload(url: string, filename: string) {
+export function startFileDownload(
+  url: string,
+  filename: string,
+  announce = true
+) {
+  if (announce) {
+    noteBrowserDownload(filename);
+  }
   const link = document.createElement("a");
   link.href = savingDownloadUrl(url);
   link.download = filename;
@@ -144,9 +152,15 @@ function DownloadFileButton({
         }
         setBusy(true);
         setValue("downloading");
-        const downloaded = onDownload
-          ? await onDownload()
-          : Boolean(url && startFileDownload(url, filename) === undefined);
+        if (!onDownload) {
+          if (url) {
+            startFileDownload(url, filename);
+          }
+          setBusy(false);
+          setValue("download");
+          return;
+        }
+        const downloaded = await onDownload();
         setBusy(false);
         setValue(downloaded ? "downloaded" : "download");
         if (!downloaded) {

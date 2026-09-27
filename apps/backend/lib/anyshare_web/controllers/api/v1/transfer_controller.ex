@@ -3,6 +3,7 @@ defmodule AnyshareWeb.Api.V1.TransferController do
 
   alias Anyshare.ObjectStore
   alias Anyshare.Sharing
+  alias Anyshare.Sharing.LinkPassword
 
   def index(conn, params) do
     peer_id = params |> Map.get("peer_id", "") |> to_string() |> String.trim()
@@ -22,13 +23,21 @@ defmodule AnyshareWeb.Api.V1.TransferController do
   end
 
   def create(conn, params) do
+    if invalid_link_password?(params) do
+      ControllerHelpers.error(conn, :unprocessable_entity, "password must be 12–1024 characters")
+    else
+      create_transfer(conn, params)
+    end
+  end
+
+  defp create_transfer(conn, params) do
     current_device = conn.assigns.current_device
 
     case Sharing.create_transfer(current_device, params) do
       {:ok, %{kind: "text"} = transfer, recipient} ->
         :ok = Sharing.deliver_text(transfer, recipient)
 
-        respond_transfer(conn, :created, current_device, transfer)
+        respond_transfer(conn, :created, current_device, transfer, [], params)
 
       {:ok, transfer, _recipient} ->
         content_type = present(transfer.content_type) || "application/octet-stream"
@@ -90,6 +99,14 @@ defmodule AnyshareWeb.Api.V1.TransferController do
   end
 
   def complete(conn, %{"id" => id} = params) do
+    if invalid_link_password?(params) do
+      ControllerHelpers.error(conn, :unprocessable_entity, "password must be 12–1024 characters")
+    else
+      complete_transfer(conn, id, params)
+    end
+  end
+
+  defp complete_transfer(conn, id, params) do
     current_device = conn.assigns.current_device
 
     case Sharing.complete_transfer(current_device, id, Map.get(params, "parts")) do
@@ -99,7 +116,7 @@ defmodule AnyshareWeb.Api.V1.TransferController do
             do: Anyshare.Repo.get(Anyshare.Accounts.Device, transfer.recipient_id)
 
         :ok = Sharing.offer_transfer(transfer, recipient)
-        respond_transfer(conn, :ok, current_device, transfer, download: true)
+        respond_transfer(conn, :ok, current_device, transfer, [download: true], params)
 
       {:error, :not_found} ->
         ControllerHelpers.error(conn, :not_found, "not found")
@@ -115,13 +132,13 @@ defmodule AnyshareWeb.Api.V1.TransferController do
     end
   end
 
-  defp respond_transfer(conn, status, device, transfer, json_opts \\ []) do
+  defp respond_transfer(conn, status, device, transfer, json_opts, link_params) do
     body = %{transfer: Sharing.transfer_json(transfer, device, json_opts)}
 
     if present(transfer.recipient_id) do
       conn |> put_status(status) |> json(body)
     else
-      case Sharing.mint_short_link(device, transfer) do
+      case Sharing.mint_short_link(device, transfer, link_params) do
         {:ok, link} ->
           conn
           |> put_status(status)
@@ -141,4 +158,11 @@ defmodule AnyshareWeb.Api.V1.TransferController do
 
   defp present(value) when value in [nil, ""], do: nil
   defp present(value), do: value
+
+  defp invalid_link_password?(params) do
+    case Map.get(params, "password") do
+      password when password in [nil, ""] -> false
+      password -> not LinkPassword.valid?(password)
+    end
+  end
 end

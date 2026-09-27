@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "start": "nub index.ts",
-    "dev": "alchemy dev",
+    "dev": "sh infra/dev.sh",
     "check": "ultracite check --ignore-pattern=vendors/**",
     "fix": "ultracite fix --ignore-pattern=vendors/**",
     "deploy": "alchemy deploy",

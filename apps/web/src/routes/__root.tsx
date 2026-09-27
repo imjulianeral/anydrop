@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
+import { FileTransfersHost } from "#/components/file-transfers-host.tsx";
 import { ToastHost } from "#/components/toast-host.tsx";
 import { isRouteModuleLoadError } from "#/lib/short-link.ts";
 
@@ -48,6 +49,7 @@ function RootComponent() {
     <>
       <Outlet />
       <ToastHost />
+      <FileTransfersHost />
       {import.meta.env.DEV ? (
         <TanStackDevtools
           config={{

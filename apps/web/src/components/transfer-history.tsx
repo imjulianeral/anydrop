@@ -1,3 +1,4 @@
+import { InfinityIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
@@ -235,7 +236,7 @@ export function TransferHistory({
           }
         }}
       >
-        <DialogContent className="max-h-[85dvh] sm:max-w-lg">
+        <DialogContent className="bg-background max-h-[85dvh] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Shared with {peerName}</DialogTitle>
             <DialogDescription>
@@ -338,9 +339,19 @@ function TransferUsage({ transfer }: { transfer: Transfer }) {
       className="text-muted-foreground inline-flex shrink-0 items-center gap-1 tabular-nums"
       title={label}
     >
-      <span aria-hidden="true" className="inline-flex items-center gap-1">
-        <Icon className="size-3.5" />
-        {count}/{limit ?? "∞"}
+      <span
+        aria-hidden="true"
+        className="inline-flex items-center gap-1 text-sm font-bold"
+      >
+        <Icon className="size-4.5 [&_path]:stroke-[2.5]" />
+        <span className="inline-flex items-center gap-0.5">
+          {count}/
+          {limit == null ? (
+            <InfinityIcon className="size-5 shrink-0" strokeWidth={2.5} />
+          ) : (
+            limit
+          )}
+        </span>
       </span>
       <span className="sr-only">{label}</span>
     </span>

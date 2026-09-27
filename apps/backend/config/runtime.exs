@@ -72,3 +72,35 @@ config :anyshare,
   allowed_origins: System.get_env("ALLOWED_ORIGINS", ""),
   expire_secret: unwrap_redacted.(System.get_env("EXPIRE_SECRET")),
   r2: r2
+
+auth_origin = System.get_env("AUTH_ORIGIN", "http://localhost:3000") |> URI.decode()
+auth_uri = URI.parse(auth_origin)
+google_client_id = System.get_env("GOOGLE_CLIENT_ID") |> unwrap_redacted.()
+
+if config_env() == :prod and not alchemy_dev? and google_client_id not in [nil, ""] and
+     auth_uri.scheme != "https" do
+  raise "Set AUTH_ORIGIN to the HTTPS website origin before enabling Google sign-in in production"
+end
+
+unless auth_uri.scheme in ["http", "https"] and is_binary(auth_uri.host) and
+         auth_uri.path in [nil, ""] and is_nil(auth_uri.query) and
+         is_nil(auth_uri.fragment) and is_nil(auth_uri.userinfo) and
+         (auth_uri.scheme == "https" or auth_uri.host in ["localhost", "127.0.0.1"]) do
+  raise "AUTH_ORIGIN must be an HTTPS origin (HTTP is allowed on localhost) without a trailing slash"
+end
+
+config :anyshare, :auth,
+  origin: auth_origin,
+  client_id: google_client_id,
+  client_secret: System.get_env("GOOGLE_CLIENT_SECRET") |> unwrap_redacted.()
+
+config :phoenix, :filter_parameters, [
+  "password",
+  "token",
+  "secret",
+  "code",
+  "state",
+  "clientDataJSON",
+  "attestationObject",
+  "signature"
+]

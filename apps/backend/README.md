@@ -18,6 +18,8 @@ mix phx.server
 Set `DATABASE_URL` to use another database. The app reads the other supported
 settings from `.env.example` when they are exported into the environment.
 
+For optional Google sign-in and passkeys, see [authentication setup](../../docs/auth.md).
+
 ## Checks
 
 ```sh

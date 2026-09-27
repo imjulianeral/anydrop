@@ -1,3 +1,4 @@
+import { beginFileTransfer } from "./file-transfers.ts";
 import type { SealOptions, OpenSecret } from "./secret-crypto.ts";
 import {
   missingKeyError,
@@ -48,6 +49,8 @@ export const unlockSecret = async (
     kind: "text" | "file";
     body?: string;
     downloadUrl?: string;
+    filename?: string | null;
+    byteSize?: number | null;
   },
   password?: string,
   masterKey?: Uint8Array
@@ -61,7 +64,11 @@ export const unlockSecret = async (
   const ciphertext =
     input.kind === "text"
       ? decodeText(input.body)
-      : await fetchCiphertext(input.downloadUrl);
+      : await fetchCiphertext(
+          input.downloadUrl,
+          input.filename,
+          input.byteSize
+        );
   let task: SecretTask;
   if (input.secret.version === 3) {
     if (!masterKey) {
@@ -96,39 +103,75 @@ const decodeText = (body?: string): ArrayBuffer => {
   return fromBase64(body).buffer;
 };
 
-const fetchCiphertext = async (url?: string): Promise<ArrayBuffer> => {
+const fetchCiphertext = async (
+  url?: string,
+  filename?: string | null,
+  expectedBytes?: number | null
+): Promise<ArrayBuffer> => {
   if (!url) {
     throw new Error("This Secret file is not available yet.");
   }
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(120_000),
-    cache: "no-store",
+  const controller = new AbortController();
+  const transfer = beginFileTransfer({
+    direction: "download",
+    name: filename || "Secret file",
+    totalBytes: expectedBytes ?? undefined,
+    phase: "Downloading",
+    onCancel: () => controller.abort(),
   });
-  if (!response.ok || !response.body) {
-    throw new Error(
-      "Could not download this Secret. Refresh the page and try again."
-    );
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array<ArrayBuffer>[] = [];
-  let size = 0;
   try {
-    while (true) {
-      // Bound the response even when the server omits Content-Length.
-      // oxlint-disable-next-line no-await-in-loop
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      size += value.byteLength;
-      if (size > maxSecretCipherBytes) {
-        throw new Error("Secret files must be 100 MiB or smaller.");
-      }
-      chunks.push(value);
+    const response = await fetch(url, {
+      signal: AbortSignal.any([
+        controller.signal,
+        AbortSignal.timeout(120_000),
+      ]),
+      cache: "no-store",
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(
+        "Could not download this Secret. Refresh the page and try again."
+      );
     }
-    return await new Blob(chunks).arrayBuffer();
-  } finally {
-    await reader.cancel();
+    const contentLength = Number(response.headers.get("Content-Length"));
+    const totalBytes =
+      Number.isFinite(contentLength) && contentLength > 0
+        ? contentLength
+        : (expectedBytes ?? null);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        // Bound the response even when the server omits Content-Length.
+        // oxlint-disable-next-line no-await-in-loop
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        size += value.byteLength;
+        if (size > maxSecretCipherBytes) {
+          throw new Error("Secret files must be 100 MiB or smaller.");
+        }
+        chunks.push(value);
+        transfer.update(
+          "Downloading",
+          totalBytes ? Math.min(size / totalBytes, 1) : null,
+          totalBytes ?? undefined
+        );
+      }
+      const data = await new Blob(chunks).arrayBuffer();
+      transfer.done();
+      return data;
+    } finally {
+      await reader.cancel();
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      transfer.cancel();
+    } else {
+      transfer.fail();
+    }
+    throw error;
   }
 };
 

@@ -9,6 +9,11 @@ defmodule AnyshareWeb.ShortLinkController do
       nil ->
         send_resp(conn, 404, "")
 
+      %{password_verifier: verifier} when is_binary(verifier) ->
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(401, "This link requires a password. Open it in the web app.")
+
       %{transfer: %Transfer{secret: secret}} when not is_nil(secret) ->
         conn
         |> put_resp_content_type("text/plain")
@@ -22,12 +27,6 @@ defmodule AnyshareWeb.ShortLinkController do
           {:error, :not_found} ->
             send_resp(conn, 404, "")
         end
-
-      %{target_url: target_url, password_verifier: verifier}
-      when is_binary(target_url) and is_binary(verifier) ->
-        conn
-        |> put_resp_content_type("text/plain")
-        |> send_resp(401, "This link requires a password. Open it in the web app.")
 
       %{target_url: target_url} = link when is_binary(target_url) ->
         case Sharing.consume_short_link(link.code, "view") do

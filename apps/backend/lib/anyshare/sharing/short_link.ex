@@ -103,15 +103,10 @@ defmodule Anyshare.Sharing.ShortLink do
         add_error(changeset, :password, "is invalid")
 
       password ->
-        cond do
-          get_field(changeset, :transfer_id) != nil ->
-            add_error(changeset, :password, "is only available for shortened URLs")
-
-          not LinkPassword.valid?(password) ->
-            add_error(changeset, :password, "must be 12–1024 characters")
-
-          true ->
-            put_change(changeset, :password_verifier, LinkPassword.hash(password))
+        if LinkPassword.valid?(password) do
+          put_change(changeset, :password_verifier, LinkPassword.hash(password))
+        else
+          add_error(changeset, :password, "must be 12–1024 characters")
         end
     end
   end

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { PromptInput } from "#/components/agents/prompt-input.tsx";
+import { AppDock } from "#/components/app-dock.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
 import { EmptyState } from "#/components/empty-state.tsx";
 import { ExpirationOptions } from "#/components/expiration-options.tsx";
@@ -9,6 +10,8 @@ import { ExpiryCountdown } from "#/components/expiry-countdown.tsx";
 import { LinkDetails } from "#/components/link-details.tsx";
 import { LinksActivityChart } from "#/components/links-activity-chart.tsx";
 import { AnimatedBadge } from "#/components/motion/animated-badge.tsx";
+import { AttachmentUpload } from "#/components/motion/attachment-upload.tsx";
+import type { AttachmentUploadItem } from "#/components/motion/attachment-upload.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Input } from "#/components/motion/input.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
@@ -39,6 +42,8 @@ import type { LinkStat, ShortLink } from "#/lib/api.ts";
 import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import { limitReached } from "#/lib/expiry.ts";
+import { beginFileTransfer } from "#/lib/file-transfers.ts";
+import type { FileTransferHandle } from "#/lib/file-transfers.ts";
 import { withPreparedFile } from "#/lib/large-secrets.ts";
 import {
   applyShortLinkEventToLink,
@@ -47,11 +52,10 @@ import {
   statsFromEvents,
 } from "#/lib/link-events.ts";
 import { linkPageUrl, rememberLinkKey } from "#/lib/link-keys.ts";
-import { displayFilename } from "#/lib/media.ts";
+import { linkLabel } from "#/lib/link-label.ts";
 import { prepareText } from "#/lib/secrets.ts";
 import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
-import { cn } from "#/lib/utils.ts";
 
 type CreateView = "choose" | "message" | "link" | "file";
 
@@ -63,18 +67,10 @@ const reportError = (error: unknown, title: string) => {
   });
 };
 
-const linkLabel = (link: ShortLink): string => {
-  if (link.secret) {
-    return link.kind === "file" ? "Secret file" : "Secret message";
-  }
-  if (link.kind === "url") {
-    return link.url ?? "URL";
-  }
-  if (link.kind === "text") {
-    const body = link.body?.trim();
-    return body === undefined || body === "" ? "Message" : body;
-  }
-  return displayFilename(link.filename);
+const copyLink = async (code: string) => {
+  const url = linkPageUrl(code);
+  await navigator.clipboard.writeText(url);
+  toast.add({ description: url, title: "Link copied", type: "success" });
 };
 
 const choices = [
@@ -100,12 +96,13 @@ const choices = [
 
 export function LinksPage() {
   const { token, subscribeToEvents } = useAppSession();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<AttachmentUploadItem[]>([]);
   const [view, setView] = useState<CreateView | null>(null);
   const [shortInput, setShortInput] = useState("");
   const [message, setMessage] = useState("");
   const [expiration, setExpiration] = useState(defaultExpiration);
   const [password, setPassword] = useState<string | null>(null);
+  const passwordTooShort = password !== null && password.trim().length < 12;
   const sendingRef = useRef(false);
   const [shortening, setShortening] = useState(false);
   const [sending, setSending] = useState(false);
@@ -113,7 +110,6 @@ export function LinksPage() {
   const [phase, setPhase] = useState("Uploading");
   const upload = useRef<AbortController | null>(null);
   useEffect(() => () => upload.current?.abort(), []);
-  const [dragging, setDragging] = useState(false);
   const [links, setLinks] = useState<ShortLink[]>([]);
   const [stats, setStats] = useState<LinkStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,13 +186,7 @@ export function LinksPage() {
     setShortInput("");
     setMessage("");
     setProgress(null);
-    setDragging(false);
-  };
-
-  const copyLink = async (code: string) => {
-    const url = linkPageUrl(code);
-    await navigator.clipboard.writeText(url);
-    toast.add({ description: url, title: "Link copied", type: "success" });
+    setAttachments([]);
   };
 
   const rememberLink = (link: ShortLink) => {
@@ -217,10 +207,25 @@ export function LinksPage() {
     setShortInput("");
     setMessage("");
     setProgress(null);
+    setAttachments([]);
+  };
+
+  const checkPassword = () => {
+    if (!passwordTooShort) {
+      return true;
+    }
+    reportError(
+      new Error("Use a password or passphrase with 12–1024 characters."),
+      "Use a longer password"
+    );
+    return false;
   };
 
   const sendText = async (body: string) => {
     if (sendingRef.current) {
+      return;
+    }
+    if (!checkPassword()) {
       return;
     }
     sendingRef.current = true;
@@ -233,6 +238,7 @@ export function LinksPage() {
         body: prepared.body,
         secret: prepared.secret,
         expiration,
+        password: password ?? undefined,
       });
       if (!created.short_link) {
         throw new Error("Could not create link");
@@ -252,6 +258,9 @@ export function LinksPage() {
     if (sendingRef.current) {
       return;
     }
+    if (!checkPassword()) {
+      return;
+    }
     const allowed = files.filter((file) => file.size <= maxFileBytes);
     if (allowed.length === 0) {
       return;
@@ -260,10 +269,19 @@ export function LinksPage() {
     setSending(true);
     const controller = new AbortController();
     upload.current = controller;
+    let currentTransfer: FileTransferHandle | null = null;
     try {
       /* Sequential so the progress bar tracks one file at a time. */
       /* oxlint-disable eslint/no-await-in-loop */
       for (const file of allowed) {
+        currentTransfer = beginFileTransfer({
+          direction: "upload",
+          name: file.name,
+          totalBytes: file.size,
+          phase: "Encrypting",
+          onCancel: () => controller.abort(),
+        });
+        const transferProgress = currentTransfer;
         setProgress(0);
         setPhase("Encrypting");
         await withPreparedFile(
@@ -272,6 +290,7 @@ export function LinksPage() {
           async (prepared) => {
             setPhase("Uploading");
             setProgress(0);
+            transferProgress.update("Uploading", 0, prepared.file.size);
             const created = await createFileTransfer(token, {
               filename: prepared.file.name,
               byteSize: prepared.file.size,
@@ -284,8 +303,12 @@ export function LinksPage() {
               created.transfer.id,
               created.upload,
               prepared.file,
-              setProgress,
-              controller.signal
+              (ratio) => {
+                setProgress(ratio);
+                transferProgress.update("Uploading", ratio, prepared.file.size);
+              },
+              controller.signal,
+              password ?? undefined
             );
             if (!completed.short_link) {
               throw new Error("Could not create link");
@@ -294,12 +317,22 @@ export function LinksPage() {
             rememberLink(completed.short_link);
           },
           controller.signal,
-          setProgress
+          (ratio) => {
+            setProgress(ratio);
+            transferProgress.update("Encrypting", ratio, file.size);
+          }
         );
+        transferProgress.done();
+        currentTransfer = null;
       }
       /* oxlint-enable eslint/no-await-in-loop */
     } catch (error) {
-      reportError(error, "Upload failed");
+      if (controller.signal.aborted) {
+        currentTransfer?.cancel();
+      } else {
+        currentTransfer?.fail();
+        reportError(error, "Upload failed");
+      }
     } finally {
       upload.current = null;
       sendingRef.current = false;
@@ -313,12 +346,7 @@ export function LinksPage() {
     if (url === "") {
       return;
     }
-    if (password !== null && password.trim().length < 12) {
-      toast.add({
-        title: "Use a longer password",
-        description: "Use a password or passphrase with 12–1024 characters.",
-        type: "error",
-      });
+    if (!checkPassword()) {
       return;
     }
     setShortening(true);
@@ -441,6 +469,11 @@ export function LinksPage() {
               disabled={sending}
               kind="text"
             />
+            <PasswordOptions
+              password={password}
+              onChange={setPassword}
+              disabled={sending}
+            />
             <PromptInput
               disabled={sending}
               loading={sending}
@@ -519,41 +552,40 @@ export function LinksPage() {
               disabled={sending}
               kind="file"
             />
+            <PasswordOptions
+              password={password}
+              onChange={setPassword}
+              disabled={sending}
+            />
             <p className="text-muted-foreground text-sm">
               Files over 100 MiB need temporary disk space to send and a browser
               with file-save support to receive, such as desktop Chrome or Edge.
             </p>
             <div className="flex flex-col gap-3">
-              <button
-                className={cn(
-                  "rounded-3xl border border-dashed px-6 py-10 text-center",
-                  dragging
-                    ? "border-foreground/40 bg-muted/60"
-                    : "border-border"
-                )}
-                disabled={sending}
-                type="button"
-                onClick={() => {
-                  fileInputRef.current?.click();
-                }}
-                onDragLeave={() => {
-                  setDragging(false);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragging(true);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragging(false);
-                  void sendFiles([...event.dataTransfer.files]);
-                }}
-              >
-                <p className="font-medium">Drop files here</p>
-                <p className="text-muted-foreground text-sm">
-                  or click to browse
-                </p>
-              </button>
+              <div inert={sending}>
+                <AttachmentUpload
+                  value={attachments}
+                  onValueChange={setAttachments}
+                  onFilesAdded={(_, files) => {
+                    void sendFiles(files);
+                  }}
+                  onFilesRejected={(rejected, reason) => {
+                    reportError(
+                      new Error(rejected.map((file) => file.name).join(", ")),
+                      reason === "too-large"
+                        ? "File too large"
+                        : "Too many files"
+                    );
+                  }}
+                  maxFiles={Number.MAX_SAFE_INTEGER}
+                  maxFileSize={maxFileBytes}
+                  disabled={sending}
+                  title="Choose or drop files"
+                  description="Files upload when added"
+                  attachmentsLabel="Files"
+                  classNames={{ dropzone: "min-h-36 rounded-2xl" }}
+                />
+              </div>
               {progress === null ? null : (
                 <div className="bg-muted h-1 overflow-hidden rounded-full">
                   <div
@@ -576,21 +608,11 @@ export function LinksPage() {
                   </Button>
                 </div>
               ) : null}
-              <input
-                ref={fileInputRef}
-                className="sr-only"
-                disabled={sending}
-                multiple
-                type="file"
-                onChange={(event) => {
-                  void sendFiles([...(event.target.files ?? [])]);
-                  event.target.value = "";
-                }}
-              />
             </div>
           </CreatePane>
         ) : null}
       </MorphingModal>
+      <AppDock />
     </main>
   );
 }

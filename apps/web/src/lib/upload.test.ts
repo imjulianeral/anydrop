@@ -126,10 +126,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("slices the file, limits concurrency, and completes with parts in order", async () => {
+it("slices the file, limits concurrency, and completes with the password", async () => {
   const progress = vi.fn();
   const input = file();
-  const promise = uploadFile("token", "transfer", multipart, input, progress);
+  const promise = uploadFile(
+    "token",
+    "transfer",
+    multipart,
+    input,
+    progress,
+    undefined,
+    "four random words"
+  );
   await vi.runAllTimersAsync();
   expect(await promise).toEqual(completed);
   expect(peakActive).toBe(3);
@@ -140,7 +148,9 @@ it("slices the file, limits concurrency, and completes with parts in order", asy
   );
   const payload = JSON.parse(String(completion?.[1]?.body)) as {
     parts: { part_number: number }[];
+    password: string;
   };
+  expect(payload.password).toBe("four random words");
   expect(payload.parts.map((part) => part.part_number)).toEqual([
     1, 2, 3, 4, 5,
   ]);

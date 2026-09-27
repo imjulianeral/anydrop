@@ -25,13 +25,17 @@ defmodule Anyshare.MixProject do
 
   defp deps do
     [
+      {:assent, "~> 0.3.1"},
       {:bandit, "~> 1.8"},
+      {:certifi, "~> 2.15"},
       {:ecto_sql, "~> 3.13"},
       {:jason, "~> 1.4"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_ecto, "~> 4.7"},
       {:postgrex, ">= 0.0.0"},
-      {:websock_adapter, "~> 0.6"}
+      {:ssl_verify_fun, "~> 1.1"},
+      {:websock_adapter, "~> 0.6"},
+      {:wax_, "~> 0.7.0"}
     ]
   end
 

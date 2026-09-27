@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 
 import { ExpirationOptions } from "#/components/expiration-options.tsx";
+import { AttachmentUpload } from "#/components/motion/attachment-upload.tsx";
+import type { AttachmentUploadItem } from "#/components/motion/attachment-upload.tsx";
 import { Button } from "#/components/motion/button/base.tsx";
 import { StatefulButton } from "#/components/motion/button/stateful.tsx";
 import {
@@ -10,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog.tsx";
+import { maxFileBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
 import { toast } from "#/lib/toast.ts";
@@ -32,8 +35,24 @@ export function FileComposer({
   phase: string;
 }) {
   const [expiration, setExpiration] = useState(defaultExpiration);
+  const [attachments, setAttachments] = useState<AttachmentUploadItem[]>(() =>
+    files.map((file, index) => ({
+      id: `${file.name}-${file.lastModified}-${index}`,
+      name: file.name,
+      kind: file.type.startsWith("image/")
+        ? "image"
+        : file.type.startsWith("audio/")
+          ? "audio"
+          : "file",
+      size: file.size,
+      file,
+    }))
+  );
   const [sent, setSent] = useState(false);
   const sendingClick = useRef(false);
+  const selectedFiles = attachments.flatMap((item) =>
+    item.file ? [item.file] : []
+  );
   return (
     <Dialog
       open
@@ -43,15 +62,39 @@ export function FileComposer({
         }
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="bg-background max-h-[calc(100dvh-2rem)] min-w-0 grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
+        <DialogHeader className="min-w-0">
           <DialogTitle>
-            Share {files.length === 1 ? "a file" : `${files.length} files`}
+            Share {selectedFiles.length === 1 ? "a file" : "files"}
           </DialogTitle>
           <DialogDescription className="break-all">
-            {files.map((file) => file.name).join(", ")}
+            {selectedFiles.length > 0
+              ? selectedFiles.map((file) => file.name).join(", ")
+              : "Choose files to share with this device or group."}
           </DialogDescription>
         </DialogHeader>
+        <div className="max-w-full min-w-0" inert={sending}>
+          <AttachmentUpload
+            className="max-w-full min-w-0"
+            value={attachments}
+            onValueChange={setAttachments}
+            maxFiles={Number.MAX_SAFE_INTEGER}
+            maxFileSize={maxFileBytes}
+            disabled={sending}
+            title="Choose or drop files"
+            description="Add files to share"
+            attachmentsLabel="Selected files"
+            classNames={{ dropzone: "min-h-36 rounded-2xl" }}
+            onFilesRejected={(rejected, reason) => {
+              toast.add({
+                title:
+                  reason === "too-large" ? "File too large" : "Too many files",
+                description: rejected.map((file) => file.name).join(", "),
+                type: "error",
+              });
+            }}
+          />
+        </div>
         <ExpirationOptions
           value={expiration}
           onChange={setExpiration}
@@ -69,9 +112,11 @@ export function FileComposer({
         ) : null}
         <StatefulButton
           type="button"
+          className="max-w-full min-w-0"
           state={sending ? "loading" : sent ? "success" : "idle"}
           loadingText="Sending…"
           successText="Sent"
+          disabled={selectedFiles.length === 0}
           onClick={async () => {
             if (sending || sendingClick.current) {
               return;
@@ -79,7 +124,7 @@ export function FileComposer({
             sendingClick.current = true;
             setSent(false);
             try {
-              const didSend = await onSend(files, expiration);
+              const didSend = await onSend(selectedFiles, expiration);
               setSent(didSend);
             } catch (error) {
               setSent(false);

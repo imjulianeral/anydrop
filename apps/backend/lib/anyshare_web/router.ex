@@ -5,6 +5,33 @@ defmodule AnyshareWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :account_auth do
+    plug AnyshareWeb.Plugs.AuthSession
+    plug :protect_from_forgery
+  end
+
+  scope "/auth", AnyshareWeb do
+    pipe_through :account_auth
+
+    get "/session", AuthController, :show
+    post "/logout", AuthController, :logout
+    patch "/profile", AuthController, :update_profile
+    delete "/account", AuthController, :delete_account
+    post "/google", AuthController, :google
+    get "/google/callback", AuthController, :callback
+    delete "/google", AuthController, :unlink_google
+    post "/passkeys/signup/options", AuthController, :signup_options
+    post "/passkeys/signup", AuthController, :signup
+    post "/passkeys/authentication/options", AuthController, :authentication_options
+    post "/passkeys/authentication", AuthController, :authenticate
+    post "/passkeys/reauthentication/options", AuthController, :reauthentication_options
+    post "/passkeys/reauthentication", AuthController, :reauthenticate
+    post "/passkeys/registration/options", AuthController, :registration_options
+    post "/passkeys/registration", AuthController, :register
+    patch "/passkeys/:id", AuthController, :rename_passkey
+    delete "/passkeys/:id", AuthController, :delete_passkey
+  end
+
   pipeline :authenticated_api do
     plug :accepts, ["json"]
     plug AnyshareWeb.Plugs.AuthenticateDevice
@@ -44,6 +71,7 @@ defmodule AnyshareWeb.Router do
     get "/short_links", ShortLinkController, :index
     get "/short_links/:id/stats", ShortLinkController, :stats
     post "/short_links", ShortLinkController, :create
+    delete "/short_links/:id", ShortLinkController, :delete
     get "/transfers", TransferController, :index
     post "/transfers", TransferController, :create
     get "/transfers/:id", TransferController, :show

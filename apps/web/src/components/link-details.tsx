@@ -34,9 +34,15 @@ interface LinkDetailsProps {
   link: ShortLink;
   label: string;
   token: string;
+  embedded?: boolean;
 }
 
-export function LinkDetails({ link, label, token }: LinkDetailsProps) {
+export function LinkDetails({
+  link,
+  label,
+  token,
+  embedded = false,
+}: LinkDetailsProps) {
   const { subscribeToEvents } = useAppSession();
   const [activity, setActivity] = useState<Activity>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -90,15 +96,29 @@ export function LinkDetails({ link, label, token }: LinkDetailsProps) {
 
   return (
     <>
-      <DialogHeader className="min-w-0 pr-8">
-        <DialogTitle className="truncate">{label}</DialogTitle>
-        <DialogDescription className="break-all">
-          {linkPageUrl(link.code)}
-          {link.password_protected
-            ? " Visitors need the password before this link opens."
-            : ""}
-        </DialogDescription>
-      </DialogHeader>
+      {embedded ? (
+        <header className="min-w-0">
+          <h2 className="text-foreground truncate text-lg font-semibold">
+            {label}
+          </h2>
+          <p className="text-muted-foreground mt-1 text-sm break-all">
+            {linkPageUrl(link.code)}
+            {link.password_protected
+              ? " Visitors need the password before this link opens."
+              : ""}
+          </p>
+        </header>
+      ) : (
+        <DialogHeader className="min-w-0 pr-8">
+          <DialogTitle className="truncate">{label}</DialogTitle>
+          <DialogDescription className="break-all">
+            {linkPageUrl(link.code)}
+            {link.password_protected
+              ? " Visitors need the password before this link opens."
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+      )}
 
       <section className="flex flex-col gap-3">
         <h3 className="font-heading text-sm">Totals</h3>

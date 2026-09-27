@@ -23,7 +23,7 @@ import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
 import { cn } from "#/lib/utils.ts";
 
 type Side = "top" | "bottom";
-type Align = "start" | "end";
+type Align = "start" | "center" | "end";
 
 type MorphContextValue = {
   open: boolean;
@@ -56,9 +56,9 @@ export interface MorphPopoverProps {
 }
 
 /**
- * A popover whose panel morphs open from the trigger corner: it's laid out at
- * full size but clipped to the corner nearest the trigger, then unclips as one
- * piece. Closes on outside pointer / Escape. Controlled or uncontrolled.
+ * A popover whose panel grows from the trigger's alignment point. It lays out
+ * at full size, then reveals itself from that point. Closes on outside pointer
+ * or Escape. Controlled or uncontrolled.
  */
 export function MorphPopover({
   children,
@@ -194,16 +194,26 @@ export function MorphPopoverTrigger({ children }: MorphPopoverTriggerProps) {
   });
 }
 
-const originFor = (side: Side, align: Align) =>
-  `${side === "bottom" ? "top" : "bottom"} ${align === "end" ? "right" : "left"}`;
+const horizontalOrigin = {
+  start: "left",
+  center: "center",
+  end: "right",
+} as const;
 
-// A clip that hides everything but the corner nearest the trigger, so the
-// panel appears to grow out of it. inset(top right bottom left).
+const originFor = (side: Side, align: Align) =>
+  `${side === "bottom" ? "top" : "bottom"} ${horizontalOrigin[align]}`;
+
+const hiddenSides = {
+  start: ["92%", "0%"],
+  center: ["46%", "46%"],
+  end: ["0%", "92%"],
+} as const;
+
+// The clip starts at the trigger's horizontal anchor. inset(top right bottom left).
 function clipHidden(side: Side, align: Align, radius: number) {
   const top = side === "bottom" ? "0%" : "92%";
   const bottom = side === "bottom" ? "92%" : "0%";
-  const right = align === "end" ? "0%" : "92%";
-  const left = align === "end" ? "92%" : "0%";
+  const [right, left] = hiddenSides[align];
   return `inset(${top} ${right} ${bottom} ${left} round ${radius}px)`;
 }
 const clipShown = (radius: number) => `inset(0% 0% 0% 0% round ${radius}px)`;
@@ -242,9 +252,12 @@ export function MorphPopoverContent({
 
   useEffect(() => setPortalReady(true), []);
   const left = layout
-    ? align === "end"
-      ? layout.trigger.left + layout.trigger.width - layout.content.width
-      : layout.trigger.left
+    ? layout.trigger.left +
+      (align === "start"
+        ? 0
+        : align === "center"
+          ? (layout.trigger.width - layout.content.width) / 2
+          : layout.trigger.width - layout.content.width)
     : 0;
   const top = layout
     ? side === "bottom"

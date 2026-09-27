@@ -267,6 +267,7 @@ export const createTextTransfer = (
     body: string;
     secret: Secret;
     expiration?: ExpirationOptions;
+    password?: string;
   }
 ) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>("/api/v1/transfers", {
@@ -280,6 +281,7 @@ export const createTextTransfer = (
       secret: input.secret,
       expires_in: input.expiration?.expiresIn,
       max_downloads: input.expiration?.maxDownloads,
+      password: input.password,
     },
   });
 
@@ -315,14 +317,15 @@ export const completeTransfer = (
   token: string,
   id: string,
   parts?: UploadedPart[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  password?: string
 ) =>
   request<{ transfer: Transfer; short_link?: ShortLink }>(
     `/api/v1/transfers/${id}/complete`,
     {
       method: "POST",
       token,
-      body: parts ? { parts } : undefined,
+      body: parts || password ? { parts, password } : undefined,
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(150_000)])
         : AbortSignal.timeout(150_000),
@@ -405,6 +408,12 @@ export const listShortLinks = (token: string) =>
       token,
     }
   );
+
+export const deleteShortLink = (token: string, code: string) =>
+  request<void>(`/api/v1/short_links/${encodeURIComponent(code)}`, {
+    method: "DELETE",
+    token,
+  });
 
 export const getShortLink = (code: string) =>
   request<{ short_link: ShortLink }>(

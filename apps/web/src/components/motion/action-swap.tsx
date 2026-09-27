@@ -344,7 +344,7 @@ export function ActionSwapButton({
       whileTap={reduce || disabled ? undefined : { scale: 0.97 }}
       transition={SPRING_PRESS}
       className={cn(
-        "inline-flex items-center justify-center overflow-hidden font-medium transition-colors",
+        "inline-flex cursor-pointer items-center justify-center overflow-hidden font-medium transition-colors",
         "disabled:pointer-events-none disabled:opacity-50",
         VARIANT_CLASS[variant],
         SIZE_CLASS[size],

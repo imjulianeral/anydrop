@@ -485,6 +485,29 @@ export function Share2(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function CircleUser(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      aria-hidden="true"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      {...props}
+    >
+      <g fill="none">
+        <path
+          d="M6.16797 18.8488C6.41548 18.0254 6.92194 17.3037 7.61222 16.7906C8.3025 16.2776 9.13986 16.0003 10.0001 16H14.0001C14.8614 15.9997 15.7 16.2772 16.391 16.7912C17.0821 17.3053 17.5887 18.0285 17.8358 18.8536M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12ZM15 10C15 11.6569 13.6569 13 12 13C10.3431 13 9 11.6569 9 10C9 8.34315 10.3431 7 12 7C13.6569 7 15 8.34315 15 10Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
 export function Plus(props: SVGProps<SVGSVGElement>) {
   return (
     <svg

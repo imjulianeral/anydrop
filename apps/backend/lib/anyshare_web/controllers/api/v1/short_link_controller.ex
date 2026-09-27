@@ -29,6 +29,13 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
     end
   end
 
+  def delete(conn, %{"id" => code}) do
+    case Sharing.delete_short_link(conn.assigns.current_device, code) do
+      :ok -> send_resp(conn, :no_content, "")
+      {:error, :not_found} -> ControllerHelpers.error(conn, :not_found, "not found")
+    end
+  end
+
   def stats(conn, %{"id" => code}) do
     device = conn.assigns.current_device
 
@@ -47,8 +54,7 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
 
   def show(conn, %{"id" => code}) do
     case Sharing.get_live_short_link(code) do
-      %Sharing.ShortLink{target_url: url, password_verifier: verifier} = link
-      when is_binary(url) and is_binary(verifier) ->
+      %Sharing.ShortLink{password_verifier: verifier} = link when is_binary(verifier) ->
         json(conn, %{short_link: Sharing.short_link_json(link, reveal: false)})
 
       nil ->
@@ -83,13 +89,23 @@ defmodule AnyshareWeb.Api.V1.ShortLinkController do
     end
   end
 
-  def download(conn, %{"id" => code}) do
-    case Sharing.consume_short_link(code, "download") do
-      {:ok, %{transfer: %{r2_key: key, filename: filename}}} ->
-        redirect_to_object(conn, Anyshare.ObjectStore.presign_get(key, filename: filename))
-
-      _missing ->
+  def download(conn, %{"id" => code} = params) do
+    case Sharing.get_live_short_link(code) do
+      nil ->
         ControllerHelpers.error(conn, :not_found, "not found")
+
+      link ->
+        if Sharing.short_link_download_allowed?(link, Map.get(params, "token")) do
+          case Sharing.consume_short_link(code, "download") do
+            {:ok, %{transfer: %{r2_key: key, filename: filename}}} ->
+              redirect_to_object(conn, Anyshare.ObjectStore.presign_get(key, filename: filename))
+
+            _missing ->
+              ControllerHelpers.error(conn, :not_found, "not found")
+          end
+        else
+          ControllerHelpers.error(conn, :unauthorized, "password required")
+        end
     end
   end
 

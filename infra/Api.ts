@@ -1,3 +1,4 @@
+import { ALCHEMY_DEV } from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/unstable/http/HttpServerRequest";
@@ -8,14 +9,17 @@ import { corsHeaders } from "./cors.ts";
 
 export default class Api extends Cloudflare.Worker<Api>()(
   "Api",
-  {
-    crons: ["0 * * * *"],
-    env: {
-      ALCHEMY_DEV: process.env.ALCHEMY_DEV ?? "false",
-      ALLOWED_ORIGINS: "http://127.0.0.1:3000,http://localhost:3000",
-    },
-    main: import.meta.url,
-  },
+  Effect.gen(function* () {
+    const dev = yield* ALCHEMY_DEV;
+    return {
+      crons: ["0 * * * *"],
+      env: {
+        ALCHEMY_DEV: dev ? "true" : "false",
+        ALLOWED_ORIGINS: "http://127.0.0.1:3000,http://localhost:3000",
+      },
+      main: import.meta.url,
+    };
+  }),
   Effect.gen(function* () {
     const backends = yield* Backend;
     const env = yield* Cloudflare.Workers.WorkerEnvironment;

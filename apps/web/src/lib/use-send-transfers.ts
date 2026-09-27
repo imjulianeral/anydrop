@@ -4,6 +4,7 @@ import { createFileTransfer, createTextTransfer } from "#/lib/api.ts";
 import type { Peer, Transfer } from "#/lib/api.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
+import { beginFileTransfer } from "#/lib/file-transfers.ts";
 import { island } from "#/lib/island.ts";
 import { withPreparedFile } from "#/lib/large-secrets.ts";
 import { formatBytes } from "#/lib/media.ts";
@@ -143,37 +144,62 @@ export function useSendTransfers({
             id: `${index}:${recipient.id}`,
             label: `${file.name} → ${recipient.display_name}`,
             send: async () => {
+              const transfer = beginFileTransfer({
+                direction: "upload",
+                name: `${file.name} → ${recipient.display_name}`,
+                totalBytes: file.size,
+                phase: "Encrypting",
+                onCancel: () => controller.abort(),
+              });
               setProgress(0);
               setPhase(`Encrypting for ${recipient.display_name}`);
-              await withPreparedFile(
-                file,
-                { recipientPublicKey: recipientKey(recipient) },
-                async (prepared) => {
-                  setPhase(`Uploading to ${recipient.display_name}`);
-                  setProgress(0);
-                  const created = await createFileTransfer(token, {
-                    recipientId: recipient.id,
-                    groupId,
-                    expiration,
-                    filename: prepared.file.name,
-                    byteSize: prepared.file.size,
-                    contentType:
-                      prepared.file.type || "application/octet-stream",
-                    secret: prepared.secret,
-                  });
-                  const result = await uploadFile(
-                    token,
-                    created.transfer.id,
-                    created.upload,
-                    prepared.file,
-                    setProgress,
-                    controller.signal
-                  );
-                  sent(result.transfer, recipient);
-                },
-                controller.signal,
-                setProgress
-              );
+              try {
+                await withPreparedFile(
+                  file,
+                  { recipientPublicKey: recipientKey(recipient) },
+                  async (prepared) => {
+                    const uploadPhase = `Uploading to ${recipient.display_name}`;
+                    setPhase(uploadPhase);
+                    setProgress(0);
+                    transfer.update(uploadPhase, 0, prepared.file.size);
+                    const created = await createFileTransfer(token, {
+                      recipientId: recipient.id,
+                      groupId,
+                      expiration,
+                      filename: prepared.file.name,
+                      byteSize: prepared.file.size,
+                      contentType:
+                        prepared.file.type || "application/octet-stream",
+                      secret: prepared.secret,
+                    });
+                    const result = await uploadFile(
+                      token,
+                      created.transfer.id,
+                      created.upload,
+                      prepared.file,
+                      (ratio) => {
+                        setProgress(ratio);
+                        transfer.update(uploadPhase, ratio, prepared.file.size);
+                      },
+                      controller.signal
+                    );
+                    sent(result.transfer, recipient);
+                  },
+                  controller.signal,
+                  (ratio) => {
+                    setProgress(ratio);
+                    transfer.update("Encrypting", ratio, file.size);
+                  }
+                );
+                transfer.done();
+              } catch (error) {
+                if (controller.signal.aborted) {
+                  transfer.cancel();
+                } else {
+                  transfer.fail();
+                }
+                throw error;
+              }
             },
           }))
         ),

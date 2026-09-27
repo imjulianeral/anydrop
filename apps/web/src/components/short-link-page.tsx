@@ -29,6 +29,8 @@ import {
 import FolderComponent from "#/components/ui/folder-component.tsx";
 import { Separator } from "#/components/ui/separator.tsx";
 import { resolveAssetUrl, unlockShortLink } from "#/lib/api.ts";
+import type { ShortLink } from "#/lib/api.ts";
+import { noteBrowserDownload } from "#/lib/file-transfers.ts";
 import { displayFilename, formatBytes } from "#/lib/media.ts";
 import { toast } from "#/lib/toast.ts";
 import { cn } from "#/lib/utils.ts";
@@ -36,18 +38,20 @@ import { cn } from "#/lib/utils.ts";
 const shortLinkRoute = getRouteApi("/s/$code");
 
 export function ShortLinkPage() {
-  const { short_link: drop } = shortLinkRoute.useLoaderData();
-  const [destination, setDestination] = useState(drop.url);
+  const { short_link: loaded } = shortLinkRoute.useLoaderData();
+  const [unlocked, setUnlocked] = useState<ShortLink | null>(null);
+  const opened = unlocked?.code === loaded.code ? unlocked : null;
+  const drop = opened ?? loaded;
   const [password, setPassword] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
   const passwordId = useId();
 
   useEffect(() => {
-    if (drop.kind === "url" && destination) {
-      globalThis.location.replace(destination);
+    if (drop.kind === "url" && drop.url) {
+      globalThis.location.replace(drop.url);
     }
-  }, [drop.kind, destination]);
+  }, [drop.kind, drop.url]);
 
   const copyMessage = async () => {
     if (!drop.body) {
@@ -65,12 +69,12 @@ export function ShortLinkPage() {
     setBusy(true);
     setFailure("");
     try {
-      const unlocked = await unlockShortLink(drop.code, password);
-      if (!unlocked.short_link.url) {
+      const response = await unlockShortLink(drop.code, password);
+      if (response.short_link.kind === "url" && !response.short_link.url) {
         throw new Error("This link is unavailable.");
       }
       setPassword("");
-      setDestination(unlocked.short_link.url);
+      setUnlocked(response.short_link);
     } catch (error) {
       setFailure(
         error instanceof Error ? error.message : "Could not open this link."
@@ -80,7 +84,7 @@ export function ShortLinkPage() {
     }
   };
 
-  if (drop.kind === "url" && drop.password_protected && !destination) {
+  if (drop.password_protected && !opened) {
     return (
       <PageShell>
         <form
@@ -94,8 +98,8 @@ export function ShortLinkPage() {
             This link is locked.
           </h1>
           <p className="text-muted-foreground text-sm">
-            Enter the password from the sender. The destination stays hidden
-            until the password is correct.
+            Enter the password from the sender. The contents stay hidden until
+            the password is correct.
           </p>
           <FieldGroup>
             <Field data-invalid={Boolean(failure)} data-disabled={busy}>
@@ -248,6 +252,11 @@ export function ShortLinkPage() {
               className="w-full focus-visible:outline-2 focus-visible:outline-offset-4"
               href={resolveAssetUrl(drop.track_download)}
               magneticClassName="w-full"
+              onClick={() =>
+                noteBrowserDownload(
+                  displayFilename(drop.filename, "Shared file")
+                )
+              }
               rel="noopener"
               size="lg"
               target="_blank"

@@ -18,7 +18,8 @@ export const uploadFile = async (
   target: UploadTarget,
   file: File,
   onProgress: (ratio: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  password?: string
 ) => {
   const controller = new AbortController();
   const uploadSignal = signal
@@ -53,7 +54,7 @@ export const uploadFile = async (
     uploadSignal.throwIfAborted();
     completing = true;
     const completed = await retry(
-      () => completeTransfer(token, transferId, parts, uploadSignal),
+      () => completeTransfer(token, transferId, parts, uploadSignal, password),
       uploadSignal
     );
     onProgress(1);

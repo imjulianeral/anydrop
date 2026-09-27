@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { EmptyState } from "#/components/empty-state.tsx";
-import {
-  FilePreview,
-  startFileDownload,
-} from "#/components/file-preview.tsx";
+import { FilePreview, startFileDownload } from "#/components/file-preview.tsx";
 import { LargeSecretContent } from "#/components/large-secret-content.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Input } from "#/components/motion/input.tsx";
@@ -221,6 +218,8 @@ function BufferedSecretContent({ item, masterKey }: SecretContentProps) {
           downloadUrl: item.download?.url
             ? savingDownloadUrl(resolveAssetUrl(item.download.url))
             : undefined,
+          filename: item.filename,
+          byteSize: item.byte_size,
         },
         needsPassword ? password : undefined,
         masterKey
@@ -270,7 +269,11 @@ function BufferedSecretContent({ item, masterKey }: SecretContentProps) {
             if (result?.kind !== "file" || !result.url) {
               return false;
             }
-            startFileDownload(result.url, result.filename || "file");
+            startFileDownload(
+              result.url,
+              result.filename || "file",
+              Boolean(file)
+            );
             return true;
           }}
         />
