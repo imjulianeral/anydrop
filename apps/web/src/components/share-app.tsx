@@ -3,6 +3,7 @@ import {
   Building2,
   Link as LinkIcon,
   MonitorSmartphone,
+  Users,
   UsersRound,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -14,6 +15,7 @@ import { AppDock } from "#/components/app-dock.tsx";
 import type { DockAction } from "#/components/app-dock.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
 import { CreateLinkPanel } from "#/components/create-link-panel.tsx";
+import { DashboardPanel } from "#/components/dashboard/dashboard-panel.tsx";
 import { DevicesPanel } from "#/components/devices-panel.tsx";
 import { EmptyState } from "#/components/empty-state.tsx";
 import { FileComposer } from "#/components/file-composer.tsx";
@@ -21,6 +23,7 @@ import { GroupManageModal } from "#/components/group-manage-modal.tsx";
 import { GroupsPanel } from "#/components/groups-panel.tsx";
 import { LinkDetails } from "#/components/link-details.tsx";
 import { LinkHistoryPanel } from "#/components/link-history-panel.tsx";
+import { BloomMenu } from "#/components/motion/bloom-menu.tsx";
 import { Button } from "#/components/motion/button/base.tsx";
 import { MorphingModal } from "#/components/motion/morphing-modal.tsx";
 import {
@@ -30,16 +33,28 @@ import {
 } from "#/components/motion/popover-morph.tsx";
 import { ShaderBackground } from "#/components/motion/shader-background.tsx";
 import { PeerCarousel } from "#/components/peer-carousel.tsx";
-import { ArrowLeft, Monitor, Radio, X } from "#/components/rune-icons.tsx";
+import {
+  ArrowLeft,
+  LayoutDashboard,
+  Monitor,
+  Radio,
+  X,
+} from "#/components/rune-icons.tsx";
 import { SelfCard } from "#/components/self-card.tsx";
 import { SendOptions } from "#/components/send-options.tsx";
 import { TeamPanel } from "#/components/team-panel.tsx";
 import { TextComposer } from "#/components/text-composer.tsx";
 import { TransferHistory } from "#/components/transfer-history.tsx";
 import type { DeviceGroup, Peer, ShortLink, Transfer } from "#/lib/api.ts";
+import {
+  defaultCircleFilter,
+  groupsFor,
+  peersFor,
+} from "#/lib/circle-filter.ts";
+import type { CircleFilter } from "#/lib/circle-filter.ts";
+import { island } from "#/lib/island.ts";
 import { linkLabel } from "#/lib/link-label.ts";
 import { SHARE_BACKGROUND_SHADER } from "#/lib/share-shaders.ts";
-import { toast } from "#/lib/toast.ts";
 import { useGroups } from "#/lib/use-groups.ts";
 import { usePeerTransfers } from "#/lib/use-peer-transfers.ts";
 import { useSendTransfers } from "#/lib/use-send-transfers.ts";
@@ -49,12 +64,13 @@ interface ShareAppProps {
   peerId?: string;
   peerName?: string;
   messageId?: string;
-  /** A panel to open on arrival, such as Devices from the dashboard. */
-  initialPanel?: "devices" | "team";
+  /** A panel to open on arrival, such as the dashboard. */
+  initialPanel?: "dashboard" | "devices" | "team";
   onSelectPeer: (peer: Peer) => void;
 }
 
 type SharePanel =
+  | "dashboard"
   | "groups"
   | "devices"
   | "team"
@@ -62,7 +78,11 @@ type SharePanel =
   | "history"
   | "link-stats";
 
+/** Which panel Link activity returns to. */
+type StatsOrigin = "history" | "dashboard";
+
 const panelLabels: Record<SharePanel, string> = {
+  dashboard: "Dashboard",
   groups: "Your groups",
   devices: "Your devices",
   team: "Team",
@@ -72,6 +92,7 @@ const panelLabels: Record<SharePanel, string> = {
 };
 
 const panelClassNames: Record<SharePanel, string> = {
+  dashboard: "max-h-full max-w-6xl overflow-y-auto overscroll-contain",
   groups: "max-h-full max-w-md",
   devices: "max-h-full max-w-md overscroll-contain",
   team: "max-h-full max-w-md overscroll-contain",
@@ -107,6 +128,7 @@ export function ShareApp({
   );
   const [createdLink, setCreatedLink] = useState<ShortLink | null>(null);
   const [statsLink, setStatsLink] = useState<ShortLink | null>(null);
+  const [statsOrigin, setStatsOrigin] = useState<StatsOrigin>("history");
   const [linkBusy, setLinkBusy] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelTrigger = useRef<HTMLElement | null>(null);
@@ -118,6 +140,8 @@ export function ShareApp({
   } = useGroups();
   const activeGroup = groups.find((group) => group.id === activeGroupId);
   const managedGroup = groups.find((group) => group.id === manageGroupId);
+  const { filter, setFilter, visiblePeers, visibleGroups, empty } =
+    useCircleFilter(peers, groups, selected, activeGroup);
   const {
     online,
     peerHistoryId,
@@ -135,7 +159,7 @@ export function ShareApp({
     showShared,
     sendOptionsOpen,
     peers,
-    circleCount: peers.length + groups.length,
+    circleCount: visiblePeers.length + visibleGroups.length,
   });
   const { transfers, loading, appendTransfer } = usePeerTransfers(
     peerHistoryId,
@@ -248,15 +272,17 @@ export function ShareApp({
     panelTrigger.current = null;
   }, [activePanel]);
 
-  const dockActions: DockAction[] = shareDockActions(activePanel, hasTeam).map(
-    ({ panel, ...action }) => ({
-      ...action,
-      onClick: () => {
-        setSavingPeerId(null);
-        openPanel(panel);
-      },
-    })
-  );
+  const dockActions: DockAction[] = shareDockActions(
+    activePanel,
+    statsOrigin,
+    hasTeam
+  ).map(({ panel, ...action }) => ({
+    ...action,
+    onClick: () => {
+      setSavingPeerId(null);
+      openPanel(panel);
+    },
+  }));
 
   return (
     <>
@@ -279,10 +305,18 @@ export function ShareApp({
         }}
       >
         <ShareBackdrop light={isLight} />
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-start px-5 py-5 sm:px-9 sm:py-7">
-          <DeviceBadge self={self} connected={connected} />
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col items-center gap-3 px-5 py-5 sm:flex-row sm:px-9 sm:py-7">
+          <div className="flex w-full sm:w-auto sm:flex-1">
+            <DeviceBadge self={self} connected={connected} />
+          </div>
+          <CircleSwitch
+            filter={filter}
+            organization={hasTeam}
+            onFilterChange={setFilter}
+          />
+          <div aria-hidden="true" className="hidden sm:block sm:flex-1" />
         </header>
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 sm:px-9">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-24 sm:px-9 sm:pt-16">
           <div className="flex min-h-64 flex-1 flex-col items-center justify-center gap-9 py-8 sm:gap-12">
             <div className="flex flex-col items-center gap-3 text-center">
               <h1 className="text-3xl font-medium tracking-tight sm:text-5xl">
@@ -295,10 +329,19 @@ export function ShareApp({
                 {availabilityLabel(connected, peers.length)}
               </output>
             </div>
-            {peers.length || groups.length ? (
+            {empty ? (
+              <CircleEmptyState
+                filter={filter}
+                organization={hasTeam}
+                onCreateGroup={() => openGroupManager(null)}
+                onSignIn={() => openAccountMenu("signin")}
+              />
+            ) : (
               <PeerCarousel
-                peers={peers}
-                groups={groups}
+                // A new list starts the carousel over at its first circle.
+                key={filter}
+                peers={visiblePeers}
+                groups={visibleGroups}
                 selectedId={peerHistoryId}
                 selectedGroupId={groupId ?? null}
                 disabled={sending}
@@ -316,10 +359,7 @@ export function ShareApp({
                   setActiveGroupId(group.id);
                   setShowShared(false);
                   if (!group.members.some((member) => member.id !== self.id)) {
-                    toast.add({
-                      title: "Add another participant before sending",
-                      type: "error",
-                    });
+                    island.error("Add another participant before sending");
                     return;
                   }
                   setSendOptionsOpen(true);
@@ -330,13 +370,6 @@ export function ShareApp({
                   setSendOptionsOpen(false);
                 }}
                 onManageGroup={(group) => setManageGroupId(group.id)}
-              />
-            ) : (
-              <EmptyState
-                className="bg-background/65 max-w-sm rounded-3xl p-6 backdrop-blur-md"
-                icon={<Radio />}
-                title="Waiting for another device"
-                description="Devices on the same network appear here. Sign in and save your own devices to reach them from anywhere."
               />
             )}
           </div>
@@ -453,11 +486,13 @@ export function ShareApp({
               sending={sending}
               createdLink={createdLink}
               statsLink={statsLink}
+              statsOrigin={statsOrigin}
               savingPeerId={savingPeerId}
               token={token}
               onOpenGroupManager={openGroupManager}
               onCreatedLink={setCreatedLink}
               onStatsLink={setStatsLink}
+              onStatsOrigin={setStatsOrigin}
               onLinkBusyChange={setLinkBusy}
               onPanelChange={setActivePanel}
               onClose={closePanel}
@@ -476,7 +511,16 @@ function useHasTeam() {
   return Boolean(user?.team || user?.plan === "enterprise");
 }
 
-function shareDockActions(activePanel: SharePanel | null, hasTeam: boolean) {
+function shareDockActions(
+  activePanel: SharePanel | null,
+  statsOrigin: StatsOrigin,
+  hasTeam: boolean
+) {
+  // Link activity belongs to whichever panel opened it.
+  const current =
+    activePanel === "link-stats" && statsOrigin === "dashboard"
+      ? "dashboard"
+      : activePanel;
   const action = (
     panel: SharePanel,
     label: string,
@@ -486,13 +530,14 @@ function shareDockActions(activePanel: SharePanel | null, hasTeam: boolean) {
     panel,
     label,
     icon,
-    active: panel === "link" ? isLinkPanel(activePanel) : activePanel === panel,
+    active: panel === "link" ? isLinkPanel(current) : current === panel,
   });
   return [
     action("groups", "Groups", UsersRound),
     action("devices", "Your devices", MonitorSmartphone),
     ...(hasTeam ? [action("team", "Team", Building2)] : []),
     action("link", "Create a link", LinkIcon),
+    action("dashboard", "Dashboard", LayoutDashboard),
   ];
 }
 
@@ -504,6 +549,130 @@ const LINK_PANELS = new Set<SharePanel | null>([
 
 function isLinkPanel(panel: SharePanel | null) {
   return LINK_PANELS.has(panel);
+}
+
+/**
+ * The carousel's tab and what it shows. The tab stays unset until the viewer
+ * picks one, so until then it follows the selection.
+ */
+function useCircleFilter(
+  peers: Peer[],
+  groups: DeviceGroup[],
+  selected: Pick<Peer, "id" | "relation"> | null,
+  activeGroup: DeviceGroup | undefined
+) {
+  const [picked, setPicked] = useState<CircleFilter | null>(null);
+  const filter =
+    picked ??
+    defaultCircleFilter({
+      peers,
+      groups,
+      selectedPeer: selected,
+      selectedGroup: activeGroup ?? null,
+    });
+  const visiblePeers = peersFor(filter, peers);
+  const visibleGroups = groupsFor(filter, groups);
+  return {
+    filter,
+    setFilter: setPicked,
+    visiblePeers,
+    visibleGroups,
+    empty: visiblePeers.length + visibleGroups.length === 0,
+  };
+}
+
+/** Chooses which circles the carousel shows. */
+function CircleSwitch({
+  filter,
+  organization,
+  onFilterChange,
+}: {
+  filter: CircleFilter;
+  /** Enterprise accounts see everyone else's devices as their organization. */
+  organization: boolean;
+  onFilterChange: (filter: CircleFilter) => void;
+}) {
+  return (
+    <BloomMenu
+      className="pointer-events-auto"
+      anchor="top"
+      title="Show"
+      value={filter}
+      onSelect={onFilterChange}
+      items={[
+        { value: "groups", label: "Groups", icon: UsersRound },
+        { value: "mine", label: "Your devices", icon: MonitorSmartphone },
+        organization
+          ? { value: "others", label: "Organization", icon: Building2 }
+          : { value: "others", label: "Friends", icon: Users },
+      ]}
+    />
+  );
+}
+
+function CircleEmptyState({
+  filter,
+  organization,
+  onCreateGroup,
+  onSignIn,
+}: {
+  filter: CircleFilter;
+  organization: boolean;
+  onCreateGroup: () => void;
+  onSignIn: () => void;
+}) {
+  const { session } = useAccountSession();
+  const className =
+    "bg-background/65 max-w-sm rounded-3xl p-6 backdrop-blur-md";
+  if (filter === "groups") {
+    return (
+      <EmptyState
+        className={className}
+        icon={<UsersRound />}
+        title="No groups yet"
+        description="Make a group to send to several devices at once."
+        action={
+          <Button size="sm" onClick={onCreateGroup}>
+            Create a group
+          </Button>
+        }
+      />
+    );
+  }
+  if (filter === "mine") {
+    return session?.user ? (
+      <EmptyState
+        className={className}
+        icon={<MonitorSmartphone />}
+        title="None of your devices are online"
+        description="Devices saved to your account show up here while they’re open."
+      />
+    ) : (
+      <EmptyState
+        className={className}
+        icon={<MonitorSmartphone />}
+        title="Reach your own devices"
+        description="Sign in and save your phone, laptop and tablet to reach them from anywhere."
+        action={
+          <Button size="sm" onClick={onSignIn}>
+            Sign in
+          </Button>
+        }
+      />
+    );
+  }
+  return (
+    <EmptyState
+      className={className}
+      icon={<Radio />}
+      title="Waiting for another device"
+      description={
+        organization
+          ? "Devices on the same network and your organization’s devices appear here."
+          : "Devices on the same network appear here."
+      }
+    />
+  );
 }
 
 function availabilityLabel(connected: boolean, count: number) {
@@ -688,11 +857,13 @@ function SharePanelBody({
   sending,
   createdLink,
   statsLink,
+  statsOrigin,
   savingPeerId,
   token,
   onOpenGroupManager,
   onCreatedLink,
   onStatsLink,
+  onStatsOrigin,
   onLinkBusyChange,
   onPanelChange,
   onClose,
@@ -704,17 +875,30 @@ function SharePanelBody({
   sending: boolean;
   createdLink: ShortLink | null;
   statsLink: ShortLink | null;
+  statsOrigin: StatsOrigin;
   savingPeerId: string | null;
   token: string;
   onOpenGroupManager: (id: string | null) => void;
   onCreatedLink: Dispatch<SetStateAction<ShortLink | null>>;
   onStatsLink: Dispatch<SetStateAction<ShortLink | null>>;
+  onStatsOrigin: (origin: StatsOrigin) => void;
   onLinkBusyChange: (busy: boolean) => void;
   onPanelChange: (panel: SharePanel) => void;
   onClose: () => void;
 }) {
+  const openStats = (link: ShortLink, origin: StatsOrigin) => {
+    onStatsLink(link);
+    onStatsOrigin(origin);
+    onPanelChange("link-stats");
+  };
   return (
     <>
+      {panel === "dashboard" ? (
+        <DashboardPanel
+          onOpenLink={(link) => openStats(link, "dashboard")}
+          onOpenPanel={onPanelChange}
+        />
+      ) : null}
       {panel === "groups" ? (
         <GroupsPanel
           groups={groups}
@@ -747,10 +931,7 @@ function SharePanelBody({
             );
             onStatsLink((current) => (current?.code === code ? null : current));
           }}
-          onStats={(link) => {
-            onStatsLink(link);
-            onPanelChange("link-stats");
-          }}
+          onStats={(link) => openStats(link, "history")}
         />
       ) : null}
       {panel === "link-stats" && statsLink ? (
@@ -758,10 +939,10 @@ function SharePanelBody({
           <button
             type="button"
             className="text-muted-foreground hover:text-foreground inline-flex w-fit cursor-pointer items-center gap-2 text-sm focus-visible:outline-2"
-            onClick={() => onPanelChange("history")}
+            onClick={() => onPanelChange(statsOrigin)}
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Link history
+            {panelLabels[statsOrigin]}
           </button>
           <LinkDetails
             embedded

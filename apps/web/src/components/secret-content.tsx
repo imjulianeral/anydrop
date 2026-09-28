@@ -14,6 +14,7 @@ import {
 import { resolveAssetUrl, savingDownloadUrl } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { loadDeviceKeyPair, unwrapMasterKey } from "#/lib/device-crypto.ts";
+import { island } from "#/lib/island.ts";
 import { loadLinkKey } from "#/lib/link-keys.ts";
 import type { OpenSecret } from "#/lib/secret-crypto.ts";
 import {
@@ -23,7 +24,6 @@ import {
 } from "#/lib/secret-format.ts";
 import type { Secret } from "#/lib/secret-format.ts";
 import { unlockSecret } from "#/lib/secrets.ts";
-import { toast } from "#/lib/toast.ts";
 
 interface SecretContentProps {
   viewerId?: string;
@@ -155,10 +155,7 @@ function useSecretKey(
                   : "Could not unlock this transfer.";
               setFailure(message);
               if (item.recipient_id) {
-                toast.add({
-                  title: "Could not unlock this transfer.",
-                  type: "error",
-                });
+                island.error("Could not unlock this transfer.");
               }
             }
           },
@@ -362,12 +359,9 @@ function OpenedSecret({
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(opened.body);
-                toast.add({ title: "Message copied", type: "success" });
+                island.success("Message copied");
               } catch {
-                toast.add({
-                  title: "Could not copy the message",
-                  type: "error",
-                });
+                island.error("Could not copy the message");
               }
             }}
           >

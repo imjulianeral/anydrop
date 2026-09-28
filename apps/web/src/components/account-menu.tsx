@@ -505,7 +505,6 @@ export function AccountMenu() {
           <button
             type="button"
             aria-label={triggerLabel}
-            title={triggerLabel}
             className="focus-visible:ring-ring focus-visible:ring-offset-background flex size-full cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
           />
         }

@@ -12,7 +12,7 @@ import {
 import { maxTextBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
-import { toast } from "#/lib/toast.ts";
+import { island } from "#/lib/island.ts";
 
 export function TextComposer({
   open,
@@ -71,10 +71,10 @@ export function TextComposer({
           maxLength={maxTextBytes}
           onSubmit={async (body) => {
             if (new TextEncoder().encode(body).length > maxTextBytes) {
-              toast.add({
+              island.notice({
                 title: "This text is too long",
                 description: "Shorten your message and try again.",
-                type: "error",
+                kind: "error",
               });
               return;
             }
@@ -86,11 +86,7 @@ export function TextComposer({
               setExpiration(defaultExpiration);
               setText("");
             } catch (error) {
-              toast.add({
-                title: "Could not send",
-                description: error instanceof Error ? error.message : undefined,
-                type: "error",
-              });
+              island.error("Could not send", error);
             }
           }}
         />

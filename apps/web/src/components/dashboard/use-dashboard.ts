@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAccountSession } from "#/components/account-session.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
-import type { ShortLink } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { applyLiveEvent, getDashboard } from "#/lib/dashboard.ts";
 import type { Dashboard, DashboardRange } from "#/lib/dashboard.ts";
@@ -71,30 +70,9 @@ export function useDashboard(days: DashboardRange, scope: "me" | "team") {
     [subscribeToEvents]
   );
 
-  /** Shows a link just created here straight away, then refetches the counts. */
-  const addLink = useCallback(
-    (link: ShortLink) => {
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              links: [
-                link,
-                ...current.links.filter((item) => item.code !== link.code),
-              ],
-            }
-          : current
-      );
-      void load();
-    },
-    [load]
-  );
-
   return {
     data,
     error: loadError,
     loading: loadedKey !== key,
-    token,
-    addLink,
   };
 }

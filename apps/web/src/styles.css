@@ -35,6 +35,17 @@ body {
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-label: var(--chart-label);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-series-blue: var(--series-blue);
+  --color-series-orange: var(--series-orange);
+  --color-series-aqua: var(--series-aqua);
+  --color-series-yellow: var(--series-yellow);
+  --color-series-magenta: var(--series-magenta);
+  --color-series-green: var(--series-green);
+  --color-series-violet: var(--series-violet);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -54,6 +65,7 @@ body {
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --color-success: var(--success);
+  --color-success-text: var(--success-text);
   --color-warning: var(--warning);
   --color-notification: var(--notification);
   --color-halo-1: var(--halo-1);
@@ -94,6 +106,8 @@ body {
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.596 0.145 163.225);
+  /* --success is too light for small text on white. */
+  --success-text: oklch(0.5 0.12 163.225);
   --warning: oklch(0.795 0.184 86.047);
   --notification: oklch(0.646 0.222 41.116);
   --halo-1: oklch(0.865 0.127 207.078);
@@ -118,9 +132,9 @@ body {
   --chart-crosshair: oklch(0.4 0 0);
   --chart-grid: oklch(0.92 0 0);
   --chart-brush-border: var(--chart-grid);
-  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
-  --chart-tooltip-foreground: oklch(0.985 0 0);
-  --chart-tooltip-muted: oklch(0.65 0.01 260);
+  --chart-tooltip-background: oklch(1 0 0);
+  --chart-tooltip-foreground: oklch(0.145 0 0);
+  --chart-tooltip-muted: oklch(0.45 0.01 260);
   --chart-marker-background: oklch(0.97 0.005 260);
   --chart-marker-border: oklch(0.85 0.01 260);
   --chart-marker-foreground: oklch(0.3 0.01 260);
@@ -131,6 +145,16 @@ body {
   --chart-scale-04: oklch(0.68 0.02 106);
   --chart-scale-05: oklch(0.55 0.025 106);
   --chart-scale-pattern-color: oklch(0.96 0.005 106);
+  /* Dashboard series hues. The order is colorblind-checked: keep the three
+     metrics (blue, orange, aqua) and the three link kinds (violet, magenta,
+     yellow) together as sets. Dark mode re-steps each hue for its surface. */
+  --series-blue: #2a78d6;
+  --series-orange: #eb6834;
+  --series-aqua: #1baf7a;
+  --series-yellow: #eda100;
+  --series-magenta: #e87ba4;
+  --series-green: #008300;
+  --series-violet: #4a3aa7;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -166,6 +190,7 @@ body {
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.765 0.177 163.223);
+  --success-text: var(--success);
   --warning: oklch(0.795 0.184 86.047);
   --notification: oklch(0.705 0.213 47.604);
   --halo-1: oklch(0.865 0.127 207.078);
@@ -187,6 +212,9 @@ body {
   --chart-line-tertiary: oklch(0.42 0 0);
   --chart-crosshair: oklch(0.45 0 0);
   --chart-grid: oklch(0.25 0 0);
+  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
+  --chart-tooltip-foreground: oklch(0.985 0 0);
+  --chart-tooltip-muted: oklch(0.65 0.01 260);
   --chart-marker-background: oklch(0.25 0.01 260);
   --chart-marker-border: oklch(0.4 0.01 260);
   --chart-marker-foreground: oklch(0.9 0 0);
@@ -197,6 +225,13 @@ body {
   --chart-scale-04: oklch(0.58 0.06 270);
   --chart-scale-05: oklch(0.68 0.07 270);
   --chart-scale-pattern-color: oklch(0.145 0 0);
+  --series-blue: #3987e5;
+  --series-orange: #d95926;
+  --series-aqua: #199e70;
+  --series-yellow: #c98500;
+  --series-magenta: #d55181;
+  --series-green: #008300;
+  --series-violet: #9085e9;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

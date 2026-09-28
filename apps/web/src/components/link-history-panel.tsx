@@ -28,13 +28,13 @@ import { deleteShortLink, listShortLinks } from "#/lib/api.ts";
 import type { ShortLink } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { limitReached } from "#/lib/expiry.ts";
+import { island } from "#/lib/island.ts";
 import {
   applyShortLinkEventToLink,
   readShortLinkEvent,
 } from "#/lib/link-events.ts";
 import { forgetLinkKey, linkPageUrl } from "#/lib/link-keys.ts";
 import { linkLabel } from "#/lib/link-label.ts";
-import { toast } from "#/lib/toast.ts";
 
 interface LinkHistoryPanelProps {
   onBack: () => void;
@@ -91,11 +91,7 @@ export function LinkHistoryPanel({
       {
         onError: (cause) => {
           setLoadFailed(true);
-          toast.add({
-            title: "Could not load links",
-            description: cause instanceof Error ? cause.message : undefined,
-            type: "error",
-          });
+          island.error("Could not load links", cause);
         },
         onSettled: () => {
           setLoading(false);
@@ -139,15 +135,11 @@ export function LinkHistoryPanel({
         } catch {
           // The link is revoked even if this browser cannot write local storage.
         }
-        toast.add({ title: "Link deleted", type: "success" });
+        island.success("Link deleted");
       },
       {
         onError: (cause) => {
-          toast.add({
-            title: "Could not delete link",
-            description: cause instanceof Error ? cause.message : undefined,
-            type: "error",
-          });
+          island.error("Could not delete link", cause);
         },
         onSettled: () => {
           setDeletingCode(null);
@@ -164,13 +156,9 @@ export function LinkHistoryPanel({
       copyResetTimer.current = window.setTimeout(() => {
         setCopiedCode(null);
       }, 2000);
-      toast.add({ title: "Link copied", type: "success" });
+      island.success("Link copied");
     } catch (error) {
-      toast.add({
-        title: "Could not copy link",
-        description: error instanceof Error ? error.message : undefined,
-        type: "error",
-      });
+      island.error("Could not copy link", error);
     }
   };
 

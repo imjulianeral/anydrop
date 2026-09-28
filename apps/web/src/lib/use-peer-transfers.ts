@@ -4,7 +4,7 @@ import { useAppSession } from "#/components/app-session.tsx";
 import type { Transfer } from "#/lib/api.ts";
 import { listGroupTransfers, listTransfers } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
-import { toast } from "#/lib/toast.ts";
+import { island } from "#/lib/island.ts";
 import {
   applyTransferUsage,
   belongsToHistory,
@@ -93,11 +93,7 @@ export function usePeerTransfers(peerId: string | null, groupId?: string) {
             if (cancelled) {
               return;
             }
-            toast.add({
-              title: "Could not load shared items",
-              description: error instanceof Error ? error.message : undefined,
-              type: "error",
-            });
+            island.error("Could not load shared items", error);
             setHistory((current) => ({
               peerId: historyId,
               transfers: current.peerId === historyId ? current.transfers : [],

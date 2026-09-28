@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { HeatCalendar } from "#/components/charts/heat-calendar.tsx";
 import type { HeatCalendarSelection } from "#/components/charts/heat-calendar.tsx";
 import { Panel } from "#/components/dashboard/cards.tsx";
+import { seriesColors } from "#/components/dashboard/charts.tsx";
 import { Tabs, TabsList, TabsTrigger } from "#/components/motion/tabs.tsx";
 import {
   HEAT_WEEKS,
@@ -56,6 +57,13 @@ const toCells = (
   }
   const last = dayToCell(selection.end, end, weeks);
   return last ? { start, end: last } : { start };
+};
+
+/** One hue per metric, matching its series; "both" gets a hue of its own. */
+const metricColors: Record<HeatMetric, string> = {
+  both: "var(--series-green)",
+  views: seriesColors.views,
+  downloads: seriesColors.downloads,
 };
 
 const metricUnits: Record<HeatMetric, string> = {
@@ -137,7 +145,7 @@ export function YearHeat({
       <div className="-mx-1 overflow-x-auto px-1 pb-1" ref={ref}>
         <HeatCalendar
           className="mx-auto"
-          color="var(--foreground)"
+          color={metricColors[metric]}
           endDate={new Date(`${end}T00:00:00Z`)}
           maxCount={maxCount}
           selection={toCells(selection, end, weeks)}

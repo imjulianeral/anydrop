@@ -41,6 +41,10 @@ const CONTENT_SPRING = {
 // Constant radius — never animated. The browser clamps it to half the shell
 // height, so the pill-to-rounded-rect morph falls out of the resize for free
 // with zero chance of corner glitches.
+//
+// Everything inside is sized to sit concentric with these corners: a 40px
+// icon badge with 8px of padding (20 + 8 = 28) in a view, and a 25px badge
+// with 6px of padding (12.5 + 6 = 18.5, the clamped radius) in the pill.
 
 // iPhone pill dimensions. Also the shell's pre-measure animate target: if the
 // first commit already has a view active (e.g. a click replayed after
@@ -137,6 +141,8 @@ export interface DynamicIslandProps {
   view: string | null;
   /** Compact pill content, shown when no view is active. */
   compact?: ReactNode;
+  /** Identifies the compact content; a new id cross-fades the pill. */
+  compactId?: string;
   /** DynamicIslandView elements. */
   children?: ReactNode;
   className?: string;
@@ -145,6 +151,7 @@ export interface DynamicIslandProps {
 export function DynamicIsland({
   view,
   compact,
+  compactId = "compact",
   children,
   className,
 }: DynamicIslandProps) {
@@ -169,9 +176,12 @@ export function DynamicIsland({
         // items-start pins content to the top edge while the shell springs, so
         // expansion reads as unfurling downward out of the pill. Top-align the
         // island in its parent (like under a notch) to complete the effect.
+        // `dark` scopes the theme tokens: the island is black in both themes,
+        // so muted text and buttons inside it use their dark-surface values.
         className={cn(
-          "relative inline-flex items-start justify-center overflow-hidden rounded-[32px]",
-          "bg-foreground text-background shadow-2xl",
+          "dark relative inline-flex items-start justify-center overflow-hidden rounded-[28px]",
+          "text-foreground bg-black ring-1 ring-white/10",
+          "shadow-[0_18px_40px_-12px_rgb(0_0_0/0.45),0_4px_12px_-4px_rgb(0_0_0/0.2)]",
           className
         )}
       >
@@ -181,9 +191,10 @@ export function DynamicIsland({
           <AnimatePresence mode="popLayout" initial={false}>
             {!expanded && compact ? (
               <Slot
-                keyId="compact"
+                key={compactId}
+                keyId={compactId}
                 // iPhone pill proportions: ~126 x 37.
-                className="min-h-[37px] min-w-[126px] gap-2 px-4 py-1.5 text-xs font-medium"
+                className="h-[37px] min-w-[126px] px-1.5 text-xs font-medium"
               >
                 {compact}
               </Slot>
@@ -217,10 +228,57 @@ export function DynamicIslandView({
   return (
     <AnimatePresence mode="popLayout" initial={false}>
       {active ? (
-        <Slot keyId={id} className={cn("px-6 py-4", className)}>
+        <Slot key={id} keyId={id} className={cn("p-2", className)}>
           {children}
         </Slot>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+const ICON_TONE = {
+  blue: "bg-series-blue/15 text-series-blue",
+  violet: "bg-series-violet/15 text-series-violet",
+  green: "bg-success/15 text-success",
+  red: "bg-destructive/15 text-destructive",
+  amber: "bg-warning/15 text-warning",
+  gray: "bg-white/10 text-muted-foreground",
+} as const;
+
+export type DynamicIslandIconTone = keyof typeof ICON_TONE;
+
+export interface DynamicIslandIconProps {
+  tone: DynamicIslandIconTone;
+  /** `sm` fits the compact pill, `md` leads a view. */
+  size?: "sm" | "md";
+  /** A single icon; it is sized and centered by the badge. */
+  children: ReactNode;
+  className?: string;
+}
+
+/**
+ * The tinted circle that leads island content. Sized to sit concentric with
+ * the shell's corners when placed at the view's (or pill's) padding.
+ */
+export function DynamicIslandIcon({
+  tone,
+  size = "md",
+  children,
+  className,
+}: DynamicIslandIconProps) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full [&>svg]:shrink-0",
+        size === "sm"
+          ? "icon-bold size-[25px] [&>svg]:size-3.5"
+          : "size-10 [&>svg]:size-[18px]",
+        ICON_TONE[tone],
+        className
+      )}
+    >
+      {children}
+    </span>
   );
 }

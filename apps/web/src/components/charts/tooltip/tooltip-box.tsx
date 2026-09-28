@@ -179,7 +179,7 @@ function TooltipBoxInner({
   const transformOrigin = isFlipped ? "right top" : "left top";
 
   const panelClassName = cn(
-    "text-chart-tooltip-foreground min-w-[140px] overflow-hidden rounded-lg shadow-lg",
+    "text-chart-tooltip-foreground ring-border min-w-[140px] overflow-hidden rounded-lg shadow-lg ring-1",
     panelStyle?.backgroundColor === undefined &&
       backgroundColor === chartCssVars.tooltipBackground &&
       "bg-chart-tooltip-background",

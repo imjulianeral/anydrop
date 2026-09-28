@@ -33,8 +33,8 @@ import { resolveAssetUrl, unlockShortLink } from "#/lib/api.ts";
 import type { ShortLink } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { noteBrowserDownload } from "#/lib/file-transfers.ts";
+import { island } from "#/lib/island.ts";
 import { displayFilename, formatBytes } from "#/lib/media.ts";
-import { toast } from "#/lib/toast.ts";
 import { cn } from "#/lib/utils.ts";
 
 const shortLinkRoute = getRouteApi("/s/$code");
@@ -61,9 +61,9 @@ export function ShortLinkPage() {
     }
     try {
       await navigator.clipboard.writeText(drop.body);
-      toast.add({ title: "Message copied", type: "success" });
+      island.success("Message copied");
     } catch {
-      toast.add({ title: "Could not copy the message", type: "error" });
+      island.error("Could not copy the message");
     }
   };
 

@@ -2,11 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
-import { DeviceClaimNotice } from "#/components/device-claim-notice.tsx";
-import {
-  DynamicIsland,
-  DynamicIslandView,
-} from "#/components/motion/dynamic-island.tsx";
+import { useIslandActivity } from "#/components/island-host.tsx";
+import { DynamicIslandIcon } from "#/components/motion/dynamic-island.tsx";
+import type { DynamicIslandIconTone } from "#/components/motion/dynamic-island.tsx";
 import {
   Check,
   MessageSquare,
@@ -14,8 +12,8 @@ import {
   X,
 } from "#/components/rune-icons.tsx";
 import type { Transfer } from "#/lib/api.ts";
-import { ISLAND_NOTICE_EVENT, ISLAND_SENT_EVENT } from "#/lib/island.ts";
-import type { IslandNotice, IslandSentNotice } from "#/lib/island.ts";
+import { ISLAND_PRIORITY, ISLAND_SENT_EVENT } from "#/lib/island.ts";
+import type { IslandActivity, IslandSentNotice } from "#/lib/island.ts";
 import { readTransfer } from "#/lib/transfer-events.ts";
 import { transferPreview } from "#/lib/transfer-preview.ts";
 
@@ -27,9 +25,9 @@ interface MessageNotification {
 
 const SENT_NOTICE_MS = 5000;
 
+/** Puts incoming and just-sent messages on the island. */
 export function MessageNotifications() {
   const { self, peers, claims, subscribeToEvents } = useAppSession();
-  const [notice, setNotice] = useState<IslandNotice | null>(null);
   const [notifications, setNotifications] = useState<MessageNotification[]>([]);
   // The island opens for each new notification until the person collapses it.
   const [collapsedId, setCollapsedId] = useState<string | null>(null);
@@ -38,21 +36,6 @@ export function MessageNotifications() {
   const claim = claims.find(
     (item) => item.status === "pending" && item.target.id === self.id
   );
-
-  useEffect(() => {
-    const onNotice = (event: Event) =>
-      setNotice((event as CustomEvent<IslandNotice>).detail);
-    globalThis.addEventListener(ISLAND_NOTICE_EVENT, onNotice);
-    return () => globalThis.removeEventListener(ISLAND_NOTICE_EVENT, onNotice);
-  }, []);
-
-  useEffect(() => {
-    if (!notice || notice.kind === "error") {
-      return;
-    }
-    const timer = globalThis.setTimeout(() => setNotice(null), 7000);
-    return () => globalThis.clearTimeout(timer);
-  }, [notice]);
 
   const enqueue = useEffectEvent((item: MessageNotification) => {
     if (seen.current.has(item.transfer.id)) {
@@ -107,7 +90,8 @@ export function MessageNotifications() {
   }, []);
 
   useEffect(() => {
-    if (!notification || notification.source !== "sent" || notice || claim) {
+    // A pending request covers the island; hold "Sent" until it can be seen.
+    if (!notification || notification.source !== "sent" || claim) {
       return;
     }
     const { id } = notification.transfer;
@@ -119,7 +103,7 @@ export function MessageNotifications() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [notification, notice, claim]);
+  }, [notification, claim]);
 
   const dismiss = (id: string) => {
     setNotifications((current) =>
@@ -127,124 +111,139 @@ export function MessageNotifications() {
     );
   };
 
-  if (notice || claim) {
-    return (
-      <DeviceClaimNotice
-        claim={claim}
-        notice={notice}
-        onDismiss={() => setNotice(null)}
-      />
-    );
-  }
+  useIslandActivity(
+    "messages",
+    notification
+      ? messageActivity({
+          notification,
+          count: notifications.length,
+          expanded: collapsedId !== notification.transfer.id,
+          onOpen: dismiss,
+          onCollapse: setCollapsedId,
+        })
+      : null
+  );
 
-  if (!notification) {
-    return null;
-  }
+  return null;
+}
 
+function messageActivity({
+  notification,
+  count,
+  expanded,
+  onOpen,
+  onCollapse,
+}: {
+  notification: MessageNotification;
+  count: number;
+  expanded: boolean;
+  onOpen: (id: string) => void;
+  onCollapse: (id: string) => void;
+}): IslandActivity {
   const { transfer, peerName, source } = notification;
   const preview = transferPreview(transfer);
   const sent = source === "sent";
-  const expanded = collapsedId !== transfer.id;
   const peerId = sent
     ? (transfer.recipient_id ?? undefined)
     : transfer.sender_id;
   const title = sent ? `Sent to ${peerName}` : peerName;
+  const tone = noticeTone(sent, transfer.kind);
   const openLabel = sent
     ? `Sent to ${peerName}: ${preview}`
     : `Open message from ${peerName}: ${preview}`;
 
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[10000] flex justify-center px-3">
-      <DynamicIsland
-        className="pointer-events-auto"
-        view={expanded ? transfer.id : null}
-        compact={
-          <Link
-            to="/"
-            search={(previous) => ({
-              ...previous,
-              peer: peerId,
-              peerName,
-              message: transfer.id,
-            })}
-            resetScroll={false}
-            className="flex items-center gap-2 rounded-full outline-offset-4"
-            aria-label={openLabel}
-            onClick={() => dismiss(transfer.id)}
-          >
-            {sent ? (
-              <Check className="size-4" />
-            ) : (
-              <MessageSquare className="size-4" />
-            )}
-            <span>{sent ? "Sent" : `${notifications.length} new`}</span>
-          </Link>
-        }
+  return {
+    id: transfer.id,
+    // Collapsed, it steps back behind transfer progress.
+    priority: expanded
+      ? ISLAND_PRIORITY.message
+      : ISLAND_PRIORITY.messageCompact,
+    viewClassName: "w-[min(24rem,calc(100vw-1.5rem))] items-start gap-2",
+    compact: (
+      <Link
+        to="/"
+        search={(previous) => ({
+          ...previous,
+          peer: peerId,
+          peerName,
+          message: transfer.id,
+        })}
+        resetScroll={false}
+        className="flex flex-1 items-center justify-between gap-3 rounded-full pr-2 outline-offset-4"
+        aria-label={openLabel}
+        onClick={() => onOpen(transfer.id)}
       >
-        <DynamicIslandView
-          id={transfer.id}
-          className="w-[min(24rem,calc(100vw-1.5rem))] gap-3 px-4 py-3"
+        <DynamicIslandIcon tone={tone} size="sm">
+          <NoticeIcon sent={sent} kind={transfer.kind} />
+        </DynamicIslandIcon>
+        <span className="tabular-nums">{sent ? "Sent" : `${count} new`}</span>
+      </Link>
+    ),
+    view: expanded ? (
+      <>
+        <Link
+          to="/"
+          search={(previous) => ({
+            ...previous,
+            peer: peerId,
+            peerName,
+            message: transfer.id,
+          })}
+          resetScroll={false}
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-3xl text-left outline-offset-2"
+          aria-label={openLabel}
+          onClick={() => onOpen(transfer.id)}
         >
-          <Link
-            to="/"
-            search={(previous) => ({
-              ...previous,
-              peer: peerId,
-              peerName,
-              message: transfer.id,
-            })}
-            resetScroll={false}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left outline-offset-4"
-            aria-label={openLabel}
-            onClick={() => dismiss(transfer.id)}
-          >
-            <NoticeIcon
-              sent={sent}
-              kind={transfer.kind}
-              className="size-5 shrink-0"
-            />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate text-sm font-medium">{title}</span>
-              <span className="line-clamp-2 text-xs opacity-80">{preview}</span>
-              {notifications.length > 1 && (
-                <span className="text-xs opacity-60">
-                  {notifications.length - 1} more notifications
-                </span>
-              )}
+          <DynamicIslandIcon tone={tone}>
+            <NoticeIcon sent={sent} kind={transfer.kind} />
+          </DynamicIslandIcon>
+          <span className="flex min-h-10 min-w-0 flex-1 flex-col justify-center py-0.5">
+            <span className="truncate text-sm leading-5 font-medium">
+              {title}
             </span>
-          </Link>
-          <button
-            type="button"
-            className="flex size-8 shrink-0 items-center justify-center rounded-full outline-offset-2"
-            aria-label={
-              sent
-                ? "Collapse sent notification"
-                : "Collapse message notifications"
-            }
-            onClick={() => setCollapsedId(transfer.id)}
-          >
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </DynamicIslandView>
-      </DynamicIsland>
-    </div>
-  );
+            <span className="text-muted-foreground line-clamp-2 text-xs leading-4">
+              {preview}
+            </span>
+            {count > 1 && (
+              <span className="text-2xs text-muted-foreground/70 mt-1">
+                {count - 1} more notifications
+              </span>
+            )}
+          </span>
+        </Link>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground grid size-10 shrink-0 cursor-pointer place-items-center rounded-full outline-offset-2 transition-colors hover:bg-white/10"
+          aria-label={
+            sent
+              ? "Collapse sent notification"
+              : "Collapse message notifications"
+          }
+          onClick={() => onCollapse(transfer.id)}
+        >
+          <X aria-hidden="true" className="size-4" />
+        </button>
+      </>
+    ) : null,
+  };
 }
 
-function NoticeIcon({
-  sent,
-  kind,
-  className,
-}: {
-  sent: boolean;
-  kind: Transfer["kind"];
-  className: string;
-}) {
+function noticeTone(
+  sent: boolean,
+  kind: Transfer["kind"]
+): DynamicIslandIconTone {
   if (sent) {
-    return <Check aria-hidden="true" className={className} />;
+    return "green";
+  }
+  return kind === "file" ? "violet" : "blue";
+}
+
+function NoticeIcon({ sent, kind }: { sent: boolean; kind: Transfer["kind"] }) {
+  if (sent) {
+    return <Check aria-hidden="true" />;
   }
   if (kind === "file") {
-    return <Paperclip aria-hidden="true" className={className} />;
+    return <Paperclip aria-hidden="true" />;
   }
-  return <MessageSquare aria-hidden="true" className={className} />;
+  return <MessageSquare aria-hidden="true" />;
 }

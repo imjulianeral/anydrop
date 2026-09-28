@@ -1,17 +1,13 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import type { ReactElement } from "react";
 
 import { AccountMenu } from "#/components/account-menu.tsx";
+import { useAccountSession } from "#/components/account-session.tsx";
 import { Button } from "#/components/motion/button/base.tsx";
 import { Dock, DockItem, DockSeparator } from "#/components/motion/dock.tsx";
 import { ThemeToggle } from "#/components/motion/theme-toggle.tsx";
-import { LayoutDashboard, Share2 } from "#/components/rune-icons.tsx";
+import { Tooltip } from "#/components/motion/tooltip.tsx";
 import type { RuneIcon } from "#/components/rune-icons.tsx";
 import { cn } from "#/lib/utils.ts";
-
-const items = [
-  { to: "/", label: "Share", icon: Share2 },
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-] as const;
 
 const actionClassName =
   "flex size-full items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -27,10 +23,8 @@ export interface DockAction {
 const NO_ACTIONS: DockAction[] = [];
 
 export function AppDock({ actions = NO_ACTIONS }: { actions?: DockAction[] }) {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
   const panelOpen = actions.some((action) => action.active);
+  const { session } = useAccountSession();
 
   return (
     <nav
@@ -48,59 +42,62 @@ export function AppDock({ actions = NO_ACTIONS }: { actions?: DockAction[] }) {
             : "pointer-events-auto"
         }
       >
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <DockItem key={item.to} active={pathname === item.to}>
-              <Link
-                to={item.to}
-                activeOptions={{ exact: true, includeSearch: false }}
-                aria-label={item.label}
-                title={item.label}
-                className={actionClassName}
-              >
-                <Icon className="size-5" />
-              </Link>
-            </DockItem>
-          );
-        })}
-        {actions.length > 0 ? <DockSeparator /> : null}
         {actions.map((action) => {
           const Icon = action.icon;
           return (
             <DockItem key={action.id}>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={action.label}
-                aria-pressed={action.active}
-                title={action.label}
-                className={cn(
-                  actionClassName,
-                  "text-foreground hover:text-foreground hover:bg-transparent",
-                  action.active && "bg-primary/10"
-                )}
-                whileHover={{}}
-                onClick={() => action.onClick()}
-              >
-                <Icon className="size-5" />
-              </Button>
+              <DockTooltip label={action.label}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={action.label}
+                  aria-pressed={action.active}
+                  className={cn(
+                    actionClassName,
+                    "text-foreground hover:text-foreground hover:bg-transparent",
+                    action.active && "bg-primary/10"
+                  )}
+                  whileHover={{}}
+                  onClick={() => action.onClick()}
+                >
+                  <Icon className="size-5" />
+                </Button>
+              </DockTooltip>
             </DockItem>
           );
         })}
         <DockSeparator />
         <DockItem>
-          <ThemeToggle
-            className={actionClassName}
-            iconClassName="size-5"
-            start="bottom-up"
-            variant="circle-blur"
-          />
+          <DockTooltip label="Switch theme">
+            <ThemeToggle
+              className={actionClassName}
+              iconClassName="size-5"
+              start="bottom-up"
+              variant="circle-blur"
+            />
+          </DockTooltip>
         </DockItem>
         <DockItem>
-          <AccountMenu />
+          <DockTooltip label={session?.user ? "Your account" : "Sign in"}>
+            <AccountMenu />
+          </DockTooltip>
         </DockItem>
       </Dock>
     </nav>
+  );
+}
+
+/** Labels a dock button from above, filling the item so the hit area holds. */
+function DockTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement;
+}) {
+  return (
+    <Tooltip content={label} side="top" wrapperClassName="size-full">
+      {children}
+    </Tooltip>
   );
 }

@@ -1,8 +1,6 @@
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useAccountSession } from "#/components/account-session.tsx";
-import { AppDock } from "#/components/app-dock.tsx";
 import { Figure, Panel, StatCard } from "#/components/dashboard/cards.tsx";
 import {
   ActivityChart,
@@ -12,9 +10,9 @@ import {
   WeekdayChart,
   growthSeries,
   nearbyBars,
+  nearbyColors,
+  seriesColors,
 } from "#/components/dashboard/charts.tsx";
-import { CreateDrop } from "#/components/dashboard/create-drop.tsx";
-import type { CreateView } from "#/components/dashboard/create-drop.tsx";
 import { LiveLinks } from "#/components/dashboard/live-links.tsx";
 import type { LinkSort } from "#/components/dashboard/live-links.tsx";
 import { useDashboard } from "#/components/dashboard/use-dashboard.ts";
@@ -36,6 +34,7 @@ import {
   Tablet,
 } from "#/components/rune-icons.tsx";
 import type { RuneIcon } from "#/components/rune-icons.tsx";
+import type { ShortLink } from "#/lib/api.ts";
 import {
   countsByKind,
   dashboardRanges,
@@ -96,92 +95,90 @@ const scopeDescription = (data: Dashboard | null) => {
   return "Activity from this device. Sign in to see all your devices together.";
 };
 
-export function DashboardPage() {
+/** Where the dashboard hands off to the share page's other panels. */
+export type DashboardTarget = "devices" | "team" | "link";
+
+/** The dashboard, as a view of the share page's morphing modal. */
+export function DashboardPanel({
+  onOpenPanel,
+  onOpenLink,
+}: {
+  onOpenPanel: (panel: DashboardTarget) => void;
+  onOpenLink: (link: ShortLink) => void;
+}) {
   const { session } = useAccountSession();
   const user = session?.user ?? null;
   const [range, setRange] = useState<DashboardRange>(30);
   const [scope, setScope] = useState<"me" | "team">("me");
   const [kind, setKind] = useState<KindFilter>("all");
   const [selection, setSelection] = useState<DaySelection | null>(null);
-  const [createView, setCreateView] = useState<CreateView | null>(null);
-  const { data, loading, error, token, addLink } = useDashboard(
+  const { data, loading, error } = useDashboard(
     range,
     user?.team ? scope : "me"
   );
-  const startDrop = () => setCreateView("choose");
 
-  // The app layout pins itself to the viewport, so the dashboard scrolls itself.
   return (
-    <div className="h-full overflow-y-auto">
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-8 pb-(--app-dock-space) sm:px-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1">
-            <h2 className="font-heading flex items-center gap-2 text-lg">
-              <LayoutDashboard aria-hidden="true" className="size-5" />
-              Dashboard
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              {scopeDescription(data)}
-            </p>
-          </div>
-          <ScopeSwitch
-            scope={scope}
-            signedIn={Boolean(user)}
-            teamName={user?.team?.name ?? null}
-            onScopeChange={(next) => {
-              setScope(next);
-              setSelection(null);
-            }}
-          />
-        </header>
-
-        <Filters
-          kind={kind}
-          range={range}
-          onKindChange={setKind}
-          onRangeChange={(next) => {
-            setRange(next);
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="font-heading flex items-center gap-2 text-lg">
+            <LayoutDashboard aria-hidden="true" className="size-5" />
+            Dashboard
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            {scopeDescription(data)}
+          </p>
+        </div>
+        <ScopeSwitch
+          scope={scope}
+          signedIn={Boolean(user)}
+          teamName={user?.team?.name ?? null}
+          onScopeChange={(next) => {
+            setScope(next);
             setSelection(null);
           }}
         />
+      </header>
 
-        {error ? (
-          <p className="border-destructive/30 bg-destructive/5 text-destructive rounded-2xl border px-4 py-3 text-sm">
-            {error}
-          </p>
-        ) : null}
+      <Filters
+        kind={kind}
+        range={range}
+        onKindChange={setKind}
+        onRangeChange={(next) => {
+          setRange(next);
+          setSelection(null);
+        }}
+      />
 
-        {data ? (
-          <DashboardBody
-            data={data}
-            kind={kind}
-            loading={loading}
-            selection={selection}
-            signedIn={Boolean(user)}
-            hasTeam={Boolean(user?.team)}
-            token={token}
-            onKindChange={setKind}
-            onSelectionChange={(next) => {
-              setSelection(next);
-              // A span older than the loaded range needs the full year of rows.
-              if (next && selectionRange(next).start < data.start) {
-                setRange(365);
-              }
-            }}
-            onShowTeam={() => setScope("team")}
-            onStartDrop={startDrop}
-          />
-        ) : (
-          <DashboardSkeleton />
-        )}
+      {error ? (
+        <p className="border-destructive/30 bg-destructive/5 text-destructive rounded-2xl border px-4 py-3 text-sm">
+          {error}
+        </p>
+      ) : null}
 
-        <CreateDrop
-          view={createView}
-          onCreated={addLink}
-          onViewChange={setCreateView}
+      {data ? (
+        <DashboardBody
+          data={data}
+          kind={kind}
+          loading={loading}
+          selection={selection}
+          signedIn={Boolean(user)}
+          hasTeam={Boolean(user?.team)}
+          onKindChange={setKind}
+          onSelectionChange={(next) => {
+            setSelection(next);
+            // A span older than the loaded range needs the full year of rows.
+            if (next && selectionRange(next).start < data.start) {
+              setRange(365);
+            }
+          }}
+          onShowTeam={() => setScope("team")}
+          onOpenPanel={onOpenPanel}
+          onOpenLink={onOpenLink}
         />
-        <AppDock />
-      </main>
+      ) : (
+        <DashboardSkeleton />
+      )}
     </div>
   );
 }
@@ -233,8 +230,14 @@ function DashboardSkeleton() {
   return (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpiSkeletons.map(({ label, icon }) => (
-          <StatCard icon={icon} key={label} label={label} value={null} />
+        {kpiSkeletons.map(({ label, icon, color }) => (
+          <StatCard
+            color={color}
+            icon={icon}
+            key={label}
+            label={label}
+            value={null}
+          />
         ))}
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
@@ -252,10 +255,10 @@ function DashboardSkeleton() {
 }
 
 const kpiSkeletons = [
-  { label: "Views", icon: Eye },
-  { label: "Downloads", icon: Download },
-  { label: "Links created", icon: Link2 },
-  { label: "Download rate", icon: Send },
+  { label: "Views", icon: Eye, color: seriesColors.views },
+  { label: "Downloads", icon: Download, color: seriesColors.downloads },
+  { label: "Links created", icon: Link2, color: seriesColors.created },
+  { label: "Download rate", icon: Send, color: undefined },
 ];
 
 function KpiRow({ view }: { view: ReturnType<typeof deriveView> }) {
@@ -263,18 +266,21 @@ function KpiRow({ view }: { view: ReturnType<typeof deriveView> }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <StatCard
+        color={seriesColors.views}
         icon={Eye}
         label="Views"
         trend={previous ? trend(current.views, previous.views) : null}
         value={current.views}
       />
       <StatCard
+        color={seriesColors.downloads}
         icon={Download}
         label="Downloads"
         trend={previous ? trend(current.downloads, previous.downloads) : null}
         value={current.downloads}
       />
       <StatCard
+        color={seriesColors.created}
         icon={Link2}
         label="Links created"
         trend={previous ? trend(current.created, previous.created) : null}
@@ -298,11 +304,11 @@ function DashboardBody({
   selection,
   signedIn,
   hasTeam,
-  token,
   onKindChange,
   onSelectionChange,
   onShowTeam,
-  onStartDrop,
+  onOpenPanel,
+  onOpenLink,
 }: {
   data: Dashboard;
   kind: KindFilter;
@@ -310,11 +316,11 @@ function DashboardBody({
   selection: DaySelection | null;
   signedIn: boolean;
   hasTeam: boolean;
-  token: string;
   onKindChange: (kind: KindFilter) => void;
   onSelectionChange: (selection: DaySelection | null) => void;
   onShowTeam: () => void;
-  onStartDrop: () => void;
+  onOpenPanel: (panel: DashboardTarget) => void;
+  onOpenLink: (link: ShortLink) => void;
 }) {
   const [heatMetric, setHeatMetric] = useState<HeatMetric>("both");
   const [sort, setSort] = useState<LinkSort>("recent");
@@ -328,7 +334,7 @@ function DashboardBody({
         <Panel>
           <EmptyState
             action={
-              <Button type="button" onClick={onStartDrop}>
+              <Button type="button" onClick={() => onOpenPanel("link")}>
                 <Plus />
                 Create your first drop
               </Button>
@@ -384,11 +390,16 @@ function DashboardBody({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <DevicesPanel data={data} signedIn={signedIn} />
+        <DevicesPanel
+          data={data}
+          signedIn={signedIn}
+          onManage={() => onOpenPanel("devices")}
+        />
         <TeamPanel
           data={data}
           focus={view.focus}
           hasTeam={hasTeam}
+          onManage={() => onOpenPanel("team")}
           onShowTeam={onShowTeam}
         />
       </div>
@@ -422,7 +433,7 @@ function DashboardBody({
           }
           links={view.links}
           sort={sort}
-          token={token}
+          onOpen={onOpenLink}
         />
       </Panel>
     </>
@@ -446,14 +457,22 @@ function NearbyPanel({
       title="Nearby sharing"
     >
       <div className="grid grid-cols-2 gap-2">
-        <Figure label="Sent" value={number.format(view.nearbySent)}>
+        <Figure
+          color={nearbyColors.sent}
+          label="Sent"
+          value={number.format(view.nearbySent)}
+        >
           {wholeRange && data.nearby.bytes_sent > 0 ? (
             <span className="text-muted-foreground text-xs">
               {formatBytes(data.nearby.bytes_sent)} of files
             </span>
           ) : null}
         </Figure>
-        <Figure label="Received" value={number.format(view.nearbyReceived)}>
+        <Figure
+          color={nearbyColors.received}
+          label="Received"
+          value={number.format(view.nearbyReceived)}
+        >
           {wholeRange && data.nearby.bytes_received > 0 ? (
             <span className="text-muted-foreground text-xs">
               {formatBytes(data.nearby.bytes_received)} of files
@@ -507,9 +526,11 @@ function ScopeSwitch({
 function DevicesPanel({
   data,
   signedIn,
+  onManage,
 }: {
   data: Dashboard | null;
   signedIn: boolean;
+  onManage: () => void;
 }) {
   if (!signedIn) {
     return (
@@ -528,13 +549,13 @@ function DevicesPanel({
   return (
     <Panel
       action={
-        <Link
-          className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-          search={{ panel: "devices" }}
-          to="/"
+        <button
+          className="text-muted-foreground hover:text-foreground cursor-pointer text-xs underline underline-offset-2 focus-visible:outline-2"
+          type="button"
+          onClick={onManage}
         >
           Manage
-        </Link>
+        </button>
       }
       description="Saved to your account"
       title="Your devices"
@@ -577,8 +598,7 @@ function DevicesPanel({
         </ul>
       ) : (
         <p className="text-muted-foreground text-sm">
-          No devices saved yet. Open Your devices on the share page to save this
-          one.
+          No devices saved yet. Open Manage to save this one.
         </p>
       )}
     </Panel>
@@ -589,11 +609,13 @@ function TeamPanel({
   data,
   focus,
   hasTeam,
+  onManage,
   onShowTeam,
 }: {
   data: Dashboard | null;
   focus: DayRange;
   hasTeam: boolean;
+  onManage: () => void;
   onShowTeam: () => void;
 }) {
   if (!hasTeam) {
@@ -622,13 +644,13 @@ function TeamPanel({
   return (
     <Panel
       action={
-        <Link
-          className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-          search={{ panel: "team" }}
-          to="/"
+        <button
+          className="text-muted-foreground hover:text-foreground cursor-pointer text-xs underline underline-offset-2 focus-visible:outline-2"
+          type="button"
+          onClick={onManage}
         >
           Manage team
-        </Link>
+        </button>
       }
       description={team.role === "owner" ? "You own this team" : "Member"}
       title={team.name}

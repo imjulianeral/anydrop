@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { DashboardPage } from "#/components/dashboard/dashboard-page.tsx";
-
+// The dashboard opens as a panel over the share page; keep old links working.
 export const Route = createFileRoute("/_app/dashboard")({
-  component: DashboardPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/", search: { panel: "dashboard" }, replace: true });
+  },
 });

@@ -3,8 +3,7 @@ import { Outlet, createRootRoute, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import { FileTransfersHost } from "#/components/file-transfers-host.tsx";
-import { ToastHost } from "#/components/toast-host.tsx";
+import { IslandHost } from "#/components/island-host.tsx";
 import { isRouteModuleLoadError } from "#/lib/short-link.ts";
 
 import "../styles.css";
@@ -58,8 +57,7 @@ function RootComponent() {
   return (
     <>
       <Outlet />
-      <ToastHost />
-      <FileTransfersHost />
+      <IslandHost />
       {import.meta.env.DEV ? (
         <TanStackDevtools
           config={{

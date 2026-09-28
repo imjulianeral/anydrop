@@ -29,10 +29,10 @@ import { maxFileBytes, maxTextBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
 import { beginFileTransfer } from "#/lib/file-transfers.ts";
+import { island } from "#/lib/island.ts";
 import { withPreparedFile } from "#/lib/large-secrets.ts";
 import { linkPageUrl, rememberLinkKey } from "#/lib/link-keys.ts";
 import { prepareText } from "#/lib/secrets.ts";
-import { toast } from "#/lib/toast.ts";
 import { uploadFile } from "#/lib/upload.ts";
 
 type LinkKind = "url" | "text" | "file";
@@ -79,11 +79,7 @@ const actionButtonClass =
   "bg-foreground text-background inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-transform active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transform-none";
 
 const reportError = (error: unknown, title: string) => {
-  toast.add({
-    title,
-    description: error instanceof Error ? error.message : undefined,
-    type: "error",
-  });
+  island.error(title, error);
 };
 
 interface LinkFormProps {
@@ -401,7 +397,7 @@ export function CreateLinkPanel({
     onCreated(link);
     setExpiration(defaultExpiration);
     setPassword(null);
-    toast.add({ title, type: "success" });
+    island.success(title);
   };
 
   const checkPassword = () => {

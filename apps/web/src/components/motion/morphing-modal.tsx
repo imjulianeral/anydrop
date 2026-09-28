@@ -103,7 +103,8 @@ export function MorphingModal({
                 transition={SPRING_PANEL}
                 {...gate}
                 className={cn(
-                  "border-border bg-background pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-3xl border shadow-2xl will-change-transform",
+                  // Views set their own max width; the transition morphs between them.
+                  "border-border bg-background pointer-events-auto relative w-full max-w-sm overflow-hidden rounded-3xl border shadow-2xl transition-[max-width] duration-300 ease-out will-change-transform motion-reduce:transition-none",
                   className
                 )}
               >

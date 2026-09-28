@@ -29,7 +29,7 @@ import { ApiError, getTransfer } from "#/lib/api.ts";
 import type { Peer, Transfer } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { itemExpired } from "#/lib/expiry.ts";
-import { toast } from "#/lib/toast.ts";
+import { island } from "#/lib/island.ts";
 import { transferPreview } from "#/lib/transfer-preview.ts";
 
 export function TransferHistory({
@@ -415,12 +415,7 @@ function TransferContent({
               },
               {
                 onError: (error) => {
-                  toast.add({
-                    title: "Could not open message",
-                    description:
-                      error instanceof Error ? error.message : undefined,
-                    type: "error",
-                  });
+                  island.error("Could not open message", error);
                 },
                 onSettled: () => {
                   opening.current = false;
@@ -521,10 +516,7 @@ function CopySharedTextButton({ text }: { text: string }) {
             setValue("copy");
           }, 2000);
         } catch {
-          toast.add({
-            title: "Could not copy text",
-            type: "error",
-          });
+          island.error("Could not copy text");
         }
       }}
     />

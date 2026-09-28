@@ -54,7 +54,7 @@ function TrendBadge({ trend }: { trend: Trend }) {
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
         trend.direction === "up"
-          ? "bg-foreground/[0.08] text-foreground"
+          ? "bg-success/12 text-success-text"
           : "bg-destructive/10 text-destructive"
       )}
     >
@@ -76,6 +76,7 @@ export function StatCard({
   value,
   suffix,
   icon: Icon,
+  color,
   trend,
   hint,
 }: {
@@ -83,13 +84,24 @@ export function StatCard({
   value: number | null;
   suffix?: string;
   icon: RuneIcon;
+  /** The series colour this number draws with in the charts below. */
+  color?: string;
   trend?: Trend | null;
   hint?: string;
 }) {
   return (
     <div className="border-border/70 bg-card/40 flex min-w-0 flex-col gap-3 rounded-3xl border p-4">
       <div className="text-muted-foreground flex items-center gap-2 text-xs">
-        <Icon aria-hidden="true" className="size-3.5" />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center rounded-lg",
+            color && "bg-(--tint)/15 text-(--tint)"
+          )}
+          style={color ? { "--tint": color } : undefined}
+        >
+          <Icon className="size-3.5" />
+        </span>
         <span className="truncate">{label}</span>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -113,15 +125,27 @@ export function StatCard({
 export function Figure({
   label,
   value,
+  color,
   children,
 }: {
   label: string;
   value: ReactNode;
+  /** A swatch naming the series this figure draws in a chart beside it. */
+  color?: string;
   children?: ReactNode;
 }) {
   return (
     <div className="bg-foreground/[0.03] flex min-w-0 flex-col gap-1 rounded-2xl p-3">
-      <span className="text-muted-foreground truncate text-xs">{label}</span>
+      <span className="text-muted-foreground flex items-center gap-1.5 truncate text-xs">
+        {color ? (
+          <span
+            aria-hidden="true"
+            className="size-2.5 shrink-0 rounded-full bg-(--swatch)"
+            style={{ "--swatch": color }}
+          />
+        ) : null}
+        {label}
+      </span>
       <span className="font-heading text-lg tabular-nums">{value}</span>
       {children}
     </div>

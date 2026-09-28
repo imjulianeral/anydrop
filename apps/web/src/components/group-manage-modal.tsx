@@ -13,7 +13,7 @@ import { saveGroup, deleteGroup, leaveGroup } from "#/lib/api.ts";
 import type { DeviceGroup, Peer } from "#/lib/api.ts";
 import { attempt } from "#/lib/attempt.ts";
 import { deviceShader } from "#/lib/device-shader.ts";
-import { toast } from "#/lib/toast.ts";
+import { island } from "#/lib/island.ts";
 
 type ManageView = "members" | "add" | "rename" | "remove";
 
@@ -214,11 +214,7 @@ export function GroupManageModal({
       },
       {
         onError: (error) => {
-          toast.add({
-            title: "Could not update group",
-            description: error instanceof Error ? error.message : undefined,
-            type: "error",
-          });
+          island.error("Could not update group", error);
         },
         onSettled: () => {
           setBusy(false);
@@ -241,11 +237,10 @@ export function GroupManageModal({
       },
       {
         onError: (error) => {
-          toast.add({
-            title: owner ? "Could not delete group" : "Could not leave group",
-            description: error instanceof Error ? error.message : undefined,
-            type: "error",
-          });
+          island.error(
+            owner ? "Could not delete group" : "Could not leave group",
+            error
+          );
         },
         onSettled: () => {
           setBusy(false);

@@ -20,7 +20,7 @@ import { attempt } from "#/lib/attempt.ts";
 import { maxFileBytes } from "#/lib/config.ts";
 import { defaultExpiration } from "#/lib/expiration-options.ts";
 import type { ExpirationOptions as ExpirationSettings } from "#/lib/expiration-options.ts";
-import { toast } from "#/lib/toast.ts";
+import { island } from "#/lib/island.ts";
 
 export function FileComposer({
   files,
@@ -90,11 +90,11 @@ export function FileComposer({
             attachmentsLabel="Selected files"
             classNames={{ dropzone: "min-h-36 rounded-2xl" }}
             onFilesRejected={(rejected, reason) => {
-              toast.add({
+              island.notice({
                 title:
                   reason === "too-large" ? "File too large" : "Too many files",
                 description: rejected.map((file) => file.name).join(", "),
-                type: "error",
+                kind: "error",
               });
             }}
           />
@@ -135,12 +135,7 @@ export function FileComposer({
               {
                 onError: (error) => {
                   setSent(false);
-                  toast.add({
-                    title: "Could not send files",
-                    description:
-                      error instanceof Error ? error.message : undefined,
-                    type: "error",
-                  });
+                  island.error("Could not send files", error);
                 },
                 onSettled: () => {
                   sendingClick.current = false;
