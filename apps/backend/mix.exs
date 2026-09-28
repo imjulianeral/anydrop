@@ -1,9 +1,9 @@
-defmodule Anyshare.MixProject do
+defmodule Phemera.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :anyshare,
+      app: :phemera,
       version: "0.1.0",
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -15,7 +15,7 @@ defmodule Anyshare.MixProject do
 
   def application do
     [
-      mod: {Anyshare.Application, []},
+      mod: {Phemera.Application, []},
       extra_applications: [:crypto, :inets, :logger, :public_key, :runtime_tools, :ssl, :xmerl]
     ]
   end
@@ -29,10 +29,12 @@ defmodule Anyshare.MixProject do
       {:bandit, "~> 1.8"},
       {:certifi, "~> 2.15"},
       {:ecto_sql, "~> 3.13"},
+      {:gen_smtp, "~> 1.2"},
       {:jason, "~> 1.4"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_ecto, "~> 4.7"},
       {:postgrex, ">= 0.0.0"},
+      {:swoosh, "~> 1.17"},
       {:ssl_verify_fun, "~> 1.1"},
       {:websock_adapter, "~> 0.6"},
       {:wax_, "~> 0.7.0"}

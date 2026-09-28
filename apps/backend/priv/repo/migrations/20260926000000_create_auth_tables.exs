@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.CreateAuthTables do
+defmodule Phemera.Repo.Migrations.CreateAuthTables do
   use Ecto.Migration
 
   def change do

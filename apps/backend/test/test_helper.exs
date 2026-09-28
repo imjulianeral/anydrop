@@ -1,2 +1,2 @@
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(Anyshare.Repo, :manual)
+Ecto.Adapters.SQL.Sandbox.mode(Phemera.Repo, :manual)

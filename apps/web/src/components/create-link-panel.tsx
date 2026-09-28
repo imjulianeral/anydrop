@@ -8,6 +8,7 @@ import type { ActionSwapItem } from "#/components/motion/action-swap-cascade.tsx
 import { AttachmentUpload } from "#/components/motion/attachment-upload.tsx";
 import type { AttachmentUploadItem } from "#/components/motion/attachment-upload.tsx";
 import { Input } from "#/components/motion/input.tsx";
+import { MorphingView } from "#/components/motion/morphing-modal.tsx";
 import { PasswordOptions } from "#/components/password-options.tsx";
 import {
   Check,
@@ -593,146 +594,152 @@ export function CreateLinkPanel({
   };
 
   return (
-    <section className="flex min-w-0 flex-col" aria-label="Create a link">
-      <PanelHeader
-        selected={selected}
-        busy={busy}
-        backButton={backButton}
-        onBack={() => setKind(null)}
-        onClose={onClose}
-      />
-      {kind === null ? (
-        <fieldset className="flex min-w-0 flex-col gap-2">
-          <legend className="sr-only">Link type</legend>
-          {choices.map((choice) => {
-            const Icon = choice.icon;
-            return (
-              <button
-                ref={(node) => {
-                  optionButtons.current[choice.kind] = node;
-                }}
-                key={choice.kind}
-                type="button"
-                className="bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08] flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
-                onClick={() => setKind(choice.kind)}
-              >
-                <Icon aria-hidden="true" className="size-4 shrink-0" />
-                {choice.label}
-              </button>
-            );
-          })}
-        </fieldset>
-      ) : null}
-      {kind === "url" ? (
-        <UrlLinkForm
-          {...formProps}
-          value={url}
-          onValueChange={setUrl}
-          onSubmit={() => void shorten()}
-        />
-      ) : null}
-      {kind === "text" ? (
-        <MessageLinkForm
-          {...formProps}
-          id={messageId}
-          value={message}
-          onValueChange={setMessage}
-          onSubmit={() => void createMessage()}
-        />
-      ) : null}
-      {kind === "file" ? (
-        <div className="flex flex-col gap-4">
-          <div inert={busy}>
-            <AttachmentUpload
-              value={attachment ? [attachment] : []}
-              onValueChange={(items) => setAttachment(items[0] ?? null)}
-              multiple={false}
-              maxFiles={1}
-              maxFileSize={maxFileBytes}
-              disabled={busy}
-              title="Choose or drop a file"
-              description="Choose one file to encrypt and share"
-              attachmentsLabel="Selected file"
-              classNames={{ dropzone: "min-h-44 rounded-2xl py-6" }}
-              onFilesRejected={(rejected, reason) => {
-                reportError(
-                  new Error(rejected.map((item) => item.name).join(", ")),
-                  reason === "too-large" ? "File too large" : "Too many files"
+    <section className="min-w-0" aria-label="Create a link">
+      <MorphingView viewId={kind ?? "choose"}>
+        <div className="flex min-w-0 flex-col">
+          <PanelHeader
+            selected={selected}
+            busy={busy}
+            backButton={backButton}
+            onBack={() => setKind(null)}
+            onClose={onClose}
+          />
+          {kind === null ? (
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="sr-only">Link type</legend>
+              {choices.map((choice) => {
+                const Icon = choice.icon;
+                return (
+                  <button
+                    ref={(node) => {
+                      optionButtons.current[choice.kind] = node;
+                    }}
+                    key={choice.kind}
+                    type="button"
+                    className="bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08] flex w-full cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98] motion-reduce:transform-none"
+                    onClick={() => setKind(choice.kind)}
+                  >
+                    <Icon aria-hidden="true" className="size-4 shrink-0" />
+                    {choice.label}
+                  </button>
                 );
+              })}
+            </fieldset>
+          ) : null}
+          {kind === "url" ? (
+            <UrlLinkForm
+              {...formProps}
+              value={url}
+              onValueChange={setUrl}
+              onSubmit={() => void shorten()}
+            />
+          ) : null}
+          {kind === "text" ? (
+            <MessageLinkForm
+              {...formProps}
+              id={messageId}
+              value={message}
+              onValueChange={setMessage}
+              onSubmit={() => void createMessage()}
+            />
+          ) : null}
+          {kind === "file" ? (
+            <div className="flex flex-col gap-4">
+              <div inert={busy}>
+                <AttachmentUpload
+                  value={attachment ? [attachment] : []}
+                  onValueChange={(items) => setAttachment(items[0] ?? null)}
+                  multiple={false}
+                  maxFiles={1}
+                  maxFileSize={maxFileBytes}
+                  disabled={busy}
+                  title="Choose or drop a file"
+                  description="Choose one file to encrypt and share"
+                  attachmentsLabel="Selected file"
+                  classNames={{ dropzone: "min-h-44 rounded-2xl py-6" }}
+                  onFilesRejected={(rejected, reason) => {
+                    reportError(
+                      new Error(rejected.map((item) => item.name).join(", ")),
+                      reason === "too-large"
+                        ? "File too large"
+                        : "Too many files"
+                    );
+                  }}
+                />
+              </div>
+              {file && file.size > 100 * 1024 ** 2 ? (
+                <p className="text-muted-foreground text-xs leading-snug">
+                  Over 100 MiB: saving needs disk space and file-save support
+                  (e.g. Chrome or Edge).
+                </p>
+              ) : null}
+              {busy ? (
+                <UploadProgress
+                  phase={phase}
+                  progress={progress}
+                  onCancel={() => upload.current?.abort()}
+                />
+              ) : (
+                <>
+                  <ExpirationOptions
+                    value={expiration}
+                    onChange={setExpiration}
+                    kind="file"
+                    compact
+                  />
+                  <PasswordOptions
+                    password={password}
+                    onChange={setPassword}
+                    compact
+                  />
+                  <div className="mt-1 flex gap-2">
+                    <button
+                      type="button"
+                      className={cancelButtonClass}
+                      onClick={() => setKind(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className={actionButtonClass}
+                      disabled={!file || passwordTooShort}
+                      onClick={() => {
+                        void createFile();
+                      }}
+                    >
+                      Create file link
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+          {created && showCopyLink(kind, { file, password, busy }) ? (
+            <ActionSwapCascadeButton
+              aria-live="polite"
+              className="mt-5 w-full"
+              cycle={false}
+              items={copyLinkItems}
+              size="lg"
+              value={copyStatus}
+              variant="secondary"
+              onClick={() => {
+                void copy();
               }}
             />
-          </div>
-          {file && file.size > 100 * 1024 ** 2 ? (
-            <p className="text-muted-foreground text-xs leading-snug">
-              Over 100 MiB: saving needs disk space and file-save support (e.g.
-              Chrome or Edge).
-            </p>
           ) : null}
-          {busy ? (
-            <UploadProgress
-              phase={phase}
-              progress={progress}
-              onCancel={() => upload.current?.abort()}
-            />
-          ) : (
-            <>
-              <ExpirationOptions
-                value={expiration}
-                onChange={setExpiration}
-                kind="file"
-                compact
-              />
-              <PasswordOptions
-                password={password}
-                onChange={setPassword}
-                compact
-              />
-              <div className="mt-1 flex gap-2">
-                <button
-                  type="button"
-                  className={cancelButtonClass}
-                  onClick={() => setKind(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={actionButtonClass}
-                  disabled={!file || passwordTooShort}
-                  onClick={() => {
-                    void createFile();
-                  }}
-                >
-                  Create file link
-                </button>
-              </div>
-            </>
+          {busy ? null : (
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground mt-4 cursor-pointer self-start text-xs underline underline-offset-2"
+              onClick={onViewHistory}
+            >
+              View link history
+            </button>
           )}
         </div>
-      ) : null}
-      {created && showCopyLink(kind, { file, password, busy }) ? (
-        <ActionSwapCascadeButton
-          aria-live="polite"
-          className="mt-5 w-full"
-          cycle={false}
-          items={copyLinkItems}
-          size="lg"
-          value={copyStatus}
-          variant="secondary"
-          onClick={() => {
-            void copy();
-          }}
-        />
-      ) : null}
-      {busy ? null : (
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground mt-4 cursor-pointer self-start text-xs underline underline-offset-2"
-          onClick={onViewHistory}
-        >
-          View link history
-        </button>
-      )}
+      </MorphingView>
     </section>
   );
 }

@@ -1,0 +1,70 @@
+defmodule PhemeraWeb.ShortLinkDownloadControllerTest do
+  use PhemeraWeb.ConnCase, async: true
+
+  import Ecto.Query
+
+  alias Phemera.Accounts
+  alias Phemera.Repo
+  alias Phemera.Sharing
+  alias Phemera.Sharing.LinkEvent
+  alias Phemera.Sharing.ShortLink
+
+  setup do
+    {:ok, token, device} =
+      Accounts.create_session(%{"id" => Ecto.UUID.generate()}, "download-test")
+
+    # Historical plaintext rows remain readable until expiry.
+    transfer =
+      Repo.insert!(%Phemera.Sharing.Transfer{
+        id: Ecto.UUID.generate(),
+        sender_id: device.id,
+        kind: "file",
+        filename: "notes.txt",
+        byte_size: 4,
+        content_type: "text/plain",
+        status: "uploaded",
+        r2_key: "legacy/notes.txt",
+        created_at: NaiveDateTime.utc_now(),
+        expires_at: NaiveDateTime.add(NaiveDateTime.utc_now(), 21_600)
+      })
+
+    {:ok, link} = Sharing.mint_short_link(device, transfer)
+
+    %{token: token, device: device, link: link}
+  end
+
+  test "records a download and redirects to the file", %{conn: conn, link: link} do
+    conn =
+      conn
+      |> put_req_header("accept", "text/html,application/xhtml+xml")
+      |> get("/api/v1/short_links/#{String.downcase(link.code)}/download")
+
+    location = redirected_to(conn)
+    assert location =~ "/api/v1/local_blobs/"
+    assert location =~ "download=1"
+    assert Repo.get!(ShortLink, link.code).download_count == 1
+    assert Repo.get!(ShortLink, link.code).view_count == 0
+
+    assert [%LinkEvent{kind: "download"}] =
+             Repo.all(from(event in LinkEvent, where: event.code == ^link.code))
+  end
+
+  test "does not treat opening the drop as a download", %{conn: conn, link: link} do
+    conn = get(conn, "/api/v1/short_links/#{link.code}")
+    assert json_response(conn, 200)["short_link"]["download_count"] == 0
+    assert Repo.get!(ShortLink, link.code).view_count == 1
+    assert Repo.get!(ShortLink, link.code).download_count == 0
+  end
+
+  test "legacy /s/:code does not start a file download", %{conn: conn, link: link} do
+    conn = get(conn, "/s/#{link.code}")
+    assert conn.status == 404
+    assert Repo.get!(ShortLink, link.code).download_count == 0
+  end
+
+  test "returns not found for url drops", %{conn: conn, device: device} do
+    {:ok, link} = Sharing.create_short_link(device, "https://example.com")
+    conn = get(conn, "/api/v1/short_links/#{link.code}/download")
+    assert json_response(conn, 404) == %{"error" => "not found"}
+  end
+end

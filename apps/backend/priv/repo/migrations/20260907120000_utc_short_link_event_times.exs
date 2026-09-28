@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.UtcShortLinkEventTimes do
+defmodule Phemera.Repo.Migrations.UtcShortLinkEventTimes do
   use Ecto.Migration
 
   def up do

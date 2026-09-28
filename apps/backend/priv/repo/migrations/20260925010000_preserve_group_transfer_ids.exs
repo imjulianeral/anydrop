@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.PreserveGroupTransferIds do
+defmodule Phemera.Repo.Migrations.PreserveGroupTransferIds do
   use Ecto.Migration
 
   def up do

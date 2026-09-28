@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddDevicePublicKeys do
+defmodule Phemera.Repo.Migrations.AddDevicePublicKeys do
   use Ecto.Migration
 
   def change do

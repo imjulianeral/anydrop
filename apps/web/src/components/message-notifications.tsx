@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { useAppSession } from "#/components/app-session.tsx";
-import { InvitationNotice } from "#/components/invitation-notice.tsx";
+import { DeviceClaimNotice } from "#/components/device-claim-notice.tsx";
 import {
   DynamicIsland,
   DynamicIslandView,
@@ -28,15 +28,15 @@ interface MessageNotification {
 const SENT_NOTICE_MS = 5000;
 
 export function MessageNotifications() {
-  const { self, peers, invitations, subscribeToEvents } = useAppSession();
+  const { self, peers, claims, subscribeToEvents } = useAppSession();
   const [notice, setNotice] = useState<IslandNotice | null>(null);
   const [notifications, setNotifications] = useState<MessageNotification[]>([]);
   // The island opens for each new notification until the person collapses it.
   const [collapsedId, setCollapsedId] = useState<string | null>(null);
   const seen = useRef(new Set<string>());
   const [notification] = notifications;
-  const invitation = invitations.find(
-    (item) => item.status === "pending" && item.recipient.id === self.id
+  const claim = claims.find(
+    (item) => item.status === "pending" && item.target.id === self.id
   );
 
   useEffect(() => {
@@ -107,12 +107,7 @@ export function MessageNotifications() {
   }, []);
 
   useEffect(() => {
-    if (
-      !notification ||
-      notification.source !== "sent" ||
-      notice ||
-      invitation
-    ) {
+    if (!notification || notification.source !== "sent" || notice || claim) {
       return;
     }
     const { id } = notification.transfer;
@@ -124,7 +119,7 @@ export function MessageNotifications() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [notification, notice, invitation]);
+  }, [notification, notice, claim]);
 
   const dismiss = (id: string) => {
     setNotifications((current) =>
@@ -132,10 +127,10 @@ export function MessageNotifications() {
     );
   };
 
-  if (notice || invitation) {
+  if (notice || claim) {
     return (
-      <InvitationNotice
-        invitation={invitation}
+      <DeviceClaimNotice
+        claim={claim}
         notice={notice}
         onDismiss={() => setNotice(null)}
       />

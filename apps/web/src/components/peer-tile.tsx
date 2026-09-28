@@ -1,3 +1,4 @@
+import { BookmarkPlus } from "lucide-react";
 import { useInView } from "motion/react";
 import { useId, useRef } from "react";
 
@@ -18,6 +19,7 @@ export function PeerTile({
   open,
   onOpenChange,
   onShowItems,
+  onSave,
   onCenter,
 }: {
   peer: Peer;
@@ -28,6 +30,8 @@ export function PeerTile({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onShowItems: () => void;
+  /** Present for devices nobody has saved yet. */
+  onSave?: (peer: Peer) => void;
   onCenter: () => void;
 }) {
   const tileRef = useRef<HTMLDivElement>(null);
@@ -89,6 +93,20 @@ export function PeerTile({
         open={menuOpen}
         onOpenChange={onOpenChange}
         actions={[
+          ...(onSave
+            ? [
+                {
+                  id: "save",
+                  label: "Save",
+                  icon: <BookmarkPlus className="size-5" />,
+                  position: "top" as const,
+                  onSelect: () => {
+                    onCenter();
+                    onSave(peer);
+                  },
+                },
+              ]
+            : []),
           {
             id: "send",
             label: "Send",

@@ -272,6 +272,8 @@ export const deriveContentKey = async (
           name: "HKDF",
           hash: "SHA-256",
           salt: new Uint8Array(salt),
+          // The anyshare: labels predate the rename; changing them breaks
+          // every existing Secret.
           info: encoder.encode("anyshare:v3:content"),
         },
         ikm,

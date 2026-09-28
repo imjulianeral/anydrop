@@ -1,0 +1,178 @@
+defmodule PhemeraWeb.Api.V1.TransferController do
+  use PhemeraWeb, :controller
+
+  alias Phemera.Moderation.Signals
+  alias Phemera.ObjectStore
+  alias Phemera.Sharing
+  alias Phemera.Sharing.LinkPassword
+
+  def index(conn, params) do
+    peer_id = params |> Map.get("peer_id", "") |> to_string() |> String.trim()
+
+    if peer_id == "" do
+      ControllerHelpers.error(conn, :unprocessable_entity, "peer_id required")
+    else
+      current_device = conn.assigns.current_device
+
+      transfers =
+        current_device
+        |> Sharing.list_transfers(peer_id)
+        |> Enum.map(&Sharing.transfer_json(&1, current_device, download: true))
+
+      json(conn, %{transfers: transfers})
+    end
+  end
+
+  def create(conn, params) do
+    if invalid_link_password?(params) do
+      ControllerHelpers.error(conn, :unprocessable_entity, "password must be 12–1024 characters")
+    else
+      create_transfer(conn, params)
+    end
+  end
+
+  defp create_transfer(conn, params) do
+    current_device = conn.assigns.current_device
+
+    case Sharing.create_transfer(current_device, params) do
+      {:ok, %{kind: "text"} = transfer, recipient} ->
+        :ok = Sharing.deliver_text(transfer, recipient)
+
+        respond_transfer(conn, :created, current_device, transfer, [], params)
+
+      {:ok, transfer, _recipient} ->
+        content_type = present(transfer.content_type) || "application/octet-stream"
+
+        upload =
+          if transfer.upload_part_size do
+            %{
+              type: "multipart",
+              part_size: transfer.upload_part_size,
+              part_count: Phemera.ObjectStore.Multipart.part_count(transfer)
+            }
+          else
+            ObjectStore.presign_put(transfer.r2_key,
+              content_type: content_type,
+              byte_size: transfer.byte_size
+            )
+            |> Map.put(:type, "single")
+          end
+
+        conn
+        |> put_status(:created)
+        |> json(%{transfer: Sharing.transfer_json(transfer, current_device), upload: upload})
+
+      {:error, :recipient_not_found} ->
+        ControllerHelpers.error(conn, :not_found, "recipient not found")
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        ControllerHelpers.changeset_error(conn, changeset)
+    end
+  end
+
+  def show(conn, %{"id" => id}) do
+    current_device = conn.assigns.current_device
+
+    case Sharing.open_transfer(current_device, id) do
+      {:error, :not_found} ->
+        ControllerHelpers.error(conn, :not_found, "not found")
+
+      {:ok, transfer} ->
+        payload = Sharing.transfer_json(transfer, current_device, download: true, opened: true)
+        json(conn, %{transfer: payload, download: Map.get(payload, :download)})
+    end
+  end
+
+  def download(conn, %{"id" => id} = params) do
+    case Sharing.download_transfer(id, Map.get(params, "token", ""),
+           consume: params["save"] == "1"
+         ) do
+      {:ok, transfer} ->
+        url = ObjectStore.presign_get(transfer.r2_key, filename: transfer.filename)
+
+        if String.starts_with?(url, ["http://", "https://"]),
+          do: redirect(conn, external: url),
+          else: redirect(conn, to: url)
+
+      {:error, :not_found} ->
+        ControllerHelpers.error(conn, :not_found, "not found")
+    end
+  end
+
+  def complete(conn, %{"id" => id} = params) do
+    with false <- invalid_link_password?(params),
+         {:ok, signals} <- Signals.parse(params["signals"]) do
+      complete_transfer(conn, id, params, signals)
+    else
+      true ->
+        ControllerHelpers.error(
+          conn,
+          :unprocessable_entity,
+          "password must be 12–1024 characters"
+        )
+
+      {:error, reason} ->
+        PhemeraWeb.Api.V1.UploadController.error(conn, reason)
+    end
+  end
+
+  defp complete_transfer(conn, id, params, signals) do
+    current_device = conn.assigns.current_device
+
+    case Sharing.complete_transfer(current_device, id, Map.get(params, "parts"), signals) do
+      {:ok, transfer} ->
+        recipient =
+          if transfer.recipient_id,
+            do: Phemera.Repo.get(Phemera.Accounts.Device, transfer.recipient_id)
+
+        :ok = Sharing.offer_transfer(transfer, recipient)
+        respond_transfer(conn, :ok, current_device, transfer, [download: true], params)
+
+      {:error, :not_found} ->
+        ControllerHelpers.error(conn, :not_found, "not found")
+
+      {:error, :already_completed} ->
+        ControllerHelpers.error(conn, :conflict, "already completed")
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        ControllerHelpers.changeset_error(conn, changeset)
+
+      {:error, reason} ->
+        PhemeraWeb.Api.V1.UploadController.error(conn, reason)
+    end
+  end
+
+  defp respond_transfer(conn, status, device, transfer, json_opts, link_params) do
+    body = %{transfer: Sharing.transfer_json(transfer, device, json_opts)}
+
+    if present(transfer.recipient_id) do
+      conn |> put_status(status) |> json(body)
+    else
+      case Sharing.mint_short_link(device, transfer, link_params) do
+        {:ok, link} ->
+          conn
+          |> put_status(status)
+          |> json(Map.put(body, :short_link, Sharing.short_link_json(link)))
+
+        {:error, error} ->
+          short_link_error(conn, error)
+      end
+    end
+  end
+
+  defp short_link_error(conn, %Ecto.Changeset{} = changeset),
+    do: ControllerHelpers.changeset_error(conn, changeset)
+
+  defp short_link_error(conn, :code_allocation_failed),
+    do: ControllerHelpers.error(conn, :service_unavailable, "could not allocate short code")
+
+  defp present(value) when value in [nil, ""], do: nil
+  defp present(value), do: value
+
+  defp invalid_link_password?(params) do
+    case Map.get(params, "password") do
+      password when password in [nil, ""] -> false
+      password -> not LinkPassword.valid?(password)
+    end
+  end
+end

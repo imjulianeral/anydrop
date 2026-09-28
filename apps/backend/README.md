@@ -1,4 +1,4 @@
-# AnyShare backend
+# Phemera backend
 
 Phoenix/Elixir JSON API for device discovery, room presence, text and file
 transfers, and short links. It keeps the Rails-era HTTP, database, and Action

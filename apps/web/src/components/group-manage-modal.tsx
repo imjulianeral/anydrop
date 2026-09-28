@@ -310,6 +310,7 @@ export function GroupManageModal({
             <GroupMembers
               group={shownGroup}
               owner={owner}
+              team={shownGroup.kind === "team"}
               selfId={selfId}
               busy={busy}
               removeLabel={removeLabel}
@@ -444,7 +445,7 @@ function CreateGroupForm({
           </div>
         ) : (
           <p className="text-muted-foreground text-sm">
-            Open AnyShare on another device or invite one to add participants.
+            Open Phemera on another device or invite one to add participants.
           </p>
         )}
       </fieldset>
@@ -468,6 +469,7 @@ function CreateGroupForm({
 function GroupMembers({
   group,
   owner,
+  team,
   selfId,
   busy,
   removeLabel,
@@ -478,6 +480,8 @@ function GroupMembers({
 }: {
   group: DeviceGroup;
   owner: boolean;
+  /** The team group follows team membership, so it can't be edited here. */
+  team: boolean;
   selfId: string;
   busy: boolean;
   removeLabel: string;
@@ -551,15 +555,22 @@ function GroupMembers({
             Rename group
           </Button>
         ) : null}
-        <Button
-          variant="ghost"
-          className="bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive w-full"
-          disabled={busy}
-          onClick={onRemove}
-        >
-          <Trash2 className="size-4" />
-          {removeLabel}
-        </Button>
+        {team ? (
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Everyone’s saved devices on your team. Manage members from Team in
+            the dock.
+          </p>
+        ) : (
+          <Button
+            variant="ghost"
+            className="bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive w-full"
+            disabled={busy}
+            onClick={onRemove}
+          >
+            <Trash2 className="size-4" />
+            {removeLabel}
+          </Button>
+        )}
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddMultipartUploads do
+defmodule Phemera.Repo.Migrations.AddMultipartUploads do
   use Ecto.Migration
 
   def change do

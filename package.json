@@ -1,5 +1,5 @@
 {
-  "name": "anyshare",
+  "name": "phemera",
   "version": "0.0.1",
   "workspaces": [
     "apps/*"
@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "start": "nub index.ts",
-    "dev": "sh infra/dev.sh",
+    "dev": "alchemy dev",
     "check": "ultracite check --ignore-pattern=vendors/**",
     "fix": "ultracite fix --ignore-pattern=vendors/**",
     "shadscan": "npx -y @shadscan/cli@0.17.0 apps/web",

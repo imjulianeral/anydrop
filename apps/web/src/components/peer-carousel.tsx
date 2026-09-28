@@ -4,6 +4,7 @@ import { GroupTile } from "#/components/group-tile.tsx";
 import { CylinderCarousel } from "#/components/motion/cylinder-carousel.tsx";
 import type { CylinderCarouselHandle } from "#/components/motion/cylinder-carousel.tsx";
 import { PeerTile } from "#/components/peer-tile.tsx";
+import { isClaimable } from "#/lib/account-devices.ts";
 import type { DeviceGroup, Peer } from "#/lib/api.ts";
 
 export function PeerCarousel({
@@ -15,6 +16,7 @@ export function PeerCarousel({
   onSelect,
   onSend,
   onShowItems,
+  onSavePeer,
   onSendGroup,
   onShowGroupItems,
   onManageGroup,
@@ -27,6 +29,7 @@ export function PeerCarousel({
   onSelect: (peer: Peer) => void;
   onSend: () => void;
   onShowItems: () => void;
+  onSavePeer: (peer: Peer) => void;
   onSendGroup: (group: DeviceGroup) => void;
   onShowGroupItems: (group: DeviceGroup) => void;
   onManageGroup: (group: DeviceGroup) => void;
@@ -98,6 +101,7 @@ export function PeerCarousel({
             onSelect={onSelect}
             onSend={onSend}
             onShowItems={onShowItems}
+            onSave={isClaimable(peer) ? onSavePeer : undefined}
             open={openItemKey === `peer:${peer.id}`}
             onOpenChange={(next) =>
               setOpenItemKey(next ? `peer:${peer.id}` : null)

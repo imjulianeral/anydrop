@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AllowPasskeyOnlyUsers do
+defmodule Phemera.Repo.Migrations.AllowPasskeyOnlyUsers do
   use Ecto.Migration
 
   def change do

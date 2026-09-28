@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddTransferSecrets do
+defmodule Phemera.Repo.Migrations.AddTransferSecrets do
   use Ecto.Migration
 
   def change do

@@ -12,6 +12,8 @@ import {
 import { useEffect, useState } from "react";
 
 import { AccountAvatar } from "#/components/account-avatar.tsx";
+import { useAccountSession } from "#/components/account-session.tsx";
+import type { GuestTab } from "#/components/account-session.tsx";
 import { GoogleIcon } from "#/components/account/google-icon.tsx";
 import { InlineRename } from "#/components/account/inline-rename.tsx";
 import {
@@ -43,7 +45,6 @@ import { attempt } from "#/lib/attempt.ts";
 import {
   addPasskey,
   deleteAccount,
-  getAccountSession,
   isAccountNotFound,
   isReauthRequired,
   logout,
@@ -66,7 +67,7 @@ import type {
 type View = "home" | "security" | PasskeyFlow;
 
 /** Remembers which view to reopen after a Google redirect. */
-const RESUME_KEY = "anyshare:account-view";
+const RESUME_KEY = "phemera:account-view";
 
 const resumableViews = new Set<View>(["security", "add"]);
 
@@ -90,8 +91,6 @@ function takeRememberedView(): View | null {
 
 const describeError = (error: unknown) =>
   error instanceof Error ? error.message : "Sign-in failed. Please try again.";
-
-type GuestTab = "signin" | "signup";
 
 /** Google and passkey options for one guest tab. */
 function GuestOptions({
@@ -170,7 +169,7 @@ function headerCopy(
         description: "Sign in with Google or a passkey.",
       }
     : {
-        title: "Create your AnyShare account",
+        title: "Create your Phemera account",
         description: "Use Google, or just a name and a passkey.",
       };
 }
@@ -313,7 +312,8 @@ function AccountMessages({
 }
 
 export function AccountMenu() {
-  const [session, setSession] = useState<AccountSession | null>(null);
+  const { session, unavailable, refresh, registerAccountMenu } =
+    useAccountSession();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>("home");
   const [busy, setBusy] = useState(false);
@@ -325,45 +325,44 @@ export function AccountMenu() {
   const user = session?.user;
   const { title, description } = headerCopy(view, user, guestTab);
 
-  const refresh = async () => {
-    const current = await getAccountSession();
-    setSession(current);
-    return current;
-  };
-
-  useEffect(() => {
-    let active = true;
-    getAccountSession()
-      .then((current) => {
-        if (!active) {
-          return;
-        }
-        setSession(current);
-        if (current.user) {
-          signalAccount(current.rp_id, current.user);
-        }
-        const resumeView = takeRememberedView();
-        if (current.error_code === "account_not_found") {
-          setGuestTab("signup");
-        }
-        if (current.error || current.notice) {
-          setErrorMessage(current.error);
-          setNotice(current.notice);
-          setView(current.user && resumeView ? resumeView : "home");
+  // The page's first session can reopen the menu with a Google result or an
+  // error, and other parts of the app (such as Your devices) open it too.
+  useEffect(
+    () =>
+      registerAccountMenu({
+        open: (tab) => {
+          setErrorMessage(null);
+          setNotice(null);
+          setView("home");
+          if (tab) {
+            setGuestTab(tab);
+          }
           setOpen(true);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setErrorMessage(
-            "Account service is unavailable. Guest sharing is still available."
-          );
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+        },
+        loaded: (current) => {
+          if (current.user) {
+            signalAccount(current.rp_id, current.user);
+          }
+          const resumeView = takeRememberedView();
+          if (current.error_code === "account_not_found") {
+            setGuestTab("signup");
+          }
+          if (current.error || current.notice) {
+            setErrorMessage(current.error);
+            setNotice(current.notice);
+            setView(current.user && resumeView ? resumeView : "home");
+            setOpen(true);
+          }
+        },
+      }),
+    [registerAccountMenu]
+  );
+
+  const shownError =
+    errorMessage ??
+    (unavailable
+      ? "Account service is unavailable. Guest sharing is still available."
+      : null);
 
   const go = (next: View) => {
     setErrorMessage(null);
@@ -445,7 +444,7 @@ export function AccountMenu() {
             authenticator
           );
           setSignupName("");
-          return "Account created. Welcome to AnyShare!";
+          return "Account created. Welcome to Phemera!";
         }
         if (flow === "signin") {
           try {
@@ -691,7 +690,7 @@ export function AccountMenu() {
               </Tabs>
             )}
 
-            <AccountMessages error={errorMessage} notice={notice} />
+            <AccountMessages error={shownError} notice={notice} />
           </DialogPrimitive.Popup>
         </MorphingModal>
       </DialogPortal>

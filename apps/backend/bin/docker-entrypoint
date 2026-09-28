@@ -4,7 +4,7 @@ set -eu
 cd /app
 
 if [ "$#" -eq 0 ]; then
-  set -- /app/bin/anyshare start
+  set -- /app/bin/phemera start
 fi
 
 if [ -n "${DATABASE_URL:-}" ]; then
@@ -12,7 +12,7 @@ if [ -n "${DATABASE_URL:-}" ]; then
   max_attempts=30
 
   while [ "${attempt}" -le "${max_attempts}" ]; do
-    if /app/bin/anyshare eval "Anyshare.Release.migrate()"; then
+    if /app/bin/phemera eval "Phemera.Release.migrate()"; then
       break
     fi
 

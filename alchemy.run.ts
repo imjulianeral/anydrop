@@ -14,6 +14,8 @@ import { websitePort } from "./infra/ports.ts";
 const webDir = `${import.meta.dirname}/apps/web`;
 
 export default Alchemy.Stack(
+  // Still named for AnyShare: renaming the stack would recreate every Cloudflare
+  // resource and change the workers.dev URLs that CORS allows.
   "AnyShare",
   {
     providers: Layer.mergeAll(

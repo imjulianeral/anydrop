@@ -12,14 +12,15 @@ import type { ReactNode } from "react";
 import { EmptyState } from "#/components/empty-state.tsx";
 import { Button } from "#/components/motion/button/index.tsx";
 import { Loader } from "#/components/motion/loader.tsx";
+import { mergeClaim, pendingClaims } from "#/lib/account-devices.ts";
 import {
-  answerInvitation,
+  answerDeviceClaim,
   ApiError,
   createSession,
-  listInvitations,
+  listDeviceClaims,
   listPeers,
 } from "#/lib/api.ts";
-import type { DeviceInvitation, Peer } from "#/lib/api.ts";
+import type { DeviceClaim, Peer } from "#/lib/api.ts";
 import { connectRoom } from "#/lib/cable.ts";
 import { loadDeviceKeyPair } from "#/lib/device-crypto.ts";
 import {
@@ -27,8 +28,6 @@ import {
   loadLocalDevice,
   saveLocalDevice,
 } from "#/lib/device.ts";
-import { activeInvitations, mergeInvitation } from "#/lib/invitations.ts";
-import { island } from "#/lib/island.ts";
 
 type CableEventHandler = (payload: Record<string, unknown>) => void;
 
@@ -37,19 +36,22 @@ interface AppSession {
   self: Peer;
   peers: Peer[];
   connected: boolean;
-  invitations: DeviceInvitation[];
-  respondToInvitation: (
-    id: string,
-    action: "accept" | "decline" | "disconnect"
-  ) => Promise<void>;
+  /** Nearby accounts asking to save this device, waiting for an answer here. */
+  claims: DeviceClaim[];
+  respondToClaim: (id: string, action: "accept" | "decline") => Promise<void>;
   setPeers: (updater: Peer[] | ((current: Peer[]) => Peer[])) => void;
   subscribeToEvents: (handler: CableEventHandler) => () => void;
 }
 
+// Presence events don't say how this device reaches the peer, so keep the
+// relation from the last peer list.
 const mergePeers = (current: Peer[], incoming: Peer[]): Peer[] => {
   const next = new Map(current.map((peer) => [peer.id, peer]));
   for (const peer of incoming) {
-    next.set(peer.id, peer);
+    next.set(peer.id, {
+      ...peer,
+      relation: peer.relation ?? next.get(peer.id)?.relation,
+    });
   }
   return [...next.values()];
 };
@@ -74,29 +76,38 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
   const [self, setSelf] = useState<Peer | null>(null);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [connected, setConnected] = useState(false);
-  const [invitations, setInvitations] = useState<DeviceInvitation[]>([]);
+  const [claims, setClaims] = useState<DeviceClaim[]>([]);
   const [bootError, setBootError] = useState<string | null>(null);
   const [identityLost, setIdentityLost] = useState(false);
   const bootSession = useRef<ReturnType<typeof createSession> | null>(null);
   const selfIdRef = useRef<string | null>(null);
   const listenersRef = useRef(new Set<CableEventHandler>());
   const refreshVersion = useRef(0);
+  const peersRef = useRef<Peer[]>([]);
   useEffect(() => {
     selfIdRef.current = self?.id ?? null;
   }, [self?.id]);
+  useEffect(() => {
+    peersRef.current = peers;
+  }, [peers]);
+
+  // The server's name wins: a saved device uses the name its owner chose.
+  const rememberDevice = useCallback((device: Peer, sessionToken: string) => {
+    saveLocalDevice({
+      sessionToken,
+      id: device.id,
+      displayName: device.display_name,
+      deviceKind: device.device_kind,
+    });
+  }, []);
 
   const applySession = useCallback(
     (device: Peer, nextPeers: Peer[], sessionToken: string) => {
       setSelf(device);
       setPeers(nextPeers.filter((peer) => peer.id !== device.id));
-      saveLocalDevice({
-        sessionToken,
-        id: device.id,
-        displayName: device.display_name,
-        deviceKind: device.device_kind,
-      });
+      rememberDevice(device, sessionToken);
     },
-    []
+    [rememberDevice]
   );
 
   useEffect(() => {
@@ -153,15 +164,15 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
     }
     refreshVersion.current += 1;
     const version = refreshVersion.current;
-    const [deviceList, inviteList] = await Promise.all([
+    const [deviceList, claimList] = await Promise.all([
       listPeers(token),
-      listInvitations(token),
+      listDeviceClaims(token),
     ]);
     if (version !== refreshVersion.current) {
       return;
     }
     setPeers(deviceList.peers);
-    setInvitations(activeInvitations(inviteList.invitations));
+    setClaims(pendingClaims(claimList.claims));
   }, [token]);
 
   const invalidateRefresh = useCallback(() => {
@@ -187,32 +198,29 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
       },
       onEvent: (payload) => {
         const { type } = payload;
-        if (type === "invitation_updated" && payload.invitation) {
-          const invitation = payload.invitation as DeviceInvitation;
-          setInvitations((current) => mergeInvitation(current, invitation));
-          refresh();
-          if (
-            invitation.sender.id === selfIdRef.current &&
-            (invitation.status === "accepted" ||
-              invitation.status === "declined")
-          ) {
-            island.notice({
-              title:
-                invitation.status === "accepted"
-                  ? "Invitation accepted"
-                  : "Invitation declined",
-              description:
-                invitation.status === "accepted"
-                  ? `${invitation.recipient.display_name} is ready to share.`
-                  : `${invitation.recipient.display_name} declined your invitation.`,
-              kind: invitation.status === "accepted" ? "success" : "error",
-            });
+        if (type === "device_claim_updated" && payload.claim) {
+          const claim = payload.claim as DeviceClaim;
+          if (claim.target.id === selfIdRef.current) {
+            setClaims((current) => mergeClaim(current, claim));
           }
+        }
+        if (type === "self_updated" && payload.device) {
+          const device = payload.device as Peer;
+          setSelf((current) => (current ? { ...current, ...device } : current));
+          rememberDevice(device, token);
+        }
+        if (type === "peers_changed") {
+          refresh();
         }
         if (type === "peer_joined" || type === "peer_updated") {
           const peer = payload as unknown as Peer;
           if (peer.id && peer.id !== selfIdRef.current) {
+            // A newcomer's relation is unknown until the list is refetched.
+            const known = peersRef.current.some((item) => item.id === peer.id);
             setPeers((current) => mergePeers(current, [peer]));
+            if (!known) {
+              refresh();
+            }
           }
         }
         if (type === "peer_left" && typeof payload.id === "string") {
@@ -231,17 +239,17 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
       globalThis.clearInterval(timer);
       disconnect();
     };
-  }, [token, refreshDevices, invalidateRefresh]);
+  }, [token, refreshDevices, invalidateRefresh, rememberDevice]);
 
-  const respondToInvitation = useCallback(
-    async (id: string, action: "accept" | "decline" | "disconnect") => {
+  const respondToClaim = useCallback(
+    async (id: string, action: "accept" | "decline") => {
       if (!token) {
-        throw new Error("Reconnect before answering this invitation.");
+        throw new Error("Reconnect before answering this request.");
       }
-      const { invitation } = await answerInvitation(token, id, action);
-      setInvitations((current) => mergeInvitation(current, invitation));
+      const { claim } = await answerDeviceClaim(token, id, action);
+      setClaims((current) => mergeClaim(current, claim));
       void refreshDevices().catch(() => {
-        // The response succeeded; a later refresh will update presence.
+        // The answer went through; a later refresh will update presence.
       });
     },
     [token, refreshDevices]
@@ -255,21 +263,13 @@ export function AppSessionProvider({ children }: AppSessionProviderProps) {
             self,
             peers,
             connected,
-            invitations,
-            respondToInvitation,
+            claims,
+            respondToClaim,
             setPeers,
             subscribeToEvents,
           }
         : null,
-    [
-      token,
-      self,
-      peers,
-      connected,
-      invitations,
-      respondToInvitation,
-      subscribeToEvents,
-    ]
+    [token, self, peers, connected, claims, respondToClaim, subscribeToEvents]
   );
 
   if (bootError) {

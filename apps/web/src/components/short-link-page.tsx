@@ -416,7 +416,7 @@ function PageShell({
           href="/"
         >
           <Send aria-hidden="true" className="size-5" />
-          AnyShare
+          Phemera
         </a>
         <div
           className={cn(
@@ -442,7 +442,7 @@ function PageShell({
           </div>
         </main>
         <footer className="text-muted-foreground flex shrink-0 items-center justify-between gap-4 px-6 pb-3 text-xs md:px-10 lg:px-14">
-          <span>Shared with AnyShare</span>
+          <span>Shared with Phemera</span>
           <a
             className="hover:text-foreground flex items-center gap-1 rounded-sm py-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4"
             href="/"

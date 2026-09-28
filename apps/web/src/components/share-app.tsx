@@ -1,13 +1,20 @@
 import { Link } from "@tanstack/react-router";
-import { Link as LinkIcon, UsersRound } from "lucide-react";
+import {
+  Building2,
+  Link as LinkIcon,
+  MonitorSmartphone,
+  UsersRound,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
+import { useAccountSession } from "#/components/account-session.tsx";
 import { AppDock } from "#/components/app-dock.tsx";
 import type { DockAction } from "#/components/app-dock.tsx";
 import { useAppSession } from "#/components/app-session.tsx";
 import { CreateLinkPanel } from "#/components/create-link-panel.tsx";
+import { DevicesPanel } from "#/components/devices-panel.tsx";
 import { EmptyState } from "#/components/empty-state.tsx";
 import { FileComposer } from "#/components/file-composer.tsx";
 import { GroupManageModal } from "#/components/group-manage-modal.tsx";
@@ -23,10 +30,10 @@ import {
 } from "#/components/motion/popover-morph.tsx";
 import { ShaderBackground } from "#/components/motion/shader-background.tsx";
 import { PeerCarousel } from "#/components/peer-carousel.tsx";
-import { RemoteDevicesPanel } from "#/components/remote-devices.tsx";
 import { ArrowLeft, Monitor, Radio, X } from "#/components/rune-icons.tsx";
 import { SelfCard } from "#/components/self-card.tsx";
 import { SendOptions } from "#/components/send-options.tsx";
+import { TeamPanel } from "#/components/team-panel.tsx";
 import { TextComposer } from "#/components/text-composer.tsx";
 import { TransferHistory } from "#/components/transfer-history.tsx";
 import type { DeviceGroup, Peer, ShortLink, Transfer } from "#/lib/api.ts";
@@ -42,14 +49,23 @@ interface ShareAppProps {
   peerId?: string;
   peerName?: string;
   messageId?: string;
+  /** A panel to open on arrival, such as Devices from the dashboard. */
+  initialPanel?: "devices" | "team";
   onSelectPeer: (peer: Peer) => void;
 }
 
-type SharePanel = "groups" | "invite" | "link" | "history" | "link-stats";
+type SharePanel =
+  | "groups"
+  | "devices"
+  | "team"
+  | "link"
+  | "history"
+  | "link-stats";
 
 const panelLabels: Record<SharePanel, string> = {
   groups: "Your groups",
-  invite: "Invite a device",
+  devices: "Your devices",
+  team: "Team",
   link: "Create a link",
   history: "Link history",
   "link-stats": "Link activity",
@@ -57,7 +73,8 @@ const panelLabels: Record<SharePanel, string> = {
 
 const panelClassNames: Record<SharePanel, string> = {
   groups: "max-h-full max-w-md",
-  invite: "max-h-full max-w-md overflow-y-auto overscroll-contain",
+  devices: "max-h-full max-w-md overscroll-contain",
+  team: "max-h-full max-w-md overscroll-contain",
   link: "max-h-full max-w-sm overflow-y-auto overscroll-contain",
   history: "max-h-full max-w-md",
   "link-stats": "max-h-full max-w-lg overflow-y-auto overscroll-contain",
@@ -67,9 +84,13 @@ export function ShareApp({
   peerId,
   peerName,
   messageId,
+  initialPanel,
   onSelectPeer,
 }: ShareAppProps) {
   const { token, self, peers, connected } = useAppSession();
+  const hasTeam = useHasTeam();
+  const { session: account, openAccountMenu } = useAccountSession();
+  const [savingPeerId, setSavingPeerId] = useState<string | null>(null);
   const selected = findSelectedPeer(peers, peerId, peerName);
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === "light";
@@ -81,7 +102,9 @@ export function ShareApp({
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [manageGroupId, setManageGroupId] = useState<string | null>(null);
-  const [activePanel, setActivePanel] = useState<SharePanel | null>(null);
+  const [activePanel, setActivePanel] = useState<SharePanel | null>(
+    initialPanel ?? null
+  );
   const [createdLink, setCreatedLink] = useState<ShortLink | null>(null);
   const [statsLink, setStatsLink] = useState<ShortLink | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
@@ -149,7 +172,18 @@ export function ShareApp({
   const closePanel = () => {
     if (!linkBusy) {
       setActivePanel(null);
+      setSavingPeerId(null);
     }
+  };
+
+  // Guests can't save devices, so the Save action invites them to sign up.
+  const savePeer = (peer: Peer) => {
+    if (!account?.user) {
+      openAccountMenu("signup");
+      return;
+    }
+    setSavingPeerId(peer.id);
+    openPanel("devices");
   };
 
   const openGroupManager = (id: string | null) => {
@@ -214,29 +248,15 @@ export function ShareApp({
     panelTrigger.current = null;
   }, [activePanel]);
 
-  const dockActions: DockAction[] = [
-    {
-      id: "groups",
-      label: "Groups",
-      icon: UsersRound,
-      onClick: () => openPanel("groups"),
-      active: activePanel === "groups",
-    },
-    {
-      id: "invite",
-      label: "Invite a device",
-      icon: Radio,
-      onClick: () => openPanel("invite"),
-      active: activePanel === "invite",
-    },
-    {
-      id: "link",
-      label: "Create a link",
-      icon: LinkIcon,
-      onClick: () => openPanel("link"),
-      active: isLinkPanel(activePanel),
-    },
-  ];
+  const dockActions: DockAction[] = shareDockActions(activePanel, hasTeam).map(
+    ({ panel, ...action }) => ({
+      ...action,
+      onClick: () => {
+        setSavingPeerId(null);
+        openPanel(panel);
+      },
+    })
+  );
 
   return (
     <>
@@ -291,6 +311,7 @@ export function ShareApp({
                   setSendOptionsOpen(true);
                 }}
                 onShowItems={() => setShowShared(true)}
+                onSavePeer={savePeer}
                 onSendGroup={(group) => {
                   setActiveGroupId(group.id);
                   setShowShared(false);
@@ -315,7 +336,7 @@ export function ShareApp({
                 className="bg-background/65 max-w-sm rounded-3xl p-6 backdrop-blur-md"
                 icon={<Radio />}
                 title="Waiting for another device"
-                description="Nearby devices appear on the same network. Use Invite a device to reach someone anywhere by their exact nickname or user ID."
+                description="Devices on the same network appear here. Sign in and save your own devices to reach them from anywhere."
               />
             )}
           </div>
@@ -432,6 +453,7 @@ export function ShareApp({
               sending={sending}
               createdLink={createdLink}
               statsLink={statsLink}
+              savingPeerId={savingPeerId}
               token={token}
               onOpenGroupManager={openGroupManager}
               onCreatedLink={setCreatedLink}
@@ -445,6 +467,33 @@ export function ShareApp({
       </MorphingModal>
     </>
   );
+}
+
+/** Enterprise accounts and team members get the Team panel in the dock. */
+function useHasTeam() {
+  const { session } = useAccountSession();
+  const user = session?.user;
+  return Boolean(user?.team || user?.plan === "enterprise");
+}
+
+function shareDockActions(activePanel: SharePanel | null, hasTeam: boolean) {
+  const action = (
+    panel: SharePanel,
+    label: string,
+    icon: DockAction["icon"]
+  ) => ({
+    id: panel,
+    panel,
+    label,
+    icon,
+    active: panel === "link" ? isLinkPanel(activePanel) : activePanel === panel,
+  });
+  return [
+    action("groups", "Groups", UsersRound),
+    action("devices", "Your devices", MonitorSmartphone),
+    ...(hasTeam ? [action("team", "Team", Building2)] : []),
+    action("link", "Create a link", LinkIcon),
+  ];
 }
 
 const LINK_PANELS = new Set<SharePanel | null>([
@@ -537,7 +586,7 @@ function DeviceBadge({ self, connected }: { self: Peer; connected: boolean }) {
         <Button
           variant="secondary"
           size="sm"
-          aria-label={`This device: ${self.display_name}, ${connected ? "connected" : "disconnected"}. Show invitation details`}
+          aria-label={`This device: ${self.display_name}, ${connected ? "connected" : "disconnected"}. Show device details`}
         >
           <Monitor className="size-4" />
           <span className="max-w-32 truncate">{self.display_name}</span>
@@ -639,6 +688,7 @@ function SharePanelBody({
   sending,
   createdLink,
   statsLink,
+  savingPeerId,
   token,
   onOpenGroupManager,
   onCreatedLink,
@@ -654,6 +704,7 @@ function SharePanelBody({
   sending: boolean;
   createdLink: ShortLink | null;
   statsLink: ShortLink | null;
+  savingPeerId: string | null;
   token: string;
   onOpenGroupManager: (id: string | null) => void;
   onCreatedLink: Dispatch<SetStateAction<ShortLink | null>>;
@@ -674,7 +725,10 @@ function SharePanelBody({
           onOpenGroup={onOpenGroupManager}
         />
       ) : null}
-      {panel === "invite" ? <RemoteDevicesPanel /> : null}
+      {panel === "devices" ? (
+        <DevicesPanel savingPeerId={savingPeerId} />
+      ) : null}
+      {panel === "team" ? <TeamPanel /> : null}
       {panel === "link" ? (
         <CreateLinkPanel
           created={createdLink}

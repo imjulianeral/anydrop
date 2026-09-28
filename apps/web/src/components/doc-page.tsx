@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 export function DocLinks() {
   return (
     <nav
-      aria-label="About AnyShare"
+      aria-label="About Phemera"
       className="text-muted-foreground flex items-center gap-4 text-sm"
     >
       <Link className="hover:text-foreground" to="/security">

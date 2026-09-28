@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Moderation.Import do
 
   use Mix.Task
 
-  alias Anyshare.Moderation.HashList
+  alias Phemera.Moderation.HashList
 
   @switches [type: :string, category: :string, source: :string]
 

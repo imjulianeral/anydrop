@@ -13,7 +13,9 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppLinksRouteImport } from './routes/_app/links'
+import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as SCodeRouteImport } from './routes/s.$code'
 
 const AppRoute = AppRouteImport.update({
@@ -35,10 +37,20 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLinksRoute = AppLinksRouteImport.update({
   id: '/links',
   path: '/links',
   getParentRoute: () => AppRoute,
+} as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SCodeRoute = SCodeRouteImport.update({
   id: '/s/$code',
@@ -50,13 +62,17 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/about': typeof AboutRoute
   '/security': typeof SecurityRoute
+  '/dashboard': typeof AppDashboardRoute
   '/links': typeof AppLinksRoute
+  '/join/$token': typeof JoinTokenRoute
   '/s/$code': typeof SCodeRoute
 }
 export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/security': typeof SecurityRoute
+  '/dashboard': typeof AppDashboardRoute
   '/links': typeof AppLinksRoute
+  '/join/$token': typeof JoinTokenRoute
   '/s/$code': typeof SCodeRoute
   '/': typeof AppIndexRoute
 }
@@ -65,21 +81,39 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/about': typeof AboutRoute
   '/security': typeof SecurityRoute
+  '/_app/dashboard': typeof AppDashboardRoute
   '/_app/links': typeof AppLinksRoute
+  '/join/$token': typeof JoinTokenRoute
   '/s/$code': typeof SCodeRoute
   '/_app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/security' | '/links' | '/s/$code'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/security'
+    | '/dashboard'
+    | '/links'
+    | '/join/$token'
+    | '/s/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/about' | '/security' | '/links' | '/s/$code' | '/'
+  to:
+    | '/about'
+    | '/security'
+    | '/dashboard'
+    | '/links'
+    | '/join/$token'
+    | '/s/$code'
+    | '/'
   id:
     | '__root__'
     | '/_app'
     | '/about'
     | '/security'
+    | '/_app/dashboard'
     | '/_app/links'
+    | '/join/$token'
     | '/s/$code'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -88,6 +122,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AboutRoute: typeof AboutRoute
   SecurityRoute: typeof SecurityRoute
+  JoinTokenRoute: typeof JoinTokenRoute
   SCodeRoute: typeof SCodeRoute
 }
 
@@ -121,12 +156,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/links': {
       id: '/_app/links'
       path: '/links'
       fullPath: '/links'
       preLoaderRoute: typeof AppLinksRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/s/$code': {
       id: '/s/$code'
@@ -139,11 +188,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppDashboardRoute: typeof AppDashboardRoute
   AppLinksRoute: typeof AppLinksRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppDashboardRoute: AppDashboardRoute,
   AppLinksRoute: AppLinksRoute,
   AppIndexRoute: AppIndexRoute,
 }
@@ -154,6 +205,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AboutRoute: AboutRoute,
   SecurityRoute: SecurityRoute,
+  JoinTokenRoute: JoinTokenRoute,
   SCodeRoute: SCodeRoute,
 }
 export const routeTree = rootRouteImport

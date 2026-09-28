@@ -4,13 +4,13 @@ import { AccountMenu } from "#/components/account-menu.tsx";
 import { Button } from "#/components/motion/button/base.tsx";
 import { Dock, DockItem, DockSeparator } from "#/components/motion/dock.tsx";
 import { ThemeToggle } from "#/components/motion/theme-toggle.tsx";
-import { Link2, Share2 } from "#/components/rune-icons.tsx";
+import { LayoutDashboard, Share2 } from "#/components/rune-icons.tsx";
 import type { RuneIcon } from "#/components/rune-icons.tsx";
 import { cn } from "#/lib/utils.ts";
 
 const items = [
   { to: "/", label: "Share", icon: Share2 },
-  { to: "/links", label: "Links", icon: Link2 },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 ] as const;
 
 const actionClassName =

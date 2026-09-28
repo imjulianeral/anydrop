@@ -24,13 +24,13 @@ FROM alpine:${ALPINE_VERSION} AS runtime
 RUN apk add --no-cache ca-certificates libgcc libstdc++ ncurses-libs openssl
 
 WORKDIR /app
-RUN adduser -D -H -h /app -s /sbin/nologin anyshare
+RUN adduser -D -H -h /app -s /sbin/nologin phemera
 
-COPY --from=build --chown=anyshare:anyshare /app/_build/prod/rel/anyshare ./
-COPY --chown=anyshare:anyshare bin/docker-entrypoint ./bin/docker-entrypoint
-RUN chmod +x ./bin/docker-entrypoint && mkdir -p tmp/storage && chown -R anyshare:anyshare tmp
+COPY --from=build --chown=phemera:phemera /app/_build/prod/rel/phemera ./
+COPY --chown=phemera:phemera bin/docker-entrypoint ./bin/docker-entrypoint
+RUN chmod +x ./bin/docker-entrypoint && mkdir -p tmp/storage && chown -R phemera:phemera tmp
 
-USER anyshare
+USER phemera
 ENV HOME=/app
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8

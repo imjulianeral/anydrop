@@ -1,8 +1,14 @@
 "use client";
 // beui.dev/components/motion/morphing-modal
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect } from "react";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  useReducedMotion,
+} from "motion/react";
+import type { AnimationPlaybackControls } from "motion/react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { EASE_OUT, SPRING_PANEL } from "#/lib/ease.ts";
@@ -86,7 +92,6 @@ export function MorphingModal({
             >
               <motion.div
                 key="panel"
-                layout
                 initial={{ opacity: 0, y: enterY, scale: enterScale }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{
@@ -102,63 +107,116 @@ export function MorphingModal({
                   className
                 )}
               >
-                <motion.div layout="position" className="p-5">
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.div
-                      key={viewId}
-                      initial={
-                        reduce
-                          ? { opacity: 0 }
-                          : { opacity: 0, y: 8, filter: "blur(4px)" }
-                      }
-                      animate={
-                        reduce
-                          ? {
-                              opacity: 1,
-                              transition: {
-                                duration: 0.18,
-                                ease: EASE_OUT,
-                              },
-                            }
-                          : {
-                              opacity: 1,
-                              y: 0,
-                              filter: "blur(0px)",
-                              transition: {
-                                duration: 0.24,
-                                ease: EASE_OUT,
-                              },
-                            }
-                      }
-                      exit={
-                        reduce
-                          ? {
-                              opacity: 0,
-                              transition: {
-                                duration: 0.14,
-                                ease: EASE_OUT,
-                              },
-                            }
-                          : {
-                              opacity: 0,
-                              y: -8,
-                              filter: "blur(4px)",
-                              transition: {
-                                duration: 0.16,
-                                ease: EASE_OUT,
-                              },
-                            }
-                      }
-                    >
-                      {children}
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.div>
+                <AutoHeight>
+                  <MorphingView viewId={viewId ?? ""} className="p-5">
+                    {children}
+                  </MorphingView>
+                </AutoHeight>
               </motion.div>
             </div>
           )}
         </PresenceGate>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+/**
+ * Eases the panel's height to its content. Animating real height, rather than a
+ * `layout` scale, keeps the content from being squashed and counter-scaled on
+ * every frame while a view cross-fades inside.
+ */
+function AutoHeight({ children }: { children: ReactNode }) {
+  const reduce = useReducedMotion();
+  const box = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+
+  // Driven straight from the observer: a React state round-trip here lags the
+  // view swap by several frames, leaving the new view clipped meanwhile.
+  useLayoutEffect(() => {
+    const boxNode = box.current;
+    const contentNode = content.current;
+    if (!boxNode || !contentNode) {
+      return;
+    }
+    let first = true;
+    let running: AnimationPlaybackControls | null = null;
+    const observer = new ResizeObserver(([entry]) => {
+      const height =
+        entry?.borderBoxSize[0]?.blockSize ?? contentNode.offsetHeight;
+      running?.stop();
+      if (first || reduce) {
+        first = false;
+        boxNode.style.height = `${height}px`;
+        return;
+      }
+      running = animate(boxNode, { height }, SPRING_PANEL);
+    });
+    observer.observe(contentNode);
+    return () => {
+      observer.disconnect();
+      running?.stop();
+    };
+  }, [reduce]);
+
+  return (
+    <div ref={box} className="overflow-hidden">
+      <div ref={content}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Cross-fades between views as `viewId` changes. Inside a `MorphingModal` the
+ * panel resizes to fit, so a panel whose steps share one component's state can
+ * animate them without remounting it.
+ */
+export function MorphingView({
+  viewId,
+  children,
+  className,
+}: {
+  viewId: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  // Relative, so the view popped out on exit stays where it was.
+  return (
+    <div className={cn("relative", className)}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={viewId}
+          initial={
+            reduce ? { opacity: 0 } : { opacity: 0, y: 8, filter: "blur(4px)" }
+          }
+          animate={
+            reduce
+              ? { opacity: 1, transition: { duration: 0.18, ease: EASE_OUT } }
+              : {
+                  opacity: 1,
+                  y: 0,
+                  filter: "blur(0px)",
+                  transition: { duration: 0.24, ease: EASE_OUT },
+                  // A lingering blur(0px) keeps a filter layer over the whole
+                  // view, so later repaints inside it flicker.
+                  transitionEnd: { filter: "none" },
+                }
+          }
+          exit={
+            reduce
+              ? { opacity: 0, transition: { duration: 0.14, ease: EASE_OUT } }
+              : {
+                  opacity: 0,
+                  y: -8,
+                  filter: "blur(4px)",
+                  transition: { duration: 0.16, ease: EASE_OUT },
+                }
+          }
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }

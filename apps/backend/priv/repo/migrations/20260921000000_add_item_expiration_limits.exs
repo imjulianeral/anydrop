@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddItemExpirationLimits do
+defmodule Phemera.Repo.Migrations.AddItemExpirationLimits do
   use Ecto.Migration
 
   def change do

@@ -2,7 +2,11 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
 import ReactDOM from "react-dom/client";
 
+import { migrateLegacyStorage } from "#/lib/legacy-storage.ts";
+
 import { routeTree } from "./routeTree.gen";
+
+migrateLegacyStorage();
 
 const router = createRouter({
   routeTree,
@@ -25,7 +29,7 @@ if (!rootElement?.innerHTML && rootElement instanceof HTMLElement) {
       attribute="class"
       defaultTheme="system"
       enableSystem
-      storageKey="anyshare.theme"
+      storageKey="phemera.theme"
       // Client-only render: next-themes' inline script never executes, and
       // public/theme-init.js already prevents the theme flash. A data-block
       // type keeps React from warning about the script tag.

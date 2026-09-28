@@ -8,7 +8,7 @@ function SecurityPage() {
   return (
     <DocPage
       title="Security is not a mode."
-      lead="AnyShare encrypts every message and file in the browser before upload. The server stores ciphertext."
+      lead="Phemera encrypts every message and file in the browser before upload. The server stores ciphertext."
     >
       <DocSection title="Your files are end-to-end encrypted.">
         <p>

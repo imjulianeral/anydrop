@@ -13,9 +13,9 @@ function AboutPage() {
       <DocSection title="Why end-to-end encryption">
         <p>
           A lock helps only if you know who holds the key. With service-held
-          encryption keys, the service can unlock stored files. AnyShare
-          encrypts on your device and gives the key to the recipient. Our server
-          stores the encrypted content.
+          encryption keys, the service can unlock stored files. Phemera encrypts
+          on your device and gives the key to the recipient. Our server stores
+          the encrypted content.
         </p>
       </DocSection>
       <DocSection title="A better default">
@@ -38,7 +38,7 @@ function AboutPage() {
           Standard WeTransfer and Dropbox sharing does not use end-to-end
           encryption by default and asks senders for an identity. Dropbox offers
           end-to-end encryption for selected folders on eligible team plans.
-          AnyShare encrypts every message and file by default, needs no account
+          Phemera encrypts every message and file by default, needs no account
           email, and shows no ads.
         </p>
         <p className="text-sm">

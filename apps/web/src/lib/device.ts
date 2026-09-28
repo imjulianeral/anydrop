@@ -1,4 +1,4 @@
-const STORAGE_KEY = "anyshare.device";
+const STORAGE_KEY = "phemera.device";
 
 const adjectives = [
   "Amber",

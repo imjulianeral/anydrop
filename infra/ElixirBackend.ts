@@ -15,6 +15,9 @@ const backendDir = `${import.meta.dirname}/../apps/backend`;
 const optionalSecret = (name: string) =>
   Config.Redacted(name).pipe(Config.withDefault(Redacted.make("")));
 
+const optionalString = (name: string) =>
+  Config.String(name).pipe(Config.withDefault(""));
+
 export class ElixirBackend extends Cloudflare.Container<ElixirBackend>()(
   "ElixirBackend",
   Effect.gen(function* () {
@@ -32,10 +35,18 @@ export class ElixirBackend extends Cloudflare.Container<ElixirBackend>()(
         AUTH_ORIGIN: encodeURIComponent(authOrigin),
         DATABASE_URL: yield* DatabaseUrl,
         EXPIRE_SECRET: (yield* ExpireSecret).text,
-        GOOGLE_CLIENT_ID: yield* Config.String("GOOGLE_CLIENT_ID").pipe(
-          Config.withDefault("")
-        ),
+        GOOGLE_CLIENT_ID: yield* optionalString("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET: yield* optionalSecret("GOOGLE_CLIENT_SECRET"),
+        // Team invitations. Without MAIL_FROM they are logged, not sent.
+        // See docs/email.md for the DNS records direct delivery needs.
+        MAIL_DKIM_PRIVATE_KEY: yield* optionalSecret("MAIL_DKIM_PRIVATE_KEY"),
+        MAIL_DKIM_SELECTOR: yield* optionalString("MAIL_DKIM_SELECTOR"),
+        MAIL_FROM: yield* optionalString("MAIL_FROM"),
+        MAIL_HELO_DOMAIN: yield* optionalString("MAIL_HELO_DOMAIN"),
+        MAIL_RELAY: yield* optionalString("MAIL_RELAY"),
+        MAIL_RELAY_PASSWORD: yield* optionalSecret("MAIL_RELAY_PASSWORD"),
+        MAIL_RELAY_PORT: yield* optionalString("MAIL_RELAY_PORT"),
+        MAIL_RELAY_USERNAME: yield* optionalString("MAIL_RELAY_USERNAME"),
         MALWARE_BAZAAR_AUTH_KEY: yield* optionalSecret(
           "MALWARE_BAZAAR_AUTH_KEY"
         ),

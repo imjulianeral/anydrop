@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.CreateModerationTables do
+defmodule Phemera.Repo.Migrations.CreateModerationTables do
   use Ecto.Migration
 
   def change do

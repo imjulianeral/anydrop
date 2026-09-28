@@ -4,7 +4,6 @@ import {
   notFound,
 } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { Suspense } from "react";
 import type { ReactNode } from "react";
 
 import { ApiError, getShortLink } from "#/lib/api.ts";
@@ -27,24 +26,17 @@ export const Route = createFileRoute("/s/$code")({
       throw error;
     }
   },
-  component: ShortLinkGate,
+  // Passed directly (not wrapped) so the router awaits `.preload()` before
+  // rendering; `Lazy` then never suspends via `use()`, which React 19.3 rejects
+  // when the resolved render skips it.
+  component: lazyRouteComponent(
+    () => import("#/components/short-link-page.tsx"),
+    "ShortLinkPage"
+  ),
   pendingComponent: ShortLinkPending,
   notFoundComponent: ShortLinkUnavailable,
   errorComponent: ShortLinkRouteError,
 });
-
-const LazyShortLinkPage = lazyRouteComponent(
-  () => import("#/components/short-link-page.tsx"),
-  "ShortLinkPage"
-);
-
-function ShortLinkGate() {
-  return (
-    <Suspense fallback={<ShortLinkPending />}>
-      <LazyShortLinkPage />
-    </Suspense>
-  );
-}
 
 function ShortLinkPending() {
   return (
@@ -123,7 +115,7 @@ const actionClassName =
 function HomeLink() {
   return (
     <a className={actionClassName} href="/">
-      Back to AnyShare
+      Back to Phemera
     </a>
   );
 }

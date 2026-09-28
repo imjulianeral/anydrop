@@ -27,6 +27,9 @@ export interface AccountUser {
   passkeys: AccountPasskey[];
   /** Sensitive changes work without a new verification until this time. */
   reauth_until: string;
+  /** Enterprise accounts can create a team and invite people by email. */
+  plan: "free" | "enterprise";
+  team: { id: string; name: string; role: "owner" | "member" } | null;
 }
 
 export interface AccountSession {
@@ -65,14 +68,19 @@ export async function authRequest<T>(
   path: string,
   csrfToken?: string,
   body?: unknown,
-  method = "POST"
+  method = "POST",
+  headers: Record<string, string> = {}
 ): Promise<T> {
   const response = await fetch(`/auth/${path}`, {
     method: csrfToken ? method : "GET",
     credentials: "same-origin",
     headers: csrfToken
-      ? { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }
-      : {},
+      ? {
+          ...headers,
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        }
+      : headers,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   if (!response.ok) {
@@ -95,12 +103,15 @@ export const isAccountNotFound = (error: unknown): boolean =>
 
 export const getAccountSession = () => authRequest<AccountSession>("session");
 
+/** `returnTo` is a path on this site to come back to, such as a team invitation. */
 export async function startGoogle(
   csrfToken: string,
-  intent: GoogleIntent = "sign_in"
+  intent: GoogleIntent = "sign_in",
+  returnTo?: string
 ): Promise<void> {
   const { url } = await authRequest<{ url: string }>("google", csrfToken, {
     intent,
+    return_to: returnTo,
   });
   globalThis.location.assign(url);
 }

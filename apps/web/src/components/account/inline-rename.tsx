@@ -13,6 +13,7 @@ export function InlineRename({
   label,
   busy,
   onSave,
+  maxLength = MAX_NAME_LENGTH,
   children,
 }: {
   value: string;
@@ -20,6 +21,7 @@ export function InlineRename({
   label: string;
   busy: boolean;
   onSave: (name: string) => Promise<boolean>;
+  maxLength?: number;
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function InlineRename({
       <Input
         aria-label={label}
         value={draft}
-        maxLength={MAX_NAME_LENGTH}
+        maxLength={maxLength}
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- focus follows the edit button the person just pressed
         autoFocus
         onChange={(event) => setDraft(event.target.value)}

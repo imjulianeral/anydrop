@@ -1,6 +1,9 @@
 (function initializeTheme() {
   try {
-    const stored = localStorage.getItem("anyshare.theme");
+    // Before the rename the key was "anyshare.theme"; main.tsx moves it.
+    const stored =
+      localStorage.getItem("phemera.theme") ??
+      localStorage.getItem("anyshare.theme");
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)"
     ).matches;

@@ -1,6 +1,0 @@
-#!/bin/sh
-# proxy-everything fatals if iptables cannot install TPROXY/MARK rules.
-# Kernels without xt_mark (or without that kernel's modules installed)
-# cannot load the target. Succeeding here keeps the ingress proxy up so
-# local dev can reach Phoenix. Egress interception stays off.
-exit 0

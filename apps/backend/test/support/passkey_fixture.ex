@@ -1,4 +1,4 @@
-defmodule Anyshare.PasskeyFixture do
+defmodule Phemera.PasskeyFixture do
   def key do
     {<<4, x::binary-size(32), y::binary-size(32)>>, private} =
       :crypto.generate_key(:ecdh, :secp256r1)

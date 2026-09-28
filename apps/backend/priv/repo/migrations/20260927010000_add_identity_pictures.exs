@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddIdentityPictures do
+defmodule Phemera.Repo.Migrations.AddIdentityPictures do
   use Ecto.Migration
 
   def change do

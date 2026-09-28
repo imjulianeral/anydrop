@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.CreateDeviceGroups do
+defmodule Phemera.Repo.Migrations.CreateDeviceGroups do
   use Ecto.Migration
 
   def change do

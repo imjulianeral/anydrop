@@ -6,6 +6,12 @@ import type { ExpirationOptions } from "./expiration-options.ts";
 import { toBase64Url } from "./secret-format.ts";
 import type { Secret } from "./secret-format.ts";
 
+/**
+ * How this device reaches a peer: one of your saved devices, a teammate's
+ * saved device, or a device on the same network.
+ */
+export type PeerRelation = "mine" | "team" | "nearby";
+
 export interface Peer {
   public_key: string | null;
   id: string;
@@ -13,6 +19,10 @@ export interface Peer {
   device_kind: DeviceKind;
   room_code: string | null;
   last_seen_at: string;
+  /** Whether the device is saved to some account (not necessarily yours). */
+  saved?: boolean;
+  /** Present in peer lists; realtime presence events leave it out. */
+  relation?: PeerRelation;
 }
 
 export interface Transfer {
@@ -149,35 +159,31 @@ export const listPeers = (token: string) =>
     signal: AbortSignal.timeout(15_000),
   });
 
-export interface DeviceInvitation {
+export interface DeviceClaim {
   id: string;
-  status: "pending" | "accepted" | "declined" | "disconnected";
-  sender: Peer;
-  recipient: Peer;
+  /** The name the device gets once it's saved. */
+  name: string;
+  status: "pending" | "accepted" | "declined" | "cancelled";
   expires_at: string;
+  requester: { name: string };
+  requested_by: Peer | null;
+  target: Peer;
 }
 
-export const listInvitations = (token: string) =>
-  request<{ invitations: DeviceInvitation[] }>("/api/v1/invitations", {
+/** Requests from nearby accounts to save this device. */
+export const listDeviceClaims = (token: string) =>
+  request<{ claims: DeviceClaim[] }>("/api/v1/device_claims", {
     token,
     signal: AbortSignal.timeout(15_000),
   });
 
-export const sendInvitation = (token: string, target: string) =>
-  request<{ invitation: DeviceInvitation }>("/api/v1/invitations", {
-    method: "POST",
-    token,
-    body: { target },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-export const answerInvitation = (
+export const answerDeviceClaim = (
   token: string,
   id: string,
-  action: "accept" | "decline" | "disconnect"
+  action: "accept" | "decline"
 ) =>
-  request<{ invitation: DeviceInvitation }>(
-    `/api/v1/invitations/${encodeURIComponent(id)}`,
+  request<{ claim: DeviceClaim }>(
+    `/api/v1/device_claims/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
       token,
@@ -189,7 +195,10 @@ export const answerInvitation = (
 export interface DeviceGroup {
   id: string;
   name: string;
-  owner_id: string;
+  /** Null for the team group, which nobody manages from a device. */
+  owner_id: string | null;
+  /** `team` is the read-only group of every team member's saved devices. */
+  kind: "device" | "team";
   members: Peer[];
 }
 
@@ -445,7 +454,7 @@ export const savingDownloadUrl = (url: string): string => {
   if (url.startsWith("blob:") || url.startsWith("data:")) {
     return url;
   }
-  const parsed = new URL(url, "https://anydrop.local");
+  const parsed = new URL(url, "https://phemera.local");
   parsed.searchParams.set("save", "1");
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return parsed.toString();

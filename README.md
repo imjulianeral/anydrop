@@ -1,4 +1,4 @@
-# AnyShare
+# Phemera
 
 Browser-based nearby sharing. Open the page on two devices, see peers on the same network, and send text or files.
 

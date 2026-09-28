@@ -15,21 +15,21 @@ describe("fragment keys", () => {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
     });
-    vi.stubGlobal("location", { origin: "https://anyshare.test" });
+    vi.stubGlobal("location", { origin: "https://phemera.test" });
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it("copies the complete URL in the creating browser only", () => {
     const key = crypto.getRandomValues(new Uint8Array(32));
     const code = "ABC1234";
-    expect(linkPageUrl(code)).toBe("https://anyshare.test/s/ABC1234");
+    expect(linkPageUrl(code)).toBe("https://phemera.test/s/ABC1234");
     rememberLinkKey(code, key);
     expect(linkPageUrl(code)).toMatch(/\/s\/ABC1234#[A-Za-z0-9_-]{43}$/u);
     expect(parseFragmentKey(new URL(linkPageUrl(code)).hash)).toStrictEqual(
       key
     );
     expect(loadLinkKey(code)).toStrictEqual(key);
-    expect(linkPageUrl("URL1234")).toBe("https://anyshare.test/s/URL1234");
+    expect(linkPageUrl("URL1234")).toBe("https://phemera.test/s/URL1234");
   });
 
   it("round-trips canonical Base64url", () => {
@@ -48,7 +48,7 @@ describe("fragment keys", () => {
     ]) {
       expect(parseFragmentKey(hash)).toBeNull();
     }
-    localStorage.setItem("anyshare.link-keys", "broken");
+    localStorage.setItem("phemera.link-keys", "broken");
     expect(loadLinkKey("ABC1234")).toBeNull();
   });
 

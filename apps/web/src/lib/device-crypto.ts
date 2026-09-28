@@ -1,7 +1,7 @@
 import { fromBase64, isKeyWrap, toBase64 } from "./secret-format.ts";
 import type { KeyWrap } from "./secret-format.ts";
 
-export const ECDH_STORAGE_KEY = "anyshare.device-ecdh";
+export const ECDH_STORAGE_KEY = "phemera.device-ecdh";
 const curve = { name: "ECDH", namedCurve: "P-256" };
 
 export const loadDeviceKeyPair = async (): Promise<{
@@ -109,6 +109,7 @@ const wrappingKey = async (privateKey: CryptoKey, publicSpki: string) => {
         name: "HKDF",
         hash: "SHA-256",
         salt: new Uint8Array(),
+        // Kept from before the rename; changing it breaks existing wraps.
         info: new TextEncoder().encode("anyshare:v3:wrap"),
       },
       ikm,

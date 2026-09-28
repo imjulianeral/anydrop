@@ -16,7 +16,7 @@ interface PreparedFile {
   signals: ContentSignals;
 }
 
-const stagingName = "anyshare-secret-staging";
+const stagingName = "phemera-secret-staging";
 const cleanupWait = 2000;
 
 export const withPreparedFile = async <T>(

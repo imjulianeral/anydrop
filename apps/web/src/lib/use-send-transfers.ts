@@ -48,7 +48,7 @@ export function useSendTransfers({
     const missing = recipients.filter((recipient) => !recipient.public_key);
     if (missing.length > 0) {
       throw new Error(
-        `Ask ${missing.map((recipient) => recipient.display_name).join(", ")} to reload AnyShare before sending.`
+        `Ask ${missing.map((recipient) => recipient.display_name).join(", ")} to reload Phemera before sending.`
       );
     }
     if (
@@ -256,7 +256,7 @@ function sameFiles(files: File[], previous: File[] | undefined) {
 function recipientKey(recipient: Recipient) {
   if (!recipient.public_key) {
     throw new Error(
-      `Ask ${recipient.display_name} to reload AnyShare before sending.`
+      `Ask ${recipient.display_name} to reload Phemera before sending.`
     );
   }
   return recipient.public_key;

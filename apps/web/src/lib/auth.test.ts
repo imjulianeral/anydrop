@@ -51,7 +51,7 @@ describe("authentication", () => {
       .mockResolvedValueOnce(Response.json({ challenge: "challenge" }))
       .mockResolvedValueOnce(Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
-    await signInWithPasskey("csrf", "security_key", "anyshare.test");
+    await signInWithPasskey("csrf", "security_key", "phemera.test");
     expect(startAuthentication).toHaveBeenCalledWith({
       optionsJSON: { challenge: "challenge" },
     });
@@ -142,10 +142,10 @@ describe("authentication", () => {
         )
     );
     await expect(
-      signInWithPasskey("csrf", "app", "anyshare.test")
+      signInWithPasskey("csrf", "app", "phemera.test")
     ).rejects.toThrow("Unknown");
     expect(signalUnknownCredential).toHaveBeenCalledWith({
-      rpId: "anyshare.test",
+      rpId: "phemera.test",
       credentialId: "stale",
     });
   });
@@ -168,6 +168,8 @@ describe("authentication", () => {
         },
       ],
       reauth_until: "2026-09-26T00:10:00Z",
+      plan: "free",
+      team: null,
     };
     const signalAllAcceptedCredentials = vi.fn<() => Promise<void>>(() =>
       Promise.resolve()
@@ -179,20 +181,20 @@ describe("authentication", () => {
       signalAllAcceptedCredentials,
       signalCurrentUserDetails,
     });
-    await signalAccount("anyshare.test", user);
+    await signalAccount("phemera.test", user);
     expect(signalAllAcceptedCredentials).toHaveBeenCalledWith({
-      rpId: "anyshare.test",
+      rpId: "phemera.test",
       userId: "dXNlcg",
       allAcceptedCredentialIds: ["one"],
     });
     expect(signalCurrentUserDetails).toHaveBeenCalledWith({
-      rpId: "anyshare.test",
+      rpId: "phemera.test",
       userId: "dXNlcg",
       name: "Ada",
       displayName: "Ada",
     });
     vi.stubGlobal("PublicKeyCredential", {});
-    await expect(signalAccount("anyshare.test", user)).resolves.toBeDefined();
+    await expect(signalAccount("phemera.test", user)).resolves.toBeDefined();
   });
 
   test("surfaces backend errors and non-JSON proxy failures", async () => {

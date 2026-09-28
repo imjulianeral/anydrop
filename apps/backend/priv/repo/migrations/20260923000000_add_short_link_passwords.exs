@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddShortLinkPasswords do
+defmodule Phemera.Repo.Migrations.AddShortLinkPasswords do
   use Ecto.Migration
 
   def change do

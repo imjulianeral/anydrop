@@ -1,4 +1,4 @@
-defmodule Anyshare.SignalsFixture do
+defmodule Phemera.SignalsFixture do
   @moduledoc false
 
   @doc "Upload signals as the browser sends them, for a file no list contains."

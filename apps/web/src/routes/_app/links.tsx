@@ -1,11 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { LinksPage } from "#/components/links-page.tsx";
-
+// The links page became the dashboard; keep old bookmarks working.
 export const Route = createFileRoute("/_app/links")({
-  component: Links,
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard", replace: true });
+  },
 });
-
-function Links() {
-  return <LinksPage />;
-}

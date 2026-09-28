@@ -1,4 +1,4 @@
-defmodule Anyshare.Repo.Migrations.AddShortLinkEvents do
+defmodule Phemera.Repo.Migrations.AddShortLinkEvents do
   use Ecto.Migration
 
   def up do

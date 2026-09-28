@@ -5,8 +5,8 @@ export interface IslandSentNotice {
   peerName: string;
 }
 
-export const ISLAND_SENT_EVENT = "anyshare:island-sent";
-export const ISLAND_NOTICE_EVENT = "anyshare:island-notice";
+export const ISLAND_SENT_EVENT = "phemera:island-sent";
+export const ISLAND_NOTICE_EVENT = "phemera:island-notice";
 
 export interface IslandNotice {
   title: string;

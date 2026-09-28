@@ -37,6 +37,13 @@ export default defineConfig({
     ...(core.ignorePatterns ?? []),
     "vendors/**",
     "apps/backend/**",
+    // Agent skills (.agents, .claude, .grok, …) installed by their own tooling.
+    ".*/skills/**",
+    // Chart source copied from the @bklit and @beui registries; refresh it by
+    // re-installing rather than editing, so it keeps upstream's style.
+    "apps/web/src/components/charts/**",
+    "apps/web/src/components/shimmering-text.tsx",
+    "apps/web/src/components/motion/number-ticker.tsx",
   ],
   jsPlugins: ["@shadcn/lint"],
   overrides: [

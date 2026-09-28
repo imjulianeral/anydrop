@@ -1,7 +1,7 @@
 import { shortPageUrl } from "./api.ts";
 import { parseFragmentKey, toBase64Url } from "./secret-format.ts";
 
-const storageKey = "anyshare.link-keys";
+const storageKey = "phemera.link-keys";
 const readKeys = (): Record<string, string> => {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
